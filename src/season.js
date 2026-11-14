@@ -1,0 +1,78 @@
+import { makeRng } from './rng.js';
+import { POS, createPlayer, ageOneYear } from './player.js';
+import { makeFixtures } from './fixtures.js';
+import { blankStats, CLUBS_PER_DIV, MARKET_SIZE } from './world.js';
+import { bestXI, fixLineup } from './lineup.js';
+import { simMatch } from './match.js';
+
+const RETIRE_AGE = 35;
+const tier = club => 3 - club.div; // 3 for the top division, 1 for the bottom: scales all money
+
+export const myClub = s => s.clubs[s.me];
+
+export function takeClub(s, clubId) {
+  s.me = clubId;
+  s.budget = tier(s.clubs[clubId]) * 1.5e6;
+  s.lineup = bestXI(s.clubs[clubId], s.formation);
+}
+
+function entry(s, id) {
+  const club = s.clubs[id];
+  return id === s.me ? { club, ids: s.lineup, formation: s.formation } : { club, ids: bestXI(club, '4-4-2'), formation: '4-4-2' };
+}
+
+function record(st, scored, conceded) {
+  st.p++; st.gf += scored; st.ga += conceded;
+  if (scored > conceded) { st.w++; st.pts += 3; } else if (scored < conceded) st.l++; else { st.d++; st.pts++; }
+}
+
+export function playRound(s) {
+  if (s.done) return null;
+  if (s.me !== null) fixLineup(s);
+  const rng = makeRng(s.seed);
+  s.last = s.divisions.map(d => d.fixtures[s.round].map(([h, a]) => {
+    const r = simMatch(rng, entry(s, h), entry(s, a));
+    record(s.clubs[h].st, r.hg, r.ag);
+    record(s.clubs[a].st, r.ag, r.hg);
+    if (h === s.me) s.budget += 60e3 * tier(s.clubs[h]); // gate receipts
+    return r;
+  }));
+  if (s.me !== null) s.budget += 100e3 * tier(myClub(s)); // weekly income
+  s.seed = rng.seed;
+  s.round++;
+  s.done = s.round === s.divisions[0].fixtures.length;
+  return s.last;
+}
+
+export function table(s, d) {
+  return [...s.divisions[d].clubIds].sort((x, y) => {
+    const a = s.clubs[x].st, b = s.clubs[y].st;
+    return b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf || x - y;
+  });
+}
+
+export function endSeason(s) {
+  if (!s.done) return;
+  const rng = makeRng(s.seed);
+  const champions = s.divisions.map((_, i) => s.clubs[table(s, i)[0]].name);
+  let pos = null, prize = 0;
+  if (s.me !== null) {
+    pos = table(s, myClub(s).div).indexOf(s.me) + 1;
+    prize = (CLUBS_PER_DIV + 1 - pos) * 100e3 * tier(myClub(s));
+    s.budget += prize;
+  }
+  s.history.push({ season: s.season, champions, pos, prize });
+  for (const c of s.clubs) {
+    c.st = blankStats();
+    c.players = c.players.map(p => {
+      if (p.age >= RETIRE_AGE) return createPlayer(rng, s.nid++, p.pos, c.quality - 2, rng.int(17, 19)); // youth replaces retiree
+      ageOneYear(rng, p);
+      return p;
+    });
+  }
+  s.market = Array.from({ length: MARKET_SIZE }, () => createPlayer(rng, s.nid++, rng.pick(POS), 9));
+  for (const d of s.divisions) d.fixtures = makeFixtures(d.clubIds);
+  s.seed = rng.seed;
+  s.round = 0; s.done = false; s.last = null; s.season++;
+  if (s.me !== null) fixLineup(s);
+}
