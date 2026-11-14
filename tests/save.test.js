@@ -21,4 +21,6 @@ test('deserialize returns null for missing, corrupt or wrong-version saves', () 
   assert.equal(deserialize('42'), null);
   assert.equal(deserialize(JSON.stringify({ version: SAVE_VERSION + 1 })), null);
   assert.equal(deserialize(JSON.stringify({ teams: [] })), null); // the old demo's save shape
+  assert.equal(deserialize('{"version":1}'), null); // right version, wrong shape
+  assert.equal(deserialize(serialize({ ...createWorld(1), me: 999 })), null); // dangling club index
 });

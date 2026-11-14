@@ -56,10 +56,14 @@ test('a full season: every club plays 30, stats are consistent in every division
   const s = createWorld(4);
   takeClub(s, 20);
   const budget0 = s.budget;
+  const seed0 = s.seed;
+  playRound(s);
+  assert.notEqual(s.seed, seed0);
   while (!s.done) assert.equal(playRound(s).length, 3);
   assert.equal(s.round, 30);
   assert.equal(playRound(s), null);
   assert.ok(s.budget > budget0);
+  assert.ok(s.budget - budget0 <= 2 * budget0, `income ${s.budget - budget0} vs start ${budget0}`);
   s.divisions.forEach((d, i) => {
     const st = d.clubIds.map(id => s.clubs[id].st), sum = k => st.reduce((t, x) => t + x[k], 0);
     assert.ok(st.every(x => x.p === 30 && x.p === x.w + x.d + x.l && x.pts === 3 * x.w + x.d));
@@ -78,7 +82,9 @@ test('endSeason rolls over; three seasons keep squads intact', () => {
   assert.equal(s.season, 1);
   for (let y = 1; y <= 3; y++) {
     while (!s.done) playRound(s);
+    const seedBefore = s.seed;
     endSeason(s);
+    assert.notEqual(s.seed, seedBefore);
     assert.equal(s.season, y + 1);
     assert.equal(s.round, 0);
     assert.equal(s.done, false);

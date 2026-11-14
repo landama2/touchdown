@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRng } from '../src/rng.js';
-import { POS, ALL_ATTRS, createPlayer, overall, value, ageOneYear } from '../src/player.js';
+import { POS, WEIGHTS, ALL_ATTRS, createPlayer, overall, value, ageOneYear } from '../src/player.js';
 
 test('createPlayer fills every attribute with an integer 1..20', () => {
   const rng = makeRng(1);
@@ -59,4 +59,23 @@ test('ageOneYear: young players improve up to potential, old players lose physic
   for (let i = 0; i < 3; i++) ageOneYear(rng, old);
   assert.ok(phys(old) < physBefore);
   for (const k of ALL_ATTRS) assert.ok(old.attrs[k] >= 1);
+});
+
+test('potential is never below the key attributes at creation', () => {
+  const rng = makeRng(11);
+  for (const pos of POS) for (const q of [1, 5, 10, 15, 20]) for (let i = 0; i < 20; i++) {
+    const p = createPlayer(rng, 1, pos, q);
+    for (const k of Object.keys(WEIGHTS[pos])) assert.ok(p.pot >= p.attrs[k], `${pos} q${q} ${k}=${p.attrs[k]} pot=${p.pot}`);
+  }
+});
+
+test('ageing a young player never pushes a key attribute above pot', () => {
+  const rng = makeRng(12);
+  for (const pos of POS) for (let i = 0; i < 20; i++) {
+    const p = createPlayer(rng, 1, pos, 10, 17);
+    for (let y = 0; y < 8; y++) {
+      ageOneYear(rng, p);
+      for (const k of Object.keys(WEIGHTS[pos])) assert.ok(p.attrs[k] <= p.pot, `${pos} ${k}=${p.attrs[k]} pot=${p.pot}`);
+    }
+  }
 });

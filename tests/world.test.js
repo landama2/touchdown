@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { makeRng } from '../src/rng.js';
 import { overall } from '../src/player.js';
 import { makeFixtures } from '../src/fixtures.js';
+import { PRE, STEM, DENY } from '../src/data/names.js';
 import { createWorld, clubNames, DIVISIONS, CLUBS_PER_DIV } from '../src/world.js';
 
 test('makeFixtures: every ordered pair exactly once, every club once per round', () => {
@@ -57,4 +58,13 @@ test('createWorld is deterministic and JSON-safe', () => {
   assert.deepEqual(a, createWorld(1234));
   assert.notDeepEqual(a.clubs.map(c => c.name), createWorld(1235).clubs.map(c => c.name));
   assert.deepEqual(JSON.parse(JSON.stringify(a)), a);
+});
+
+test('clubNames never uses a denied real town name', () => {
+  for (let seed = 1; seed <= 50; seed++)
+    for (const n of clubNames(makeRng(seed), 48)) assert.ok(!DENY.includes(n.split(' ')[0]), `${n} (seed ${seed})`);
+});
+
+test('name pool leaves headroom over the clubs needed', () => {
+  assert.ok(PRE.length * STEM.length - DENY.length >= 2 * DIVISIONS.length * CLUBS_PER_DIV);
 });

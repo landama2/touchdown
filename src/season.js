@@ -34,10 +34,10 @@ export function playRound(s) {
     const r = simMatch(rng, entry(s, h), entry(s, a));
     record(s.clubs[h].st, r.hg, r.ag);
     record(s.clubs[a].st, r.ag, r.hg);
-    if (h === s.me) s.budget += 60e3 * tier(s.clubs[h]); // gate receipts
+    if (h === s.me) s.budget += 20e3 * tier(s.clubs[h]); // gate receipts
     return r;
   }));
-  if (s.me !== null) s.budget += 100e3 * tier(myClub(s)); // weekly income
+  if (s.me !== null) s.budget += 25e3 * tier(myClub(s)); // weekly income
   s.seed = rng.seed;
   s.round++;
   s.done = s.round === s.divisions[0].fixtures.length;
@@ -58,7 +58,7 @@ export function endSeason(s) {
   let pos = null, prize = 0;
   if (s.me !== null) {
     pos = table(s, myClub(s).div).indexOf(s.me) + 1;
-    prize = (CLUBS_PER_DIV + 1 - pos) * 100e3 * tier(myClub(s));
+    prize = (CLUBS_PER_DIV + 1 - pos) * 40e3 * tier(myClub(s));
     s.budget += prize;
   }
   s.history.push({ season: s.season, champions, pos, prize });

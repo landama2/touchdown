@@ -5,4 +5,7 @@ export const LAST = 'Novak Berg Castell Dvorak Eklund Fontana Greaves Holt Ilic 
 export const PRE = 'North East West South Iron Salt High Oak Red Stone Lark Cold Wex Ash Grey Elm'.split(' ');
 export const STEM = 'gate mouth bridge marsh field haven cliff well moor spur harbour combe'.split(' ');
 export const SUFFIX = ['Athletic', 'FC', 'United', 'Town', 'Rovers', 'City', 'Wanderers', 'Albion', 'Rangers', 'Vale', 'Borough'];
-export const DENY = [];
+export const DENY = ['Highgate', 'Southgate', 'Westgate', 'Stonegate', 'Redbridge', 'Highbridge', 'Stonebridge', 'Ironbridge', 'Elmbridge', 'Northbridge',
+  'Northfield', 'Eastfield', 'Westfield', 'Southfield', 'Highfield', 'Oakfield', 'Ashfield', 'Larkfield', 'Redfield', 'Coldfield',
+  'Southwell', 'Ashwell', 'Oakwell', 'Greywell', 'Stonehaven', 'Easthaven', 'Westhaven', 'Eastmoor', 'Westmoor', 'Northmoor', 'Southmoor', 'Highmoor',
+  'Greymouth', 'Coldharbour', 'Ashcombe', 'Westcliff', 'Highcliff', 'Redcliff', 'Larkspur'];

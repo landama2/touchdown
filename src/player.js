@@ -26,7 +26,8 @@ export function createPlayer(rng, id, pos, quality, age = rng.int(17, 34)) {
     // Attributes that matter for the position sit above the club's quality; the rest sit below.
     attrs[k] = clamp(Math.round(quality + (w ? w - 1 : -3) + rng.int(-3, 3)), 1, 20);
   }
-  const pot = clamp(Math.round(quality) + (age < 23 ? rng.int(1, 5) : rng.int(0, 1)), 1, 20);
+  const best = Math.max(...Object.keys(WEIGHTS[pos]).map(k => attrs[k]));
+  const pot = clamp(best + (age < 23 ? rng.int(0, 2) : 0), 1, 20);
   return { id, name: rng.pick(FIRST) + ' ' + rng.pick(LAST), pos, age, attrs, pot };
 }
 

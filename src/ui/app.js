@@ -11,7 +11,7 @@ const load = () => { try { return deserialize(localStorage.getItem(KEY)); } catc
 const save = () => { try { localStorage.setItem(KEY, serialize(s)); } catch {} };
 
 let s = load() || newWorld();
-let tab = 'Squad', sel = null, viewing = null, tableDiv = 0, msg = '';
+let tab = 'Squad', sel = null, viewing = null, tableDiv = s.me === null ? 0 : s.clubs[s.me].div, msg = '';
 
 const $ = id => document.getElementById(id);
 const money = n => '€' + (n / 1e6).toFixed(2) + 'M';
@@ -73,7 +73,7 @@ const views = {
 
 const actions = {
   start(id) { takeClub(s, id); tab = 'Squad'; tableDiv = s.clubs[id].div; },
-  reset() { if (confirm('Abandon this career and start a new game?')) { s = newWorld(); sel = viewing = null; } },
+  reset() { if (s.me === null || confirm('Abandon this career and start a new game?')) { s = newWorld(); sel = viewing = null; } },
   tab(_, el) { tab = el.dataset.tab; sel = viewing = null; },
   div(id) { tableDiv = id; },
   view(id) { viewing = id; },
