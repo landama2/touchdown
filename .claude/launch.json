@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "touchline", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "8127"], "port": 8127 }
+  ]
+}

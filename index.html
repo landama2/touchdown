@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Touchline</title>
+<style>
+  :root { --bg:#0f1a14; --panel:#17261d; --line:#2a4033; --text:#e6efe9; --dim:#8fa698; --accent:#5fd38d; --warn:#f0b35a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 system-ui,sans-serif; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:12px 16px; background:var(--panel); border-bottom:1px solid var(--line); }
+  h1 { margin:0; font-size:20px; color:var(--accent); letter-spacing:.5px; }
+  h2 { font-size:17px; margin:20px 0 8px; }
+  #info { color:var(--dim); flex:1; min-width:200px; }
+  main { max-width:900px; margin:0 auto; padding:0 16px 40px; }
+  button, select { font:inherit; color:var(--text); background:#21382b; border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.on, button.primary { background:var(--accent); color:#06140c; border-color:var(--accent); font-weight:600; }
+  button.link { background:none; border:0; padding:0; text-align:left; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:8px; }
+  .wrap { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; }
+  th, td { padding:5px 8px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--dim); font-weight:500; font-size:13px; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.me td { background:#1f3a2a; font-weight:600; }
+  tr.sel td { background:#2f5540; }
+  .oop { color:var(--warn); }
+  .msg { color:var(--warn); min-height:1.4em; margin:8px 0; }
+  .dim { color:var(--dim); }
+  .score { font-size:22px; font-weight:700; margin:8px 0; }
+  .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0; }
+</style>
+</head>
+<body>
+<header><h1>Touchline</h1><span id="info"></span><nav id="nav" class="bar" style="margin:0"></nav></header>
+<main id="main"></main>
+<script src="game.js"></script>
+<script>
+let s = null, tab = 'Squad', sel = null, msg = '';
+try { s = JSON.parse(localStorage.getItem('touchline')); } catch {}
+const save = () => { try { s ? localStorage.setItem('touchline', JSON.stringify(s)) : localStorage.removeItem('touchline'); } catch {} };
+const $ = id => document.getElementById(id);
+const money = n => '€' + (n / 1e6).toFixed(2) + 'M';
+const my = () => s.teams[s.me];
+const playerRow = (p, lead, tail, cls = '') =>
+  `<tr class="${cls}">${lead}<td>${p.name}</td><td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${p.skill}</td><td class="n">${money(value(p))}</td>${tail}</tr>`;
+const HEAD = '<th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Skill</th><th class="n">Value</th>';
+
+const views = {
+  Squad() {
+    fixLineup(s);
+    const by = new Map(my().players.map(p => [p.id, p])), pos = slots(s.formation), st = strength(my(), s.lineup, s.formation);
+    const pickBtn = p => `<td><button class="link" data-act="pick" data-id="${p.id}">${p.name}</button></td>`;
+    const row = (p, slot) => `<tr class="${sel === p.id ? 'sel' : ''}"><td class="${slot && slot !== p.pos ? 'oop' : 'dim'}">${slot || 'Sub'}</td>${pickBtn(p)}<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${p.skill}</td><td class="n">${money(value(p))}</td></tr>`;
+    const bench = my().players.filter(p => !s.lineup.includes(p.id)).sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.skill - a.skill);
+    return `<div class="bar"><label>Formation <select data-act="formation">${Object.keys(FORMATIONS).map(f => `<option${f === s.formation ? ' selected' : ''}>${f}</option>`).join('')}</select></label>
+      <button data-act="auto">Auto-pick best XI</button><span class="dim">Attack ${st.att.toFixed(1)} · Defence ${st.def.toFixed(1)}</span></div>
+      <p class="dim">Click two players to swap them. Orange slot = playing out of position.</p>
+      <div class="wrap"><table><tr><th>Slot</th>${HEAD}</tr>${s.lineup.map((id, i) => row(by.get(id), pos[i])).join('')}
+      <tr><th colspan="6">Bench</th></tr>${bench.map(p => row(p)).join('')}</table></div>`;
+  },
+  Match() {
+    const name = i => s.teams[i].name, total = s.fixtures.length;
+    let h = '';
+    if (s.done) h += `<h2>Season ${s.season} complete — you finished ${table(s).indexOf(s.me) + 1}.</h2><button class="primary" data-act="end">Start next season</button>`;
+    else {
+      const [a, b] = s.fixtures[s.round].find(f => f.includes(s.me));
+      h += `<h2>Round ${s.round + 1} of ${total}</h2><p>${name(a)} v ${name(b)} <span class="dim">(${a === s.me ? 'home' : 'away'})</span></p><button class="primary" data-act="play">Play round</button>`;
+    }
+    if (s.last) {
+      const m = s.last.find(r => r.h === s.me || r.a === s.me);
+      h += `<h2>Last round</h2><div class="score">${name(m.h)} ${m.hg} – ${m.ag} ${name(m.a)}</div>
+        ${m.ev.map(e => `<div>${e.min}' ⚽ ${e.name} <span class="dim">(${name(e.team)})</span></div>`).join('') || '<div class="dim">No goals.</div>'}
+        <h2>Other results</h2>${s.last.filter(r => r !== m).map(r => `<div>${name(r.h)} ${r.hg} – ${r.ag} ${name(r.a)}</div>`).join('')}`;
+    }
+    return h;
+  },
+  Table() {
+    return `<h2>Season ${s.season}</h2><div class="wrap"><table><tr><th class="n">#</th><th>Club</th>${['P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts'].map(c => `<th class="n">${c}</th>`).join('')}</tr>
+      ${table(s).map((i, k) => { const t = s.teams[i].st; return `<tr class="${i === s.me ? 'me' : ''}"><td class="n">${k + 1}</td><td>${s.teams[i].name}</td>${[t.p, t.w, t.d, t.l, t.gf, t.ga, t.gf - t.ga, t.pts].map(v => `<td class="n">${v}</td>`).join('')}</tr>`; }).join('')}</table></div>
+      ${s.history.length ? '<h2>History</h2>' + s.history.map(h => `<div>Season ${h.season}: champions ${h.champion} — you finished ${h.pos} (prize ${money(h.prize)})</div>`).join('') : ''}`;
+  },
+  Transfers() {
+    const act = (a, p, label) => `<td><button data-act="${a}" data-id="${p.id}">${label}</button></td>`;
+    const sorted = a => [...a].sort((x, y) => POS.indexOf(x.pos) - POS.indexOf(y.pos) || y.skill - x.skill);
+    return `<h2>Free agents</h2><div class="wrap"><table><tr>${HEAD}<th></th></tr>${sorted(s.market).map(p => playerRow(p, '', act('buy', p, 'Buy'))).join('')}</table></div>
+      <h2>Your squad (${my().players.length}/${MAX_SQUAD}) <span class="dim">— sells for 80% of value</span></h2>
+      <div class="wrap"><table><tr>${HEAD}<th></th></tr>${sorted(my().players).map(p => playerRow(p, '', act('sell', p, 'Sell'))).join('')}</table></div>`;
+  },
+};
+
+const actions = {
+  start(id) { s = newGame(id); tab = 'Squad'; },
+  reset() { if (confirm('Abandon this career and start a new game?')) s = null; },
+  tab(_, el) { tab = el.dataset.tab; sel = null; },
+  auto() { s.lineup = bestXI(my(), s.formation); sel = null; },
+  formation(_, el) { s.formation = el.value; s.lineup = bestXI(my(), s.formation); sel = null; },
+  pick(id) {
+    if (sel === null || sel === id) { sel = sel === id ? null : id; return; }
+    const i = s.lineup.indexOf(sel), j = s.lineup.indexOf(id);
+    if (i >= 0 && j >= 0) [s.lineup[i], s.lineup[j]] = [id, sel];
+    else if (i >= 0) s.lineup[i] = id;
+    else if (j >= 0) s.lineup[j] = sel;
+    sel = null;
+  },
+  play() { playRound(s); },
+  end() { endSeason(s); tab = 'Table'; },
+  buy(id) { msg = buy(s, id) || 'Signed.'; },
+  sell(id) { msg = sell(s, id) || 'Sold.'; },
+};
+
+function render() {
+  if (!s) {
+    $('info').textContent = 'Pick a club to manage'; $('nav').innerHTML = '';
+    $('main').innerHTML = '<h2>Choose your club</h2><div class="grid">' + CLUBS.map((c, i) => `<button data-act="start" data-id="${i}">${c}</button>`).join('') + '</div>';
+    return;
+  }
+  $('info').textContent = `${my().name} · Season ${s.season} · Budget ${money(s.budget)}`;
+  $('nav').innerHTML = Object.keys(views).map(t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}">${t}</button>`).join('') + '<button data-act="reset">New game</button>';
+  $('main').innerHTML = `<div class="msg" role="status">${msg}</div>` + views[tab]();
+  msg = '';
+}
+function dispatch(e) {
+  const el = e.target.closest('[data-act]');
+  if (!el || (e.type === 'click') === (el.tagName === 'SELECT')) return; // selects fire on change, everything else on click
+  actions[el.dataset.act](+el.dataset.id, el); save(); render();
+}
+document.addEventListener('click', dispatch);
+document.addEventListener('change', dispatch);
+render();
+</script>
+</body>
+</html>
