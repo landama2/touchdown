@@ -68,3 +68,16 @@ test('the free-agent list has players worth signing below the Premier League', (
   }));
   assert.ok(best > weakestChampionshipXI, `${best} vs ${weakestChampionshipXI}`);
 });
+
+test('a season of real leagues plays like real football', () => {
+  const s = createWorld(1);
+  let n = 0, goals = 0, home = 0, yellows = 0, reds = 0;
+  while (!s.done) for (const div of playRound(s)) for (const r of div) {
+    n++; goals += r.hg + r.ag; if (r.hg > r.ag) home++;
+    yellows += r.stats[0].yc + r.stats[1].yc; reds += r.stats[0].rc + r.stats[1].rc;
+  }
+  assert.ok(goals / n >= 2.5 && goals / n <= 2.9, `goals per match ${goals / n}`);
+  assert.ok(home / n >= 0.43 && home / n <= 0.47, `home wins ${home / n}`);
+  assert.ok(yellows / n >= 2.5 && yellows / n <= 4, `yellows per match ${yellows / n}`);
+  assert.ok(reds / n <= 0.3, `reds per match ${reds / n}`);
+});

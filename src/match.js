@@ -2,13 +2,16 @@ import { makeRng } from './rng.js';
 import { slots, eff, SLOT_WEIGHT, formationBonus } from './lineup.js';
 
 // Minute-by-minute match engine. A match is a plain JSON object (see startMatch), so a live match
-// can sit in the career state and be saved half-way through. Each minute: one side has the ball and
-// may shoot (chance quality xG, the finisher and the keeper decide the outcome), and everyone tires.
+// can sit in the career state and be saved half-way through. Each minute: one side has the ball,
+// may shoot (chance quality xG, the finisher and the keeper decide the outcome), the other side may
+// foul (cards), anyone may get injured, everyone tires, and AI sides make substitutions.
 // Tuning: calibrated on the real leagues, see the 'a season of real leagues' test in tests/england.test.js.
+export const MAX_SUBS = 5;
 const MINUTES = 90;
 const HOME_EDGE = 1.12;      // home side's extra share of the ball and of chances
 const SHOT_RATE = 0.25;      // chance per minute that the side on the ball shoots, between equal sides
 const SPREAD = 40;           // how strongly an attack-vs-defence gap changes that chance
+const FOUL_RATE = 0.12, YELLOW_BASE = 0.17, STRAIGHT_RED = 0.002, INJURY_RATE = 0.003;
 const FATIGUE = 0.3;         // fitness lost per minute by an outfielder with stamina 12
 const SHOOT_WEIGHT = { GK: 0, DF: 1, MF: 2, FW: 4 };
 const ASSIST_WEIGHT = { GK: 0, DF: 1, MF: 3, FW: 2 };
@@ -84,6 +87,85 @@ function tire(m) {
   }
 }
 
+function sendOff(m, i, o, second) {
+  const S = m.sides[i], p = m.pl[o.id];
+  S.on = S.on.filter(x => x !== o);
+  S.st.rc++; p.rt -= 1.5;
+  m.ev.push({ min: m.min, side: i, type: 'red', id: o.id, name: p.name, second });
+}
+
+function foul(m, rng, i) {
+  const S = m.sides[i], o = pickWeighted(rng, active(m, i), x => m.pl[x.id].attrs.aggression + 1);
+  if (!o) return;
+  const p = m.pl[o.id], r = rng.next();
+  S.st.fouls++;
+  if (r < STRAIGHT_RED) sendOff(m, i, o, false);
+  else if (r < YELLOW_BASE + p.attrs.aggression / 100) {
+    p.yc++; p.rt -= 0.3; S.st.yc++;
+    m.ev.push({ min: m.min, side: i, type: 'yellow', id: o.id, name: p.name });
+    if (p.yc === 2) sendOff(m, i, o, true);
+  }
+}
+
+// ponytail: the injury ends this match only; injuries with recovery time arrive in Phase 5.
+function injury(m, rng, i) {
+  const team = active(m, i);
+  if (!team.length) return;
+  const o = team[rng.int(0, team.length - 1)], p = m.pl[o.id];
+  p.inj = true;
+  m.ev.push({ min: m.min, side: i, type: 'injury', id: o.id, name: p.name });
+}
+
+// Returns an error message, or null when the change is made. The new player takes the slot of the
+// one going off (or `pos` when given). A player who goes off cannot come back.
+export function substitute(m, i, outId, inId, pos) {
+  const S = m.sides[i], slot = S.on.find(o => o.id === outId);
+  if (m.done) return 'The match is over.';
+  if (!slot) return 'That player is not on the pitch.';
+  if (!S.bench.includes(inId)) return 'That player is not on the bench.';
+  if (S.subs >= MAX_SUBS) return `All ${MAX_SUBS} substitutions are used.`;
+  S.subs++;
+  S.bench = S.bench.filter(id => id !== inId);
+  m.pl[inId].played = true;
+  slot.id = inId;
+  if (pos) slot.pos = pos;
+  m.ev.push({ min: m.min, side: i, type: 'sub', id: outId, name: m.pl[outId].name, in: inId, inName: m.pl[inId].name });
+  return null;
+}
+
+// Re-slots the players on the pitch into a new shape, greedily, like bestXI(). With fewer than
+// eleven on the pitch the last slots (forwards first) stay empty.
+export function setFormation(m, i, formation) {
+  const S = m.sides[i], ids = S.on.map(o => o.id), used = new Set();
+  S.formation = formation;
+  S.on = slots(formation).flatMap(pos => {
+    let best = null;
+    for (const id of ids) if (!used.has(id) && (best === null || eff(m.pl[id], pos) > eff(m.pl[best], pos))) best = id;
+    if (best === null) return [];
+    used.add(best);
+    return [{ id: best, pos }];
+  });
+}
+
+const bestFor = (m, S, pos) => S.bench.reduce((b, id) => b === null || eff(m.pl[id], pos) > eff(m.pl[b], pos) ? id : b, null);
+
+// AI manager: replace the injured at once, put a keeper back in goal after a keeper's red card,
+// and from the hour mark take off the most tired outfielder (one per ten minutes, three at most).
+function autoSubs(m, i) {
+  const S = m.sides[i];
+  if (S.subs >= MAX_SUBS || !S.bench.length || !S.on.length) return;
+  const hurt = S.on.find(o => m.pl[o.id].inj);
+  if (hurt) return void substitute(m, i, hurt.id, bestFor(m, S, hurt.pos));
+  if (!S.on.some(o => o.pos === 'GK')) {
+    const worst = S.on.reduce((w, o) => eff(m.pl[o.id], o.pos) < eff(m.pl[w.id], w.pos) ? o : w);
+    return void substitute(m, i, worst.id, bestFor(m, S, 'GK'), 'GK');
+  }
+  if (m.min >= 60 && m.min % 10 === 0 && S.subs < 3) {
+    const tired = S.on.filter(o => o.pos !== 'GK').reduce((w, o) => w === null || m.pl[o.id].fit < m.pl[w.id].fit ? o : w, null);
+    if (tired && m.pl[tired.id].fit < 75) substitute(m, i, tired.id, bestFor(m, S, tired.pos));
+  }
+}
+
 function finish(m) {
   m.done = true;
   const g = m.sides.map(S => S.st.goals);
@@ -102,7 +184,10 @@ export function stepMinute(m) {
   const atk = rng.next() < home / (home + P[1].ctrl) ? 0 : 1, def = 1 - atk;
   m.sides[atk].st.poss++;
   if (rng.next() < SHOT_RATE * (atk === 0 ? HOME_EDGE : 1) * Math.exp((P[atk].att - P[def].def) / SPREAD)) shot(m, rng, atk);
+  if (rng.next() < FOUL_RATE) foul(m, rng, def);
+  if (rng.next() < INJURY_RATE) injury(m, rng, rng.int(0, 1));
   tire(m);
+  for (const i of [0, 1]) if (m.sides[i].auto) autoSubs(m, i);
   if (m.min === MINUTES) finish(m);
   m.seed = rng.seed;
 }
