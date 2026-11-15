@@ -4,7 +4,7 @@ import { makeRng } from '../src/rng.js';
 import { createWorld } from '../src/world.js';
 import { FORMATIONS, BENCH, slots, bestXI, strength } from '../src/lineup.js';
 import { ROLES, defaultTactics } from '../src/tactics.js';
-import { startMatch, stepMinute, matchResult, simMatch, power, preview, substitute, setFormation, setLiveTactic, MAX_SUBS } from '../src/match.js';
+import { startMatch, stepMinute, matchResult, simMatch, power, preview, substitute, setFormation, setLiveTactic, shootout, MAX_SUBS } from '../src/match.js';
 import { MINI } from './fixtures/mini.js';
 
 const s = createWorld(3, MINI);
@@ -268,4 +268,33 @@ test('mid-match changes are checked; a new formation keeps the roles that still 
   const out = S.on.find(o => o.pos === 'MF');
   assert.equal(substitute(m, 0, out.id, S.bench[0], 'FW'), null);
   assert.deepEqual(out.role, 'Striker');
+});
+
+test('a neutral ground takes away the home edge', () => {
+  let homeWins = 0, neutralWins = 0, homePoss = 0, neutralPoss = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    const h = play(seed, side(4), side(5)), n = startMatch(seed, side(4), side(5), true);
+    while (!n.done) stepMinute(n);
+    if (h.sides[0].st.goals > h.sides[1].st.goals) homeWins++;
+    if (n.sides[0].st.goals > n.sides[1].st.goals) neutralWins++;
+    homePoss += h.sides[0].st.poss; neutralPoss += n.sides[0].st.poss;
+  }
+  assert.ok(homeWins > neutralWins && homePoss > neutralPoss, `${homeWins} v ${neutralWins}, ${homePoss} v ${neutralPoss}`);
+  assert.equal(startMatch(1, side(4), side(5)).neutral, undefined); // only neutral matches carry the flag
+});
+
+test('penalty shootout: a winner, a real score, the same every time, in the match result', () => {
+  let early = 0, sudden = 0;
+  for (let seed = 1; seed <= 200; seed++) {
+    const m = play(seed, side(4), side(5)), [a, b] = shootout(m);
+    assert.notEqual(a, b);
+    assert.deepEqual(m.pens, [a, b]);
+    assert.deepEqual(matchResult(m).pens, [a, b]);
+    assert.ok(Math.max(a, b) - Math.min(a, b) <= 3 && Math.min(a, b) >= 0);
+    if (Math.max(a, b) < 5 && Math.max(a, b) - Math.min(a, b) >= 2) early++;
+    if (Math.min(a, b) >= 5) sudden++;
+    assert.deepEqual(shootout(JSON.parse(JSON.stringify({ ...m, pens: undefined }))), [a, b]);
+  }
+  assert.ok(early > 10 && sudden > 5, `${early} ended early, ${sudden} went to sudden death`);
+  assert.equal(matchResult(play(1, side(4), side(5))).pens, undefined);
 });

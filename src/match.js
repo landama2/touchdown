@@ -66,9 +66,11 @@ function makeSide({ club, ids, formation, bench = autoBench(club, ids), tactics 
   };
 }
 
-export function startMatch(seed, home, away) {
-  const pl = {};
-  return { seed, min: 0, done: false, pl, sides: [makeSide(home, 0, pl), makeSide(away, 1, pl)], ev: [] };
+// neutral: a final at a neutral ground, where side 0 has no home edge.
+export function startMatch(seed, home, away, neutral = false) {
+  const pl = {}, m = { seed, min: 0, done: false, pl, sides: [makeSide(home, 0, pl), makeSide(away, 1, pl)], ev: [] };
+  if (neutral) m.neutral = true;
+  return m;
 }
 
 // Attack, defence and ball control of side i right now. Like strength() (lineup.js) at kick-off with
@@ -143,11 +145,16 @@ function shot(m, rng, i) {
   attempt(m, rng, i, o, xg, 'open', () => rng.next() < 0.75 ? pickWeighted(rng, team.filter(x => x !== o), x => ASSIST_WEIGHT[x.pos] * (role(x).assist ?? 1)) : null);
 }
 
+// Chance that player p scores a penalty against side i's keeper (no keeper: an open goal, nearly).
+function penScore(m, p, i) {
+  const keeper = keeperOf(m, i), stop = keeper ? (keeper.attrs.handling + keeper.attrs.reflexes) / 2 : 0;
+  return Math.max(0.4, Math.min(0.95, 0.6 + 0.01 * (p.attrs.finishing + p.attrs.composure) - 0.008 * stop));
+}
+
 function penalty(m, rng, i) {
   const o = taker(m, i, 'pen');
   if (!o) return;
-  const p = m.pl[o.id], keeper = keeperOf(m, 1 - i), stop = keeper ? (keeper.attrs.handling + keeper.attrs.reflexes) / 2 : 0;
-  attempt(m, rng, i, o, 0.76, 'pen', null, Math.max(0.4, Math.min(0.95, 0.6 + 0.01 * (p.attrs.finishing + p.attrs.composure) - 0.008 * stop)));
+  attempt(m, rng, i, o, 0.76, 'pen', null, penScore(m, m.pl[o.id], 1 - i));
 }
 
 function sendOff(m, i, o, second) {
@@ -264,10 +271,10 @@ export function stepMinute(m) {
   if (m.done) return;
   const rng = makeRng(m.seed);
   m.min++;
-  const P = [power(m, 0), power(m, 1)], home = P[0].ctrl * HOME_EDGE;
+  const edge = m.neutral ? 1 : HOME_EDGE, P = [power(m, 0), power(m, 1)], home = P[0].ctrl * edge;
   const atk = rng.next() < home / (home + P[1].ctrl) ? 0 : 1, def = 1 - atk, ta = m.sides[atk].tac, td = m.sides[def].tac;
   m.sides[atk].st.poss++;
-  const chance = K.SHOT_RATE * (atk === 0 ? HOME_EDGE : 1) * Math.exp((P[atk].att - P[def].def) / K.SPREAD)
+  const chance = K.SHOT_RATE * (atk === 0 ? edge : 1) * Math.exp((P[atk].att - P[def].def) / K.SPREAD)
     * (1 + K.TEMPO_SHOTS * ta.tempo) * (1 - K.LINE_SHOTS * td.line - K.PRESS_SHOTS * td.pressing);
   if (rng.next() < chance) shot(m, rng, atk);
   if (rng.next() < K.FOUL_RATE * (1 + K.PRESS_FOULS * td.pressing)) foul(m, rng, def);
@@ -284,7 +291,32 @@ export function matchResult(m) {
   const ratings = Object.entries(m.pl).filter(([, p]) => p.played)
     .map(([id, p]) => ({ id: +id, name: p.name, side: p.side, rt: Math.round(Math.max(3, Math.min(10, p.rt)) * 10) / 10 }))
     .sort((x, y) => y.rt - x.rt);
-  return { h: H.club, a: A.club, hg: H.st.goals, ag: A.st.goals, ev: m.ev, stats: [H.st, A.st], ratings };
+  const r = { h: H.club, a: A.club, hg: H.st.goals, ag: A.st.goals, ev: m.ev, stats: [H.st, A.st], ratings };
+  if (m.pens) r.pens = m.pens;
+  return r;
+}
+
+// Penalty shootout after a finished match: five kicks each, then sudden death; it stops as soon as
+// one side cannot be caught. Each side's takers in order: the chosen penalty taker, then the
+// players on the pitch by penalty skill (keepers last), round again if needed. Stores m.pens = [home, away].
+export function shootout(m) {
+  const rng = makeRng(m.seed), skill = p => p.attrs.finishing + p.attrs.composure;
+  const order = m.sides.map((S, i) => {
+    const team = active(m, i).map(o => m.pl[o.id]).sort((a, b) => (a.pos === 'GK') - (b.pos === 'GK') || skill(b) - skill(a));
+    const first = m.pl[S.takers.pen];
+    return first && team.includes(first) ? [first, ...team.filter(p => p !== first)] : team;
+  });
+  const score = [0, 0];
+  for (let k = 0; k < 100; k++) {
+    for (const i of [0, 1]) {
+      const takers = order[i], p = takers[k % takers.length];
+      if (p && rng.next() < penScore(m, p, 1 - i)) score[i]++;
+      const left = j => Math.max(0, 5 - k - (j <= i ? 1 : 0)); // kicks still to come in the first five
+      if (k < 5 && (score[0] > score[1] + left(1) || score[1] > score[0] + left(0))) return (m.pens = score);
+    }
+    if (k >= 4 && score[0] !== score[1]) return (m.pens = score);
+  }
+  return (m.pens = [score[0] + 1, score[1]]); // ponytail: only reached when neither side has a player left
 }
 
 export function simMatch(rng, home, away) {
