@@ -39,6 +39,7 @@ test('deserialize returns null for missing, corrupt or wrong-version saves', () 
   assert.equal(deserialize(JSON.stringify({ teams: [] })), null); // the old demo's save shape
   assert.equal(deserialize('{"version":1}'), null); // right version, wrong shape
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), me: 999 })), null); // dangling club index
+  assert.equal(deserialize(serialize({ ...createWorld(1, MINI), training: { ...defaultTraining(), ind: null } })), null); // null is not an object here
 });
 
 test('a career saved in the middle of a live match resumes identically', () => {

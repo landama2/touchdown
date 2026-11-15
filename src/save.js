@@ -17,7 +17,7 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
   && (s.live === null || (typeof s.live === 'object' && Array.isArray(s.live.sides)))
   && Array.isArray(s.bench) && !!s.tactics && Array.isArray(s.tactics.slots) && !!s.fam && typeof s.fam === 'object'
   && Array.isArray(s.days) && Number.isInteger(s.next) && Array.isArray(s.playoffs) && Array.isArray(s.records) && (s.cup === null || typeof s.cup === 'object')
-  && !!s.training && typeof s.training.ind === 'object' && Array.isArray(s.news);
+  && !!s.training && !!s.training.ind && typeof s.training.ind === 'object' && Array.isArray(s.news);
 
 // MIGRATIONS[v] upgrades a save from version v to v + 1.
 const MIGRATIONS = {

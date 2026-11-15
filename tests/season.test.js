@@ -5,6 +5,7 @@ import { FORMATIONS, BENCH, slots, bestXI, autoBench, fixLineup, strength, swap,
 import { available } from '../src/squad.js';
 import { setTraining } from '../src/training.js';
 import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason } from '../src/season.js';
+import { serialize, deserialize } from '../src/save.js';
 import { cupRounds } from '../src/cup.js';
 import { stepMinute, matchResult } from '../src/match.js';
 import { MINI } from './fixtures/mini.js';
@@ -405,11 +406,47 @@ test('a season of squad dynamics: nobody plays while out, players get injured an
 test('news lists only your new injuries and bans; condition stays a whole number 0-100', () => {
   const s = world(32);
   takeClub(s, 6);
+  let count = 0;
   for (let k = 0; k < 40 && !s.done; k++) {
     playDay(s);
+    count += s.news.length;
     for (const n of s.news) assert.ok(n.club === 6 && myClub(s).players.some(p => p.id === n.id) && ['injury', 'ban'].includes(n.type), JSON.stringify(n));
     assert.ok(s.clubs.every(c => c.players.every(p => Number.isInteger(p.cond) && p.cond >= 0 && p.cond <= 100)));
   }
+  assert.ok(count > 0, 'no news in 40 days');
+});
+
+test('the random state moves on past the training draws, so the next day does not reuse them', () => {
+  const s = world(35);
+  takeClub(s, 6);
+  let checked = 0;
+  while (!s.done && checked < 5) {
+    const t = deserialize(serialize(s)), gapEnd = t.days[t.next + 1]?.day, today = t.days[t.next].day;
+    if (gapEnd === undefined || Math.floor(gapEnd / 7) === Math.floor(today / 7)) { playDay(s); continue; }
+    t.days[t.next + 1].day = today; // the same match day with no week boundary to train in
+    playDay(t);
+    playDay(s);
+    assert.notEqual(s.seed, t.seed, 'training drew from the generator but its state was not kept');
+    checked++;
+  }
+  assert.ok(checked > 0);
+});
+
+test('training-injury news shows the days still left, not the days before the next match day', () => {
+  const s = world(36);
+  takeClub(s, 6);
+  setTraining(s, 'intensity', 'Hard');
+  let seen = 0;
+  while (!s.done) {
+    playDay(s);
+    for (const n of s.news.filter(n => n.type === 'injury' && n.training)) {
+      const p = myClub(s).players.find(p => p.id === n.id);
+      assert.ok(p.inj, `${n.name} is already healed`);
+      assert.equal(p.inj.days, n.days);
+      seen++;
+    }
+  }
+  assert.ok(seen > 0, 'no training injuries in the season');
 });
 
 test('your training schedule trains your squad, AI clubs train Balanced; the summer break resets the season', () => {
@@ -428,5 +465,5 @@ test('condition matters: some players start a match day still tired from the las
   takeClub(s, 6);
   let tired = 0;
   while (!s.done) { tired += s.clubs.reduce((t, c) => t + c.players.filter(p => p.cond < 100).length, 0); playDay(s); }
-  assert.ok(tired > 600, `only ${tired} tired player-days: recovery is too fast`); // 894 at 6/5/3 a day; the old 9/8/6 gave 346
+  assert.ok(tired > 616, `only ${tired} tired player-days: recovery is too fast`); // 895 at 6/5/3 a day; the old 9/8/6 gave 337; the threshold is midway
 });

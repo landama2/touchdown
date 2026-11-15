@@ -22,7 +22,7 @@ export const INTENSITY = { Light: { grow: 0.7, recover: 6, injury: 0.5 }, Normal
 const GROWTH = 0.1, DECLINE = 0.05, INJURY = 0.004, REST_RECOVER = 2; // chances per player per week
 
 export const defaultTraining = () => ({ focus: 'Balanced', intensity: 'Normal', ind: {} });
-const AI_TRAINING = defaultTraining();
+const AI_TRAINING = Object.freeze({ ...defaultTraining(), ind: Object.freeze({}) });
 export const trainingOf = (s, club) => club.id === s.me ? s.training : AI_TRAINING;
 export const recoverRate = t => INTENSITY[t.intensity].recover + (t.focus === 'Rest' ? REST_RECOVER : 0);
 

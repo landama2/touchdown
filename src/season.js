@@ -123,9 +123,11 @@ function between(s, rng, from, to) {
   const weeks = Math.floor(to / 7) - Math.floor(from / 7);
   for (const c of s.clubs) {
     const t = trainingOf(s, c);
-    for (let w = 0; w < weeks; w++) for (const p of trainWeek(rng, c, t))
-      if (c.id === s.me) s.news.push({ type: 'injury', club: c.id, id: p.id, name: p.name, injury: p.inj.name, days: p.inj.days, training: true });
+    const hurt = [];
+    for (let w = 0; w < weeks; w++) hurt.push(...trainWeek(rng, c, t));
     passDays(c.players, to - from, recoverRate(t));
+    if (c.id === s.me) for (const p of hurt) if (p.inj) // only those still hurt when the next match day comes
+      s.news.push({ type: 'injury', club: c.id, id: p.id, name: p.name, injury: p.inj.name, days: p.inj.days, training: true });
   }
   passDays(s.market, to - from, INTENSITY.Normal.recover);
 }
@@ -155,11 +157,11 @@ export function playDay(s) {
   if (s.me !== null) s.budget += 25e3 * tier(myClub(s)) * (Math.floor(today.day / 7) - Math.floor(s.day / 7)); // weekly income
   if (played) learnFam(s.fam, s.formation); // the formation you prepared, not mid-match switches
   s.live = null;
-  s.seed = rng.seed;
   s.day = today.day;
   s.next++;
   s.done = s.next === s.days.length;
   if (!s.done) between(s, rng, today.day, s.days[s.next].day);
+  s.seed = rng.seed; // after the training draws too, so the next day does not reuse them
   return s.last;
 }
 
