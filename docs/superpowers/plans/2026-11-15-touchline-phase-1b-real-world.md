@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the generated fictional world with the real English top three divisions (Premier League, Championship, League One) for the 2026–27 season, with real club and player names, our own player ratings, original club badges and kits drawn in club colours, and a free-agent list that partly carries over between seasons.
+**Goal:** Replace the generated fictional world with the real English top three divisions (Premier League, Championship, League One) for the 2026–27 season, with real club and player names, player attributes imported from the owner's dataset `data/player_stats.csv` where a player appears in it (our own ratings for everyone else), original club badges and kits drawn in club colours, and a free-agent list that partly carries over between seasons.
 
 **Architecture:** Club and squad data lives in three plain ES-module data files under `src/data/england/`, checked by a validator. `createWorld` builds the career from that data instead of generating names; engine tests use a small fake data set so they do not depend on the real squads. Badges and kits are SVG strings built by a pure module in `src/ui/art.js`. Divisions of different sizes (20 and 24 clubs) run side by side; the shorter one simply has no fixtures in the last rounds.
 
@@ -14,7 +14,7 @@
 - Engine code (`src/*.js`, `src/data/**/*.js`) must not reference `document`, `window`, `localStorage`, `Math.random` or `Date`. Randomness comes only from the `rng` passed in or built from `state.seed`.
 - State must survive `JSON.parse(JSON.stringify(state))` unchanged: no `Map`, `Set`, class instances, functions or `undefined` values in state.
 - This is a private personal project: real club and player names are wanted.
-- Player ratings are Touchline's own estimates on its own 1–20 scale. Do not copy, convert or look up ratings from EA SPORTS FC / FIFA, FIFA Index, Football Manager or any other game or ratings database.
+- Player attributes come from `data/player_stats.csv` (the owner's own dataset, 0–99 scale, columns such as `ball_control`, `stand_tackle`, `gk_reflexes`) through `scripts/import-stats.mjs` where a player appears in it. Every other player gets attributes generated from Touchline's own 1–20 rating. Do not fetch ratings from any other site or game (FIFA Index, Football Manager and the like). `data/player_stats.csv` stays a local input: the browser never loads it.
 - Badges and kits are Touchline's own artwork: a club's colours, a simple shape or pattern, and its three-letter code. Do not reproduce any real crest, emblem, sponsor or manufacturer logo.
 - Leagues and sizes: Premier League 20 clubs, Championship 24 clubs, League One 24 clubs, season 2026–27.
 - Player attributes are integers 1–20. `overall()` returns an integer 5–100.
@@ -30,6 +30,10 @@
 | `src/data/england/championship.js` | Championship 2026–27 clubs and squads |
 | `src/data/england/league-one.js` | League One 2026–27 clubs and squads |
 | `src/data/england.js` | `LEAGUES` — the three files in division order |
+| `data/player_stats.csv` | The owner's attribute dataset (input only, already present) |
+| `src/data/attrmap.js` | Maps a dataset row to Touchline's 19 attributes; name normalisation |
+| `scripts/import-stats.mjs` | Node script: matches squad players to the dataset, writes `src/data/england-stats.js` |
+| `src/data/england-stats.js` | Generated: `{ clubName: { playerName: number[19] } }` |
 | `src/data/names.js` | Name fragments for generated free agents and youth intake only |
 | `src/world.js` | Build a career state from league data; `playerFromData` |
 | `src/season.js` | Season loop; free-agent carry-over; divisions of different sizes; `myFixture` |
@@ -130,7 +134,7 @@ git commit -m "feat: free agents partly carry over between seasons"
 **Interfaces:**
 - Consumes: `POS`, `ALL_ATTRS` from `src/player.js`.
 - Produces:
-  - League data format (used by Tasks 3–7):
+  - League data format (used by Tasks 3–9):
     ```
     League = { name: string, clubs: Club[] }
     Club   = { name: string, short: 'ABC', colours: ['#rrggbb', '#rrggbb'],
@@ -327,7 +331,7 @@ How the files in `src/data/england/` are compiled. Tasks that add or update squa
 - `name`: as commonly written in English sources (the squad list on Wikipedia).
 - `pos`: `GK`, `DF`, `MF` or `FW`, as in the squad list. Wing-backs are `DF`; wingers and attacking midfielders listed as forwards are `FW`.
 - `age`: age on 1 August 2026, as an integer. Take it from the player's page where cheap; otherwise estimate. The file header states how many ages are estimates.
-- `rating`: **Touchline's own judgement** on a 1–20 scale, never copied or converted from EA SPORTS FC / FIFA, FIFA Index, Football Manager or any other game or ratings database. Base it on public facts: the league the player plays in, whether he is a regular starter, international caps, recent seasons. Scale (overall in the game is roughly 5 × rating + 6):
+- `rating`: **Touchline's own judgement** on a 1–20 scale. Base it on public facts: the league the player plays in, whether he is a regular starter, international caps, recent seasons. If the player appears in `data/player_stats.csv` (the owner's dataset), you may use it as a reference; its 0–99 values divide by 5 onto this scale. Do not look up ratings on any other site or game (FIFA Index, Football Manager and the like). Players found in the dataset get their game attributes from it later (Task 6); the rating still sets club strength and covers everyone else. Scale (overall in the game is roughly 5 × rating + 6):
 
   | Rating | Meaning |
   |--------|---------|
@@ -549,7 +553,214 @@ git commit -m "data: League One 2026-27 clubs and squads"
 
 ---
 
-### Task 6: Build the world from real data
+### Task 6: Import attributes from the owner's dataset
+
+**Files:**
+- Create: `src/data/attrmap.js`, `tests/attrmap.test.js`, `scripts/import-stats.mjs`
+- Generate: `src/data/england-stats.js` (by running the script; committed)
+- Input (already present, do not modify): `data/player_stats.csv`
+
+**Interfaces:**
+- Consumes: `ALL_ATTRS` from `src/player.js` (order: passing, dribbling, finishing, tackling, heading, firstTouch, crossing, vision, positioning, composure, workRate, decisions, aggression, pace, stamina, strength, agility, handling, reflexes); the three data files from Tasks 3–5.
+- Produces:
+  - `STAT_MAP` — which dataset columns feed each Touchline attribute.
+  - `attrsFromStats(row: { [column]: string }, pos) → number[19]` in `ALL_ATTRS` order, each an integer 1–20 (mean of the mapped 0–99 columns ÷ 5, rounded; empty cells skipped; no usable cell → 1).
+  - `isKeeper(row) → boolean` — mean of `gk_diving`, `gk_handling`, `gk_reflexes` is at least 45.
+  - `normName(name) → string` — lower case, accents and special letters folded to ASCII, punctuation to spaces, single spaces.
+  - `src/data/england-stats.js`: `export default { [clubName]: { [playerName]: number[19] } }` — keys exactly as in the data files.
+
+The dataset facts that shape this task: 5,675 rows, 41 columns, no quoted fields and no commas inside fields (a plain `split(',')` is safe), club names have a trailing space, `marking` is empty in 158 rows, 23 player names occur more than once, there is no position column, and English clubs have only 3–17 players each from an older season. Expect a minority of squad players to match.
+
+- [ ] **Step 1: Write the failing test** — `tests/attrmap.test.js`
+
+```js
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { ALL_ATTRS } from '../src/player.js';
+import { STAT_MAP, attrsFromStats, isKeeper, normName } from '../src/data/attrmap.js';
+
+const COLUMNS = 'ball_control,dribbling,marking,slide_tackle,stand_tackle,aggression,reactions,att_position,interceptions,vision,composure,crossing,short_pass,long_pass,acceleration,stamina,strength,balance,sprint_speed,agility,jumping,heading,shot_power,finishing,long_shots,curve,fk_acc,penalties,volleys,gk_positioning,gk_diving,gk_handling,gk_kicking,gk_reflexes'.split(',');
+const row = (v, extra = {}) => ({ ...Object.fromEntries(COLUMNS.map(c => [c, String(v)])), ...extra });
+
+test('STAT_MAP covers every Touchline attribute with real dataset columns', () => {
+  assert.deepEqual(Object.keys(STAT_MAP).sort(), [...ALL_ATTRS].sort());
+  for (const spec of Object.values(STAT_MAP))
+    for (const cols of Array.isArray(spec) ? [spec] : Object.values(spec))
+      for (const c of cols) assert.ok(COLUMNS.includes(c), c);
+});
+
+test('attrsFromStats scales 0-99 onto 1-20 in ALL_ATTRS order', () => {
+  const a = attrsFromStats(row(80), 'MF');
+  assert.equal(a.length, ALL_ATTRS.length);
+  assert.ok(a.every(v => v === 16));
+  assert.ok(attrsFromStats(row(99), 'FW').every(v => v === 20));
+  assert.ok(attrsFromStats(row(2), 'FW').every(v => v === 1));
+});
+
+test('attrsFromStats averages columns and skips empty cells', () => {
+  const a = attrsFromStats(row(50, { stand_tackle: '60', slide_tackle: '70', marking: '' }), 'DF');
+  assert.equal(a[ALL_ATTRS.indexOf('tackling')], 13);
+  const b = attrsFromStats(row(50, { acceleration: '90', sprint_speed: '80' }), 'FW');
+  assert.equal(b[ALL_ATTRS.indexOf('pace')], 17);
+});
+
+test('positioning depends on the position', () => {
+  const r = row(50, { gk_positioning: '90', att_position: '20', interceptions: '40', marking: '40' });
+  assert.equal(attrsFromStats(r, 'GK')[ALL_ATTRS.indexOf('positioning')], 18);
+  assert.equal(attrsFromStats(r, 'DF')[ALL_ATTRS.indexOf('positioning')], 8);
+  assert.equal(attrsFromStats(r, 'FW')[ALL_ATTRS.indexOf('positioning')], 4);
+});
+
+test('isKeeper tells goalkeepers from outfield players', () => {
+  assert.equal(isKeeper(row(10, { gk_diving: '74', gk_handling: '65', gk_reflexes: '74' })), true);
+  assert.equal(isKeeper(row(60, { gk_diving: '10', gk_handling: '8', gk_reflexes: '9' })), false);
+});
+
+test('normName folds accents, special letters and punctuation', () => {
+  assert.equal(normName('Cédric Zesiger'), 'cedric zesiger');
+  assert.equal(normName('Martin Ødegaard'), 'martin odegaard');
+  assert.equal(normName('Łukasz  Fabiański'), 'lukasz fabianski');
+  assert.equal(normName("Dara O'Shea"), 'dara o shea');
+  assert.equal(normName('Thomas Dähne'), 'thomas dahne');
+});
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `node --test tests/attrmap.test.js`
+Expected: FAIL — `Cannot find module '.../src/data/attrmap.js'`
+
+- [ ] **Step 3: Implement** — `src/data/attrmap.js`
+
+```js
+import { ALL_ATTRS } from '../player.js';
+
+// Touchline attribute <- columns of data/player_stats.csv (0-99). Several columns are averaged.
+export const STAT_MAP = {
+  passing: ['short_pass', 'long_pass'],
+  dribbling: ['dribbling'],
+  finishing: ['finishing', 'volleys'],
+  tackling: ['stand_tackle', 'slide_tackle', 'marking'],
+  heading: ['heading', 'jumping'],
+  firstTouch: ['ball_control'],
+  crossing: ['crossing'],
+  vision: ['vision'],
+  positioning: { GK: ['gk_positioning'], DF: ['interceptions', 'marking'], MF: ['interceptions', 'att_position'], FW: ['att_position'] },
+  composure: ['composure'],
+  workRate: ['stamina', 'aggression'],
+  decisions: ['reactions'],
+  aggression: ['aggression'],
+  pace: ['acceleration', 'sprint_speed'],
+  stamina: ['stamina'],
+  strength: ['strength'],
+  agility: ['agility', 'balance'],
+  handling: ['gk_handling'],
+  reflexes: ['gk_reflexes', 'gk_diving'],
+};
+
+const to20 = v => Math.max(1, Math.min(20, Math.round(v / 5)));
+const num = v => (v === undefined || v === null || String(v).trim() === '' ? NaN : Number(v));
+
+export function attrsFromStats(row, pos) {
+  return ALL_ATTRS.map(k => {
+    const cols = Array.isArray(STAT_MAP[k]) ? STAT_MAP[k] : STAT_MAP[k][pos];
+    const vals = cols.map(c => num(row[c])).filter(Number.isFinite);
+    return vals.length ? to20(vals.reduce((a, b) => a + b) / vals.length) : 1;
+  });
+}
+
+export const isKeeper = row => (num(row.gk_diving) + num(row.gk_handling) + num(row.gk_reflexes)) / 3 >= 45;
+
+const FOLD = { ø: 'o', æ: 'ae', ß: 'ss', ł: 'l', đ: 'd', ð: 'd', ı: 'i' };
+export const normName = name => name.toLowerCase()
+  .replace(/[øæßłđðı]/g, c => FOLD[c])
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+```
+
+- [ ] **Step 4: Run to verify it passes**
+
+Run: `node --test tests/attrmap.test.js`
+Expected: 6 tests pass.
+
+- [ ] **Step 5: Write the import script** — `scripts/import-stats.mjs`
+
+```js
+// Builds src/data/england-stats.js from data/player_stats.csv (the owner's dataset).
+// Run from the project root: node scripts/import-stats.mjs
+// The CSV has no quoted fields and no commas inside fields, so a plain split is safe.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { ALL_ATTRS } from '../src/player.js';
+import { attrsFromStats, isKeeper, normName } from '../src/data/attrmap.js';
+import premierLeague from '../src/data/england/premier-league.js';
+import championship from '../src/data/england/championship.js';
+import leagueOne from '../src/data/england/league-one.js';
+
+const [head, ...lines] = readFileSync(new URL('../data/player_stats.csv', import.meta.url), 'utf8').trim().split(/\r?\n/);
+const cols = head.split(',');
+const rows = lines.map(line => Object.fromEntries(line.split(',').map((v, i) => [cols[i], v.trim()])));
+
+const byName = new Map();
+for (const r of rows) { const k = normName(r.player); byName.set(k, [...(byName.get(k) || []), r]); }
+
+const out = {}, ambiguous = [], keeperMismatch = [], perLeague = [];
+let elsewhere = 0;
+for (const league of [premierLeague, championship, leagueOne]) {
+  let matched = 0, total = 0;
+  for (const club of league.clubs) {
+    const clubKey = normName(club.name);
+    for (const [name, pos] of club.players) {
+      total++;
+      const hits = byName.get(normName(name)) || [];
+      const hit = hits.length === 1 ? hits[0] : hits.find(r => normName(r.club) === clubKey);
+      if (!hit) { if (hits.length > 1) ambiguous.push(`${club.name} / ${name}`); continue; }
+      if ((pos === 'GK') !== isKeeper(hit)) { keeperMismatch.push(`${club.name} / ${name} (${pos}, dataset club ${hit.club})`); continue; }
+      if (normName(hit.club) !== clubKey) elsewhere++;
+      (out[club.name] ||= {})[name] = attrsFromStats(hit, pos);
+      matched++;
+    }
+  }
+  perLeague.push(`${league.name}: ${matched} of ${total} players matched`);
+}
+
+const body = Object.entries(out).map(([club, players]) =>
+  `  ${JSON.stringify(club)}: {\n${Object.entries(players).map(([n, a]) => `    ${JSON.stringify(n)}: ${JSON.stringify(a)},`).join('\n')}\n  },`).join('\n');
+writeFileSync(new URL('../src/data/england-stats.js', import.meta.url),
+  `// Generated by scripts/import-stats.mjs from data/player_stats.csv. Do not edit by hand; re-run the script.\n`
+  + `// Each array holds: ${ALL_ATTRS.join(', ')}\nexport default {\n${body}\n};\n`);
+
+console.log(perLeague.join('\n'));
+console.log(`Matched at a different club in the dataset (older season): ${elsewhere}`);
+console.log(`Ambiguous names skipped (${ambiguous.length}): ${ambiguous.join('; ') || 'none'}`);
+console.log(`Goalkeeper/outfield mismatches skipped (${keeperMismatch.length}): ${keeperMismatch.join('; ') || 'none'}`);
+```
+
+- [ ] **Step 6: Run the script**
+
+Run: `node scripts/import-stats.mjs`
+Expected: three "N of M players matched" lines, then the three report lines. Copy the whole output into the task report. Then run:
+
+```bash
+node --input-type=module -e "import s from './src/data/england-stats.js'; const n = Object.values(s).reduce((t, c) => t + Object.keys(c).length, 0); console.log(Object.keys(s).length, 'clubs,', n, 'players')"
+```
+Expected: a non-zero player count equal to the sum of the matched counts.
+
+- [ ] **Step 7: Spot-check five matches**
+
+Pick five matched players across the three divisions and compare the generated array against their CSV row by hand (for example `finishing` = round(mean(finishing, volleys) ÷ 5)). Note them in the report. If a match is clearly a different person (same name, implausible club history), report it — do not edit the generated file by hand.
+
+- [ ] **Step 8: Run the full suite and commit**
+
+Run: `npm test` — all pass.
+
+```bash
+git add src/data/attrmap.js tests/attrmap.test.js scripts/import-stats.mjs src/data/england-stats.js data/player_stats.csv
+git commit -m "feat: import player attributes from the owner's dataset"
+```
+
+---
+
+### Task 7: Build the world from real data
 
 **Files:**
 - Create: `src/data/england.js`, `tests/england.test.js`
@@ -557,11 +768,11 @@ git commit -m "data: League One 2026-27 clubs and squads"
 - Modify: `tests/world.test.js` (replace whole file), `tests/season.test.js` (replace whole file), `tests/transfers.test.js` (2 lines), `tests/save.test.js` (3 lines)
 
 **Interfaces:**
-- Consumes: Task 2's format and `validateLeagues`; Tasks 3–5's data files; `createPlayer(rng, id, pos, quality, age)`, `WEIGHTS`, `POS` from `src/player.js`; `makeFixtures`; `makeRng`.
+- Consumes: Task 2's format and `validateLeagues`; Tasks 3–5's data files; Task 6's generated `src/data/england-stats.js` (`{ clubName: { playerName: number[19] } }` in `ALL_ATTRS` order); `createPlayer(rng, id, pos, quality, age)`, `WEIGHTS`, `POS`, `ALL_ATTRS` from `src/player.js`; `makeFixtures`; `makeRng`.
 - Produces:
   - `LEAGUES: League[]` from `src/data/england.js` — `[premier, championship, leagueOne]`.
-  - `createWorld(seed: number, leagues = LEAGUES) → State`. Club becomes `{ id, name, short, colours, kit, div, quality, players, st }` where `quality` is the mean data rating of the squad.
-  - `playerFromData(rng, id, row: PlayerRow) → Player` — real name, age and position; `createPlayer` with `quality = rating`; each strength +2 (max 20); `pot` raised to at least every key attribute.
+  - `createWorld(seed: number, leagues = LEAGUES, stats = STATS) → State`. Club becomes `{ id, name, short, colours, kit, div, quality, players, st }` where `quality` is the mean data rating of the squad. A player found in `stats[club.name][player.name]` takes those attributes.
+  - `playerFromData(rng, id, row: PlayerRow, stats?: number[19]) → Player` — real name, age and position; `createPlayer` with `quality = rating`; with `stats`, the attributes are replaced by `stats` and strengths are ignored; without, each strength +2 (max 20). In both cases `pot` = best key attribute + (0–2 if under 23), max 20.
   - `MARKET_SIZE = 40`, `blankStats()` unchanged. `DIVISIONS`, `CLUBS_PER_DIV`, `SQUAD_SHAPE`, `clubNames` are removed.
   - `playRound(state)`: a division with no fixture for the current round contributes `[]` to the result; the season is done after the longest division's last round.
   - `myFixture(state) → [homeId, awayId] | null` — the human club's match this round, or `null` when its division has none.
@@ -587,7 +798,7 @@ Replace `tests/world.test.js` with:
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRng } from '../src/rng.js';
-import { overall, WEIGHTS } from '../src/player.js';
+import { overall, WEIGHTS, ALL_ATTRS } from '../src/player.js';
 import { makeFixtures } from '../src/fixtures.js';
 import { SAVE_VERSION } from '../src/save.js';
 import { createWorld, playerFromData, MARKET_SIZE } from '../src/world.js';
@@ -645,6 +856,23 @@ test('playerFromData keeps name, age and position and applies strengths', () => 
   assert.equal(strong.attrs.finishing, Math.min(20, plain.attrs.finishing + 2));
   assert.equal(strong.attrs.dribbling, plain.attrs.dribbling);
   for (const k of Object.keys(WEIGHTS.FW)) assert.ok(strong.pot >= strong.attrs[k], k);
+});
+
+test('playerFromData uses imported stats when given, ignoring strengths', () => {
+  const stats = ALL_ATTRS.map((_, i) => 1 + (i % 20));
+  const p = playerFromData(makeRng(4), 9, ['Stat Player', 'MF', 21, 10, ['pace']], stats);
+  assert.deepEqual(ALL_ATTRS.map(k => p.attrs[k]), stats);
+  const best = Math.max(...Object.keys(WEIGHTS.MF).map(k => p.attrs[k]));
+  assert.ok(p.pot >= best && p.pot <= Math.min(20, best + 2));
+});
+
+test('createWorld applies stats by club and player name', () => {
+  const stats = { Alpha: { 'Alpha GK1': Array(ALL_ATTRS.length).fill(12) } };
+  const s = createWorld(1, MINI, stats);
+  const gk = s.clubs[0].players.find(p => p.name === 'Alpha GK1');
+  assert.ok(ALL_ATTRS.every(k => gk.attrs[k] === 12));
+  const other = s.clubs[0].players.find(p => p.name === 'Alpha GK2');
+  assert.ok(!ALL_ATTRS.every(k => other.attrs[k] === 12));
 });
 
 test('higher divisions are stronger', () => {
@@ -844,9 +1072,10 @@ Create `tests/england.test.js`:
 ```js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { overall } from '../src/player.js';
+import { overall, ALL_ATTRS } from '../src/player.js';
 import { validateLeagues } from '../src/data/validate.js';
 import { LEAGUES } from '../src/data/england.js';
+import STATS from '../src/data/england-stats.js';
 import { createWorld } from '../src/world.js';
 import { takeClub, playRound, endSeason } from '../src/season.js';
 
@@ -866,6 +1095,21 @@ test('the default world is the English pyramid and plays a full season', () => {
   assert.equal(s.season, 2);
 });
 
+test('imported stats refer to real squad players and hold 19 attributes 1-20', () => {
+  const clubs = new Map(LEAGUES.flatMap(l => l.clubs).map(c => [c.name, new Set(c.players.map(p => p[0]))]));
+  let n = 0;
+  for (const [club, players] of Object.entries(STATS)) {
+    assert.ok(clubs.has(club), `unknown club ${club}`);
+    for (const [name, attrs] of Object.entries(players)) {
+      assert.ok(clubs.get(club).has(name), `${club} / ${name} not in the squad data`);
+      assert.equal(attrs.length, ALL_ATTRS.length);
+      assert.ok(attrs.every(v => Number.isInteger(v) && v >= 1 && v <= 20), `${club} / ${name}`);
+      n++;
+    }
+  }
+  assert.ok(n > 0, 'no imported players');
+});
+
 test('the Premier League is stronger than the Championship, which is stronger than League One', () => {
   const s = createWorld(2);
   const avg = d => { const ps = s.divisions[d].clubIds.flatMap(id => s.clubs[id].players); return ps.reduce((t, p) => t + overall(p), 0) / ps.length; };
@@ -882,10 +1126,11 @@ Expected: FAIL — `playerFromData` is not exported from `src/world.js` and `myF
 
 ```js
 import { makeRng } from './rng.js';
-import { POS, WEIGHTS, createPlayer } from './player.js';
+import { POS, WEIGHTS, ALL_ATTRS, createPlayer } from './player.js';
 import { makeFixtures } from './fixtures.js';
 import { SAVE_VERSION } from './save.js';
 import { LEAGUES } from './data/england.js';
+import STATS from './data/england-stats.js';
 
 export const MARKET_SIZE = 40;
 const FREE_AGENT_QUALITY = 9;
@@ -893,17 +1138,20 @@ const STRENGTH_BONUS = 2;
 
 export const blankStats = () => ({ p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 });
 
-// A data row becomes a full player: attributes are generated around the rating, then the
-// listed strengths are lifted. pot is raised so it never sits below a key attribute.
-export function playerFromData(rng, id, [name, pos, age, rating, strengths = []]) {
+// A data row becomes a full player. With imported stats the attributes come from the owner's
+// dataset; otherwise they are generated around the rating and the listed strengths are lifted.
+// pot always starts at the best key attribute (+0-2 for under-23s), so it never sits below one.
+export function playerFromData(rng, id, [name, pos, age, rating, strengths = []], stats) {
   const p = createPlayer(rng, id, pos, rating, age);
   p.name = name;
-  for (const k of strengths) p.attrs[k] = Math.min(20, p.attrs[k] + STRENGTH_BONUS);
-  p.pot = Math.max(p.pot, ...Object.keys(WEIGHTS[pos]).map(k => p.attrs[k]));
+  if (stats) ALL_ATTRS.forEach((k, i) => { p.attrs[k] = stats[i]; });
+  else for (const k of strengths) p.attrs[k] = Math.min(20, p.attrs[k] + STRENGTH_BONUS);
+  const best = Math.max(...Object.keys(WEIGHTS[pos]).map(k => p.attrs[k]));
+  p.pot = Math.min(20, best + (age < 23 ? rng.int(0, 2) : 0));
   return p;
 }
 
-export function createWorld(seed, leagues = LEAGUES) {
+export function createWorld(seed, leagues = LEAGUES, stats = STATS) {
   const rng = makeRng(seed);
   const s = {
     version: SAVE_VERSION, seed, nid: 1,
@@ -917,7 +1165,7 @@ export function createWorld(seed, leagues = LEAGUES) {
       s.clubs.push({
         id, name: c.name, short: c.short, colours: [...c.colours], kit: { ...c.kit }, div,
         quality: c.players.reduce((t, row) => t + row[3], 0) / c.players.length,
-        players: c.players.map(row => playerFromData(rng, s.nid++, row)),
+        players: c.players.map(row => playerFromData(rng, s.nid++, row, stats[c.name]?.[row[0]])),
         st: blankStats(),
       });
       return id;
@@ -1023,7 +1271,7 @@ git commit -m "feat: build the world from real English league data"
 
 ---
 
-### Task 7: Club badges and kits
+### Task 8: Club badges and kits
 
 **Files:**
 - Create: `src/ui/art.js`, `tests/art.test.js`
@@ -1163,14 +1411,14 @@ git commit -m "feat: original club badges and kits as SVG"
 
 ---
 
-### Task 8: UI with real clubs, badges and kits
+### Task 9: UI with real clubs, badges and kits
 
 **Files:**
 - Modify: `src/ui/app.js` (replace whole file)
 - Modify: `index.html` (add CSS rules inside `<style>`)
 
 **Interfaces:**
-- Consumes: `crestSvg`, `kitSvg` (Task 7); `myFixture`, `takeClub`, `myClub`, `playRound`, `table`, `endSeason` (`src/season.js`); `createWorld` (`src/world.js`); everything the current `src/ui/app.js` already imports.
+- Consumes: `crestSvg`, `kitSvg` (Task 8); `myFixture`, `takeClub`, `myClub`, `playRound`, `table`, `endSeason` (`src/season.js`); `createWorld` (`src/world.js`); everything the current `src/ui/app.js` already imports.
 - Produces: the playable game. No exports.
 
 - [ ] **Step 1: Add styles** — in `index.html`, inside `<style>`, before `</style>`:
@@ -1353,7 +1601,8 @@ git commit -m "feat: real clubs with badges and kits in the UI"
 
 - `npm test` passes, including `tests/england.test.js` on the real data.
 - The engine purity grep prints nothing.
-- All ten browser checks in Task 8 Step 4 pass.
+- All ten browser checks in Task 9 Step 4 pass.
+- The import report from Task 6 (players matched per division, ambiguous names, keeper mismatches) is in the phase summary.
 - Every club in the three data files has a header comment with sources, and each data task's report states how many ages and which clubs were estimated from memory.
 - `docs/fun-surprises.md` is updated with any new quirk found during this phase, and the phase summary lists them.
 
