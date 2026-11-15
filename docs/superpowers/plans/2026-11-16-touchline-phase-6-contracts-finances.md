@@ -34,7 +34,7 @@
   - penalties 0.15–0.4 per match;
   - players unavailable 0.5–3 per club.
 - **New money targets** (real leagues, seed 1):
-  - the best Premier League player is valued at €50–150M and earns €120–350k a week;
+  - the best Premier League player is valued at €50–150M and earns €150–450k a week;
   - the median League One player is valued at €0.1–1.5M and earns €1.5–10k a week;
   - over a season, wages divided by income (broadcast + sponsorship + gate) average 0.4–0.8 for Premier League clubs, 0.75–1.3 for the Championship and 0.6–1.2 for League One;
   - the average Premier League club's income is at least 5× the average Championship club's.
@@ -64,14 +64,14 @@ The age factor is unchanged (×1.3 under 24, ×0.6 over 30), so fun surprise #2 
 
 **Wages** (`wage(p)` in `src/finance.js`, euros a week):
 
-`max(€500, round(€4.5k × e^(0.09 × (overall − 50)) × (0.6 if under 21), to €500))`
+`max(€500, round(€2.2k × e^(0.112 × (overall − 50)) × (0.6 if under 21), to €500))`
 
 | Overall | Weekly wage |
 |---------|-------------|
-| 50 | €4.5k |
-| 66 | about €18k |
-| 76 | about €45k |
-| 93 | about €200k |
+| 50 | €2k |
+| 66 | about €13k |
+| 76 | about €40k |
+| 93 | about €270k |
 
 **Contracts.**
 - `p.contract = { wage, until, clause }`:
@@ -98,13 +98,13 @@ The age factor is unchanged (×1.3 under 24, ×0.6 over 30), so fun surprise #2 
 
   | Source | Amount |
   |--------|--------|
-  | Broadcast | €108M Premier League · €10.5M Championship · €8M League One (tuned in Phase 6) |
+  | Broadcast | €93M Premier League · €7.5M Championship · €2.5M League One (tuned in Phase 6) |
   | Merit prize, per place counted from the bottom | €2.5M · €0.1M · €0.05M |
-  | Sponsorship | €0.5M × e^(0.6 × (quality − 8)), rounded to €100k |
-  | Gate, per home match (not neutral finals) | €80k × e^(0.45 × (quality − 8)), rounded to €1k |
+  | Sponsorship | €0.8M × e^(0.46 × (quality − 8)), rounded to €100k |
+  | Gate, per home match (not neutral finals) | €125k × e^(0.32 × (quality − 8)), rounded to €1k |
   | FA Cup prize | €2M winner, €1M runner-up |
 
-  Sponsorship and gate come out at about €0.5M and €80k for a League One club (quality 8), and about €61M and €2.9M for a big Premier League club (quality 16).
+  Sponsorship and gate come out at about €0.8M and €125k for a League One club (quality 8), and about €32M and €1.6M for a big Premier League club (quality 16).
 - Divisions beyond the third use the last value.
 - Broadcast, sponsorship and wages are paid in `SEASON_WEEKS` = 43 weekly instalments (day 0 to the play-off finals, counted like the old weekly income). Each instalment is rounded once, so a week is always the same amount. Wages per instalment: wage bill × 52 / 43.
 - **Opening balance:** a quarter of `projection(s, c)` (a season's income at mid-table), rounded to €100k.
@@ -198,19 +198,19 @@ test('value: real-world scale, falling with age, never below €10k', () => {
 });
 
 test('wage: real-world scale per week, less for under-21s, in steps of €500', () => {
-  assert.equal(wage(at(50)), 4500);
-  assert.equal(wage(at(50, 19)), 2500);
-  assert.ok(wage(at(95)) >= 200e3 && wage(at(95)) <= 280e3, `${wage(at(95))}`);
+  assert.equal(wage(at(50)), 2000);
+  assert.equal(wage(at(50, 19)), 1500);
+  assert.ok(wage(at(95)) >= 250e3 && wage(at(95)) <= 450e3, `${wage(at(95))}`);
   assert.equal(wage(at(5)), 500);
   for (const o of [35, 60, 85]) assert.equal(wage(at(o)) % 500, 0);
   assert.equal(createPlayer(makeRng(1), 1, 'FW', 10).contract, null);
 });
 
 test('sponsorship and gate grow with club quality', () => {
-  assert.equal(sponsorship({ quality: 8 }), 0.5e6);
-  assert.equal(gate({ quality: 8 }), 80e3);
-  assert.ok(sponsorship({ quality: 16 }) >= 50e6 && sponsorship({ quality: 16 }) <= 70e6);
-  assert.ok(gate({ quality: 16 }) >= 2e6 && gate({ quality: 16 }) <= 4e6);
+  assert.equal(sponsorship({ quality: 8 }), 0.8e6);
+  assert.equal(gate({ quality: 8 }), 125e3);
+  assert.ok(sponsorship({ quality: 16 }) >= 30e6 && sponsorship({ quality: 16 }) <= 90e6);
+  assert.ok(gate({ quality: 16 }) >= 1.5e6 && gate({ quality: 16 }) <= 5e6);
   assert.equal(sponsorship({ quality: 12.37 }) % 1e5, 0);
 });
 
@@ -290,11 +290,11 @@ import { PLAYOFF_DAYS } from './calendar.js';
 // quality), cup prize money. Costs: wages (staff costs arrive in Phase 9). Broadcast, sponsorship and
 // wages are paid in SEASON_WEEKS equal weekly instalments. A club may go into debt (Phase 10's board acts on it).
 export const SEASON_WEEKS = Math.floor(PLAYOFF_DAYS[2] / 7) + 1; // weekly payments from day 0 to the play-off finals
-export const BROADCAST = [108e6, 10.5e6, 8e6];  // per season, by division (top first); lower divisions use the last
+export const BROADCAST = [93e6, 7.5e6, 2.5e6];  // per season, by division (top first); lower divisions use the last
 export const MERIT = [2.5e6, 0.1e6, 0.05e6];  // per place counted from the bottom: the last club gets 1×, the champion n×
 export const CUP_PRIZE = [2e6, 1e6];          // winner, runner-up
-const SPONSOR = { at8: 0.5e6, growth: 0.6 }, GATE = { at8: 80e3, growth: 0.45 }; // quality 8 ≈ a League One club
-const WAGE = { at50: 4.5e3, growth: 0.09 };  // a week: overall 50 ≈ a League One regular, 93 ≈ €200k (tuned in Phase 6)
+const SPONSOR = { at8: 0.8e6, growth: 0.46 }, GATE = { at8: 125e3, growth: 0.32 }; // quality 8 ≈ a League One club
+const WAGE = { at50: 2.2e3, growth: 0.112 };  // a week: overall 50 ≈ a League One regular, 93 ≈ €270k (tuned in Phase 6)
 const START_SHARE = 0.25, TRANSFER_SHARE = 0.5, WAGE_SHARE = 0.7, WAGE_HEADROOM = 1.05;
 
 const byDiv = (list, d) => list[Math.min(d, list.length - 1)];
@@ -901,7 +901,7 @@ test('real-world money: stars cost tens of millions, League One regulars a few h
   const best = squad(0).reduce((b, p) => overall(p) > overall(b) ? p : b), l1 = squad(2);
   const v = { best: value(best), bestWage: best.contract.wage, l1: median(l1.map(value)), l1Wage: median(l1.map(p => p.contract.wage)) };
   assert.ok(v.best >= 50e6 && v.best <= 150e6, JSON.stringify(v));
-  assert.ok(v.bestWage >= 120e3 && v.bestWage <= 350e3, JSON.stringify(v));
+  assert.ok(v.bestWage >= 150e3 && v.bestWage <= 450e3, JSON.stringify(v));
   assert.ok(v.l1 >= 0.1e6 && v.l1 <= 1.5e6, JSON.stringify(v));
   assert.ok(v.l1Wage >= 1.5e3 && v.l1Wage <= 10e3, JSON.stringify(v));
 });

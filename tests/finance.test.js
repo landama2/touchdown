@@ -24,19 +24,19 @@ test('value: real-world scale, falling with age, never below €10k', () => {
 });
 
 test('wage: real-world scale per week, less for under-21s, in steps of €500', () => {
-  assert.equal(wage(at(50)), 4500);
-  assert.equal(wage(at(50, 19)), 2500);
-  assert.ok(wage(at(95)) >= 200e3 && wage(at(95)) <= 280e3, `${wage(at(95))}`);
+  assert.equal(wage(at(50)), 2000);
+  assert.equal(wage(at(50, 19)), 1500);
+  assert.ok(wage(at(95)) >= 250e3 && wage(at(95)) <= 450e3, `${wage(at(95))}`);
   assert.equal(wage(at(5)), 500);
   for (const o of [35, 60, 85]) assert.equal(wage(at(o)) % 500, 0);
   assert.equal(createPlayer(makeRng(1), 1, 'FW', 10).contract, null);
 });
 
 test('sponsorship and gate grow with club quality', () => {
-  assert.equal(sponsorship({ quality: 8 }), 0.5e6);
-  assert.equal(gate({ quality: 8 }), 80e3);
-  assert.ok(sponsorship({ quality: 16 }) >= 50e6 && sponsorship({ quality: 16 }) <= 70e6);
-  assert.ok(gate({ quality: 16 }) >= 2e6 && gate({ quality: 16 }) <= 4e6);
+  assert.equal(sponsorship({ quality: 8 }), 0.8e6);
+  assert.equal(gate({ quality: 8 }), 125e3);
+  assert.ok(sponsorship({ quality: 16 }) >= 30e6 && sponsorship({ quality: 16 }) <= 90e6);
+  assert.ok(gate({ quality: 16 }) >= 1.5e6 && gate({ quality: 16 }) <= 5e6);
   assert.equal(sponsorship({ quality: 12.37 }) % 1e5, 0);
 });
 

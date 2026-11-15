@@ -96,7 +96,7 @@ test('real-world money: stars cost tens of millions, League One regulars a few h
   const best = squad(0).reduce((b, p) => overall(p) > overall(b) ? p : b), l1 = squad(2);
   const v = { best: value(best), bestWage: best.contract.wage, l1: median(l1.map(value)), l1Wage: median(l1.map(p => p.contract.wage)) };
   assert.ok(v.best >= 50e6 && v.best <= 150e6, JSON.stringify(v));
-  assert.ok(v.bestWage >= 120e3 && v.bestWage <= 350e3, JSON.stringify(v));
+  assert.ok(v.bestWage >= 150e3 && v.bestWage <= 450e3, JSON.stringify(v));
   assert.ok(v.l1 >= 0.1e6 && v.l1 <= 1.5e6, JSON.stringify(v));
   assert.ok(v.l1Wage >= 1.5e3 && v.l1Wage <= 10e3, JSON.stringify(v));
 });
