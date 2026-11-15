@@ -31,8 +31,7 @@ export function createPlayer(rng, id, pos, quality, age = rng.int(17, 34)) {
   return { id, name: rng.pick(FIRST) + ' ' + rng.pick(LAST), pos, age, attrs, pot };
 }
 
-export function overall(p, pos = p.pos) {
-  const w = WEIGHTS[pos];
+export function overall(p, pos = p.pos, w = WEIGHTS[pos]) {
   let sum = 0, total = 0;
   for (const k in w) { sum += p.attrs[k] * w[k]; total += w[k]; }
   return Math.round(sum / total * 5);

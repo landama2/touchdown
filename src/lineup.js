@@ -1,12 +1,14 @@
 import { POS, overall } from './player.js';
+import { ROLES } from './tactics.js';
 
 export const FORMATIONS = { '4-4-2': [1, 4, 4, 2], '4-3-3': [1, 4, 3, 3], '3-5-2': [1, 3, 5, 2], '5-3-2': [1, 5, 3, 2], '4-5-1': [1, 4, 5, 1] };
 export const SLOT_WEIGHT = { GK: [0, 1.5], DF: [0, 1], MF: [0.5, 0.5], FW: [1, 0] }; // [attack, defence]
 
 export const slots = f => FORMATIONS[f].flatMap((n, i) => Array(n).fill(POS[i]));
-export const eff = (p, pos) => overall(p, pos) * (p.pos === pos ? 1 : 0.85);
+// How well a player fits a slot: rated by the role's attributes (the position's when no role), less out of position.
+export const eff = (p, pos, role) => overall(p, pos, role ? ROLES[pos][role].w : undefined) * (p.pos === pos ? 1 : 0.85);
 
-// Greedy slot-by-slot pick. Good enough until Phase 3 introduces roles.
+// Greedy slot-by-slot pick, rated by each position's default role.
 export function bestXI(club, formation) {
   const used = new Set();
   return slots(formation).map(pos => {
@@ -40,4 +42,12 @@ export function strength(club, ids, formation) {
 export function formationBonus(formation) {
   const [, nd, , nf] = FORMATIONS[formation];
   return { att: 1 + 0.03 * (nf - 2), def: 1 + 0.03 * (nd - 4) };
+}
+
+// Matchday bench, from the squad players not in `taken`: the best of each position first, then the best of the rest.
+export const BENCH = 7;
+export function autoBench(club, taken) {
+  const rest = club.players.filter(p => !taken.includes(p.id)).sort((a, b) => overall(b) - overall(a) || a.id - b.id);
+  const first = POS.map(pos => rest.find(p => p.pos === pos)).filter(Boolean);
+  return [...first, ...rest.filter(p => !first.includes(p))].slice(0, BENCH).map(p => p.id);
 }
