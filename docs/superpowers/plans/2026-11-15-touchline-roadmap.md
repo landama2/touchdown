@@ -18,7 +18,7 @@
 | 3 | Tactics | Player roles and duties, mentality, pressing, tempo, width, defensive line, set-piece takers, per-player instructions, tactical familiarity; the engine from Phase 2 reads all of it | 2 | `2026-11-15-touchline-phase-3-tactics.md` (done 2026-11-15) |
 | 4 | Competitions & calendar | Day-based calendar, promotion/relegation with play-offs, a knockout cup across all divisions, season awards, club and league records | 1 | `2026-11-15-touchline-phase-4-competitions.md` (done 2026-11-15) |
 | 5 | Squad dynamics | Match fitness and condition, injuries with recovery times, suspensions, morale, form, training schedules that drive attribute development | 2, 4 | `2026-11-15-touchline-phase-5-squad-dynamics.md` (done 2026-11-15) |
-| 6 | Contracts & finances | Wages, contract lengths, renewals, release clauses, negotiations; club income (gate, sponsorship, prize, broadcast) and costs; separate transfer and wage budgets | 4 | to write |
+| 6 | Contracts & finances | Wages, contract lengths, renewals, release clauses, negotiations; club income (gate, sponsorship, prize, broadcast) and costs; separate transfer and wage budgets | 4 | `2026-11-16-touchline-phase-6-contracts-finances.md` (done 2026-11-16) |
 | 7 | Transfer market | Transfer windows, AI clubs buying and selling, bids and counter-offers, loans, free agents, player willingness to move | 6 | to write |
 | 8 | Scouting & knowledge | Attributes of unknown players shown as ranges, scouts with assignments and reports, shortlists, player search and filters | 7 | to write |
 | 9 | Youth & staff | Annual academy intake, youth squad, staff (coaches, scouts, physios) with their own attributes that affect training, scouting accuracy and recovery; hiring and firing | 5, 8 | to write |
@@ -35,6 +35,10 @@ Phase 3 note: the formation edge listed in `docs/fun-surprises.md` must survive 
 Phase 5 note (decided 2026-11-15): suspensions price "Tackle harder"; it stays as it is (fun surprise #6).
 
 Phase 9 note: staff scale squad dynamics. Coaches scale `GROWTH` and `INTENSITY` in `src/training.js`; physios scale recovery (`passDays`) and injury length (`INJURIES`) in `src/squad.js`.
+
+Phase 6 notes (decided 2026-11-16):
+- Phase 7 uses each club's `fin.balance` for bids, pays release clauses (`p.contract.clause`), and replaces the rule that a free agent costs his value as a fee.
+- Phase 10's board acts on debt and sets the season budgets that `seasonBudgets()` in `src/finance.js` now sets with fixed shares.
 
 ## Architecture decisions that hold for every phase
 
