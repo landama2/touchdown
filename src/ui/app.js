@@ -148,7 +148,7 @@ const views = {
     let h = '';
     if (s.done) {
       const pos = table(s, d).indexOf(s.me), z = zone(s, d, pos);
-      const playoff = s.playoffs[d]?.rounds[1]?.ties[0].w === s.me;
+      const playoff = s.playoffs[d] ? s.playoffs[d].rounds[1]?.ties[0].w === s.me : d > 0 && pos === 2; // no play-offs (old save): 3rd goes up
       h += `<h2>Season ${s.season} complete — you finished ${pos + 1} in the ${esc(s.divisions[d].name)}.</h2>
         <p>${z === 'up' || playoff ? 'Promoted!' : z === 'down' ? 'Relegated.' : z === 'playoff' ? 'The play-offs did not go your way.' : ''}</p>
         <button class="primary" data-act="end">Start next season</button>`;

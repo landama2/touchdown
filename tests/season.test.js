@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, MARKET_SIZE } from '../src/world.js';
 import { FORMATIONS, BENCH, slots, bestXI, autoBench, fixLineup, strength, swap, newFam, learnFam } from '../src/lineup.js';
-import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, endSeason } from '../src/season.js';
+import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason } from '../src/season.js';
 import { cupRounds } from '../src/cup.js';
 import { stepMinute, matchResult } from '../src/match.js';
 import { MINI } from './fixtures/mini.js';
@@ -282,6 +282,9 @@ test('play-offs: 3rd-6th, two legs with the higher seed at home second, a final;
     assert.deepEqual([semi1.legs.length, semi2.legs.length, final.legs.length], [2, 2, 1]);
     const first = legs.find(r => r.item.div === d && r.item.round === 0 && r.item.leg === 0 && (r.h === semi1.a));
     assert.equal(first.a, semi1.h, 'lower seed at home in the first leg');
+    assert.deepEqual(semi1.legs[0], [first.ag, first.hg], 'first leg stored in the tie\'s h/a order');
+    const second = legs.find(r => r.item.div === d && r.item.round === 0 && r.item.leg === 1 && r.h === semi1.h);
+    assert.deepEqual([second.a, semi1.legs[1]], [semi1.a, [second.hg, second.ag]]);
     assert.deepEqual([final.h, final.a], [semi1.w, semi2.w]);
   }
   const tables = s.divisions.map((_, d) => table(s, d));
@@ -351,4 +354,11 @@ test('upcoming lists the next matches of the human club in date order, cup ties 
   assert.ok(next.every((x, k) => (x.h === 16 || x.a === 16) && (k === 0 || x.day >= next[k - 1].day)));
   assert.ok(next.some(x => x.item.comp === 'cup'), 'the preliminary round is drawn at the start of the season');
   assert.deepEqual(upcoming({ ...s, me: null }, 5), []);
+});
+
+test('zone: promotion and play-off places below the top division, relegation above the bottom one', () => {
+  const s = world(21); // divisions of 4, 10 and 6 clubs
+  assert.deepEqual([0, 1, 2, 3].map(k => zone(s, 0, k)), [null, 'down', 'down', 'down']);
+  assert.deepEqual([...Array(10).keys()].map(k => zone(s, 1, k)), ['up', 'up', 'playoff', 'playoff', 'playoff', 'playoff', null, 'down', 'down', 'down']);
+  assert.deepEqual([...Array(6).keys()].map(k => zone(s, 2, k)), ['up', 'up', 'playoff', 'playoff', 'playoff', 'playoff']);
 });

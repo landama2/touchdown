@@ -11,6 +11,7 @@ const RETIRE_AGE = 35;
 const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
 // Between each division and the one below: PROMOTED go up automatically, the next PLAYOFF clubs
 // play off for one more place, RELEGATED come down. The bottom division has no relegation.
+// ponytail: no size checks; a middle division needs 2 + 4 + 3 = 9 clubs or more, a division with play-offs 6.
 export const PROMOTED = 2, PLAYOFF = 4, RELEGATED = 3;
 const CUP_PRIZE = 500e3;
 
