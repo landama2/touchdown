@@ -1,7 +1,9 @@
 import { POS, ATTRS, overall, value } from '../player.js';
 import { createWorld } from '../world.js';
 import { FORMATIONS, BENCH, slots, bestXI, fixLineup, swap } from '../lineup.js';
-import { takeClub, myClub, myFixture, kickOff, playRound, table, endSeason } from '../season.js';
+import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason } from '../season.js';
+import { dateLabel } from '../calendar.js';
+import { CUP_NAME, cupRoundName, aggregate } from '../cup.js';
 import { stepMinute, substitute, setFormation, setLiveTactic, preview, MAX_SUBS } from '../match.js';
 import { TEAM, TEAM_KEYS, TEAM_NAMES, ROLES, DUTIES, INSTR, TAKERS, setTeam, setSlot, setTaker } from '../tactics.js';
 import { line } from './commentary.js';
@@ -57,12 +59,26 @@ function liveView() {
     <tr><th colspan="5">Bench · substitutions ${S.subs}/${MAX_SUBS}${subOut !== null ? ` · ${esc(m.pl[subOut].name)} comes off: pick who comes on` : ''}</th></tr>${S.bench.map(benchRow).join('')}</table></div></div>`;
 }
 
+// 'Premier League, round 5', 'FA Cup Quarter-finals', 'Championship play-off semi-final, 2nd leg'.
+function compLabel(it) {
+  if (it.comp === 'league') return `${s.divisions[it.div].name}, round ${it.round + 1}`;
+  if (it.comp === 'cup') return `${CUP_NAME} ${cupRoundName(it.round, s.clubs.length)}`;
+  return `${s.divisions[it.div].name} play-off ${it.round ? 'final' : `semi-final, ${it.leg ? '2nd' : '1st'} leg`}`;
+}
+// ' (4–3 on penalties)' and, after a second leg, the aggregate score; '' otherwise.
+function koNote(r) {
+  const t = r.item.comp === 'playoff' && r.item.leg === 1 ? s.playoffs[r.item.div]?.rounds[0].ties.find(x => x.h === r.h && x.a === r.a) : null;
+  const agg = t ? ` · aggregate ${aggregate(t).join('–')}` : '';
+  return agg + (r.pens ? ` · ${r.pens[0]}–${r.pens[1]} on penalties` : '');
+}
+const scoreLine = r => `${clubName(r.h)} ${r.hg} – ${r.ag} ${clubName(r.a)}${koNote(r) ? `<span class="dim">${koNote(r)}</span>` : ''}`;
+
 function report(r) {
   const icon = { goal: '⚽', yellow: '🟨', red: '🟥' }, key = r.ev.filter(e => icon[e.type]);
   const total = r.stats[0].poss + r.stats[1].poss;
   const stat = (name, f) => `<tr><td class="n">${f(r.stats[0])}</td><td>${name}</td><td class="n">${f(r.stats[1])}</td></tr>`;
   const mine = r.ratings.filter(x => x.side === (r.h === s.me ? 0 : 1)), best = r.ratings[0];
-  return `<h2>Last round</h2><div class="score">${clubName(r.h)} ${r.hg} – ${r.ag} ${clubName(r.a)}</div>
+  return `<h2>${esc(compLabel(r.item))}</h2><div class="score">${scoreLine(r)}</div>
     ${key.map(e => `<div>${e.min}' ${icon[e.type]} ${esc(e.name)}${e.kind === 'pen' ? ' (pen)' : ''}${e.assistName ? ` <span class="dim">(assist ${esc(e.assistName)})</span>` : ''} <span class="dim">— ${clubName(e.side ? r.a : r.h)}</span></div>`).join('') || '<div class="dim">No goals or cards.</div>'}
     <div class="wrap"><table class="stats"><tr><th class="n">${esc(s.clubs[r.h].short)}</th><th></th><th class="n">${esc(s.clubs[r.a].short)}</th></tr>
     ${stat('Possession', st => Math.round(st.poss / total * 100) + '%')}${stat('Shots', st => st.shots)}${stat('On target', st => st.on)}${stat('Fouls', st => st.fouls)}${stat('Yellow cards', st => st.yc)}${stat('Red cards', st => st.rc)}</table></div>
@@ -83,6 +99,11 @@ function tick() {
   if (!timer || m.min % 5 === 0) save();
   if (!timer || document.activeElement?.tagName !== 'SELECT') render(); // ponytail: routine ticks skip a redraw so an open dropdown survives; a tick that stopped the clock (full time, pause) always renders
 }
+
+// Rounds of knockout ties: [[title, ties], ...].
+const knockout = rounds => rounds.map(([title, ties]) => `<h3>${esc(title)}</h3><div class="wrap"><table>${ties.map(t => `<tr class="${t.h === s.me || t.a === s.me ? 'me' : ''}">
+  <td class="${t.w === t.h ? 'win' : ''}">${clubName(t.h)}</td><td class="n">${t.legs.length ? aggregate(t).join(' – ') : 'v'}</td><td class="${t.w === t.a ? 'win' : ''}">${clubName(t.a)}</td>
+  <td class="dim">${t.pens ? `${t.pens[0]}–${t.pens[1]} pens` : t.legs.length > 1 ? 'agg.' : ''}</td></tr>`).join('')}</table></div>`).join('');
 
 function profile() {
   const p = [...myClub(s).players, ...s.market].find(x => x.id === viewing);
@@ -123,30 +144,62 @@ const views = {
   },
   Match() {
     if (s.live) return liveView();
-    const d = myClub(s).div, rounds = Math.max(...s.divisions.map(x => x.fixtures.length));
+    const d = myClub(s).div, venue = f => f.neutral ? 'neutral ground' : f.h === s.me ? 'home' : 'away';
     let h = '';
-    if (s.done) h += `<h2>Season ${s.season} complete — you finished ${table(s, d).indexOf(s.me) + 1} in the ${esc(s.divisions[d].name)}.</h2><button class="primary" data-act="end">Start next season</button>`;
-    else {
-      const f = myFixture(s);
-      h += `<h2>Round ${s.round + 1} of ${rounds}</h2>` + (f
-        ? `<p class="fixture">${badge(f[0], 28)} ${clubName(f[0])} v ${clubName(f[1])} ${badge(f[1], 28)} <span class="dim">(${f[0] === s.me ? 'home' : 'away'})</span></p>`
+    if (s.done) {
+      const pos = table(s, d).indexOf(s.me), z = zone(s, d, pos);
+      const playoff = s.playoffs[d]?.rounds[1]?.ties[0].w === s.me;
+      h += `<h2>Season ${s.season} complete — you finished ${pos + 1} in the ${esc(s.divisions[d].name)}.</h2>
+        <p>${z === 'up' || playoff ? 'Promoted!' : z === 'down' ? 'Relegated.' : z === 'playoff' ? 'The play-offs did not go your way.' : ''}</p>
+        <button class="primary" data-act="end">Start next season</button>`;
+    } else {
+      const f = myFixture(s), today = s.days[s.next];
+      h += `<h2>${dateLabel(today.day)}</h2>` + (f
+        ? `<p>${esc(compLabel(f.item))}</p><p class="fixture">${badge(f.h, 28)} ${clubName(f.h)} v ${clubName(f.a)} ${badge(f.a, 28)} <span class="dim">(${venue(f)})</span></p>`
         + '<button class="primary" data-act="live">Play live</button> <button data-act="play">Quick result</button>'
-        : `<p class="dim">No fixture for ${clubName(s.me)} this round — the ${esc(s.divisions[d].name)} season is over. Other divisions are still playing.</p>`
-        + '<button class="primary" data-act="play">Play round</button>');
+        : `<p class="dim">No match for ${clubName(s.me)} today: ${esc([...new Set(today.items.map(compLabel))].join(' · '))}.</p>`
+        + '<button class="primary" data-act="play">Continue</button>');
+      const next = upcoming(s, 6).slice(f ? 1 : 0);
+      if (next.length) h += `<h2>Coming up</h2><div class="wrap"><table>${next.map(x => `<tr><td>${dateLabel(x.day)}</td><td>${esc(compLabel(x.item))}</td><td>${clubName(x.h === s.me ? x.a : x.h)} <span class="dim">(${venue(x)})</span></td></tr>`).join('')}</table></div>`;
     }
     if (s.last) {
-      const res = s.last[d], mine = res.find(r => r.h === s.me || r.a === s.me), others = res.filter(r => r !== mine);
+      const mine = s.last.find(r => r.h === s.me || r.a === s.me);
+      const others = s.last.filter(r => r !== mine && (r.item.comp !== 'league' || r.item.div === d));
       if (mine) h += report(mine);
-      if (others.length) h += `<h2>Other results</h2>${others.map(r => `<div>${clubName(r.h)} ${r.hg} – ${r.ag} ${clubName(r.a)}</div>`).join('')}`;
+      if (others.length) h += `<h2>Other results</h2>${others.map(r => `<div>${scoreLine(r)} <span class="dim">· ${esc(compLabel(r.item))}</span></div>`).join('')}`;
     }
     return h;
   },
   Table() {
     const cols = ['P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts'];
-    const row = (id, k) => { const t = s.clubs[id].st; return `<tr class="${id === s.me ? 'me' : ''}"><td class="n">${k + 1}</td><td>${badge(id, 18)}${clubName(id)}</td>${[t.p, t.w, t.d, t.l, t.gf, t.ga, t.gf - t.ga, t.pts].map(v => `<td class="n">${v}</td>`).join('')}</tr>`; };
+    const row = (id, k) => { const t = s.clubs[id].st; return `<tr class="${id === s.me ? 'me' : ''} ${zone(s, tableDiv, k) || ''}"><td class="n">${k + 1}</td><td>${badge(id, 18)}${clubName(id)}</td>${[t.p, t.w, t.d, t.l, t.gf, t.ga, t.gf - t.ga, t.pts].map(v => `<td class="n">${v}</td>`).join('')}</tr>`; };
     return `<div class="bar">${s.divisions.map((d, i) => `<button data-act="div" data-id="${i}" class="${i === tableDiv ? 'on' : ''}">${esc(d.name)}</button>`).join('')}</div>
       <h2>Season ${s.season}</h2><div class="wrap"><table><tr><th class="n">#</th><th>Club</th>${cols.map(c => `<th class="n">${c}</th>`).join('')}</tr>${table(s, tableDiv).map(row).join('')}</table></div>
-      ${s.history.length ? '<h2>History</h2>' + s.history.map(h => `<div>Season ${h.season}: ${esc(h.champions[0])} won the ${esc(s.divisions[0].name)} — you finished ${h.pos} (prize ${money(h.prize)})</div>`).join('') : ''}`;
+      <p class="dim"><span class="key up"></span>promoted <span class="key playoff"></span>play-offs <span class="key down"></span>relegated</p>
+      ${s.playoffs[tableDiv] ? `<h2>Play-offs</h2>${knockout(s.playoffs[tableDiv].rounds.map((rd, k) => [k ? 'Final' : 'Semi-finals', rd.ties]))}` : ''}`;
+  },
+  Cup() {
+    return `<h2>${CUP_NAME} · season ${s.season}</h2>${s.cup ? knockout(s.cup.rounds.map((rd, k) => [cupRoundName(k, s.clubs.length), rd.ties]).reverse()) : '<p class="dim">No cup this season.</p>'}`;
+  },
+  History() {
+    const name = id => id === null ? '—' : clubName(id), names = ids => ids.map(name).join(', ') || '—';
+    const award = (title, a, unit) => a ? `<div>${title}: <b>${esc(a.name)}</b> <span class="dim">(${name(a.club)}, ${a.v}${unit})</span></div>` : '';
+    const seasons = [...s.history].reverse().map(h => `<h3>Season ${h.season}</h3>
+      ${h.pos ? `<p>You finished ${h.pos} in the ${esc(s.divisions[h.div].name)} (prize ${money(h.prize)}).</p>` : ''}
+      ${h.cup ? `<div>${CUP_NAME}: <b>${name(h.cup.winner)}</b> <span class="dim">beat ${name(h.cup.runnerUp)} in the final</span></div>` : ''}
+      ${h.divs.map((x, d) => `<div><b>${esc(s.divisions[d].name)}</b> champions: ${name(x.champion)}${x.up.length ? ` · promoted: ${names(x.up)}` : ''}${x.down.length ? ` · relegated: ${names(x.down)}` : ''}</div>
+        ${x.awards ? award('Player of the season', x.awards.player, ' avg') + award('Top scorer', x.awards.scorer, ' goals') + award('Young player', x.awards.young, ' avg') : ''}`).join('')}`).join('');
+    const rec = (title, r, f) => r ? `<div>${title}: ${f(r)} <span class="dim">(season ${r.season})</span></div>` : '';
+    const win = r => `${name(r.h)} ${r.hg} – ${r.ag} ${name(r.a)}`;
+    const records = s.divisions.map((dv, d) => `<h3>${esc(dv.name)}</h3>${rec('Most points', s.records[d].points, r => `${r.v}, ${name(r.club)}`)}${rec('Most goals', s.records[d].goals, r => `${r.v}, ${esc(r.name)} (${name(r.club)})`)}${rec('Biggest win', s.records[d].win, win)}`).join('');
+    const club = myClub(s), honours = [];
+    for (const h of s.history) {
+      h.divs.forEach((x, d) => { if (x.champion === s.me) honours.push(`${esc(s.divisions[d].name)} champions ${h.season}`); if (x.playoff === s.me) honours.push(`${esc(s.divisions[d].name)} play-off winners ${h.season}`); });
+      if (h.cup?.winner === s.me) honours.push(`${CUP_NAME} winners ${h.season}`);
+    }
+    return `<h2>${esc(club.name)}</h2>${honours.map(x => `<div>🏆 ${x}</div>`).join('') || '<p class="dim">No honours yet.</p>'}
+      ${rec('Biggest win', club.rec.win, win)}${rec('Most goals in a season', club.rec.goals, r => `${r.v}, ${esc(r.name)}`)}
+      <h2>Seasons</h2>${seasons || '<p class="dim">The first season is still going.</p>'}<h2>Records</h2>${records}`;
   },
   Transfers() {
     const list = (players, act, text) => `<div class="wrap"><table><tr>${HEAD}<th></th></tr>${byPos(players).map(p => `<tr>${nameBtn(p, 'view')}${cells(p)}<td><button data-act="${act}" data-id="${p.id}">${text}</button></td></tr>`).join('')}</table></div>`;
@@ -173,7 +226,7 @@ const actions = {
   slot(k, el) { const f = el.dataset.field; msg = setSlot(s.tactics.slots[k], slots(s.formation)[k], f, f === 'role' || f === 'duty' ? el.value : +el.value) || ''; },
   taker(_, el) { msg = setTaker(s.tactics, el.dataset.field, el.value === '' ? null : +el.value, myClub(s).players) || ''; },
   liveTeam(_, el) { msg = setLiveTactic(s.live, mySide(), el.dataset.field, +el.value) || ''; },
-  play() { stopClock(); playRound(s); subOut = null; },
+  play() { stopClock(); playDay(s); subOut = null; },
   live() { kickOff(s); subOut = null; },
   go() { startClock(); },
   pause() { stopClock(); },
@@ -185,7 +238,7 @@ const actions = {
     msg = substitute(s.live, mySide(), subOut, id) || 'Substitution made.';
     subOut = null;
   },
-  end() { endSeason(s); tab = 'Table'; tableDiv = myClub(s).div; },
+  end() { endSeason(s); tab = 'History'; tableDiv = myClub(s).div; },
   buy(id) { msg = buy(s, id) || 'Signed.'; },
   sell(id) { msg = sell(s, id) || 'Sold.'; if (viewing === id) viewing = null; },
 };
@@ -197,7 +250,7 @@ function render() {
     $('main').innerHTML = s.divisions.map(d => `<h2>${esc(d.name)}</h2><div class="grid">${d.clubIds.map(id => `<button data-act="start" data-id="${id}">${badge(id, 24)}${clubName(id)}</button>`).join('')}</div>`).join('');
     return;
   }
-  $('info').innerHTML = `${badge(s.me, 22)}${clubName(s.me)} · ${esc(s.divisions[myClub(s).div].name)} · Season ${s.season} · Budget ${money(s.budget)}`;
+  $('info').innerHTML = `${badge(s.me, 22)}${clubName(s.me)} · ${esc(s.divisions[myClub(s).div].name)} · Season ${s.season} · ${s.done ? 'season over' : dateLabel(s.days[s.next].day)} · Budget ${money(s.budget)}`;
   if (s.live) tab = 'Match'; // the other screens wait for the final whistle
   $('nav').innerHTML = (s.live ? ['Match'] : Object.keys(views)).map(t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}">${t}</button>`).join('') + '<button data-act="reset">New game</button>';
   $('main').innerHTML = `<div class="msg" role="status">${msg}</div>` + profile() + views[tab]();

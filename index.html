@@ -24,6 +24,11 @@
   th { color:var(--dim); font-weight:500; font-size:13px; }
   td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
   tr.me td { background:#1f3a2a; font-weight:600; }
+  tr.up td:first-child, .key.up { border-left:4px solid var(--accent); }
+  tr.playoff td:first-child, .key.playoff { border-left:4px solid var(--warn); }
+  tr.down td:first-child, .key.down { border-left:4px solid #e0605a; }
+  .key { display:inline-block; width:0; height:12px; margin:0 4px 0 10px; vertical-align:middle; }
+  td.win { font-weight:600; color:var(--accent); }
   tr.sel td { background:#2f5540; }
   .oop { color:var(--warn); }
   .msg { color:var(--warn); min-height:1.4em; margin:8px 0; }
