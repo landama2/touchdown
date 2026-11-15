@@ -129,6 +129,7 @@ export function substitute(m, i, outId, inId, pos) {
   m.pl[inId].played = true;
   slot.id = inId;
   if (pos) slot.pos = pos;
+  else if (m.pl[inId].pos === 'GK' && !S.on.some(o => o.pos === 'GK')) slot.pos = 'GK'; // keeper back in goal after a red card
   m.ev.push({ min: m.min, side: i, type: 'sub', id: outId, name: m.pl[outId].name, in: inId, inName: m.pl[inId].name });
   return null;
 }

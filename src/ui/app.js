@@ -71,10 +71,11 @@ function tick() {
   if (!m || m.done) return stopClock();
   const seen = m.ev.length, i = mySide();
   stepMinute(m);
+  if (subOut !== null && !m.sides[i].on.some(o => o.id === subOut)) subOut = null;
   if (m.done) stopClock();
   if (m.ev.slice(seen).some(e => e.side === i && (e.type === 'injury' || e.type === 'red'))) { stopClock(); msg = 'Play paused: make a change if you need one.'; }
   if (!timer || m.min % 5 === 0) save();
-  if (document.activeElement?.tagName !== 'SELECT') render(); // ponytail: skip one redraw so an open dropdown survives; the next tick catches up
+  if (!timer || document.activeElement?.tagName !== 'SELECT') render(); // ponytail: routine ticks skip a redraw so an open dropdown survives; a tick that stopped the clock (full time, pause) always renders
 }
 
 function profile() {

@@ -124,6 +124,21 @@ test('substitute: checks the request, swaps the player in, and nobody comes back
   assert.equal(substitute(m, 1, m.sides[1].on[3].id, m.sides[1].bench[0]), 'The match is over.');
 });
 
+test('substitute: a keeper brought on with no GK slot takes the goal; outfielders keep the slot pos', () => {
+  const m = startMatch(5, side(4), side(5)), S = m.sides[0];
+  S.auto = false;
+  S.on = S.on.filter(o => o.pos !== 'GK'); // as if the keeper was sent off
+  const gk = S.bench.find(id => m.pl[id].pos === 'GK'), out = S.on[5], outPos = out.pos;
+  assert.ok(gk);
+  const before = power(m, 0).def;
+  assert.equal(substitute(m, 0, out.id, gk), null);
+  assert.equal(S.on.find(o => o.id === gk).pos, 'GK');
+  assert.ok(power(m, 0).def > before);
+  const mf = S.bench.find(id => m.pl[id].pos !== 'GK'), o2 = S.on[1], p2 = o2.pos;
+  assert.equal(substitute(m, 0, o2.id, mf), null);
+  assert.equal(S.on.find(o => o.id === mf).pos, p2);
+});
+
 test('setFormation re-slots the same players; a side down to ten loses its last slot', () => {
   const m = startMatch(5, side(4), side(5)), ids = m.sides[0].on.map(o => o.id).sort();
   setFormation(m, 0, '4-3-3');

@@ -10,6 +10,7 @@ Small quirks in Touchline's rules that a curious player can find and use. They a
 | 2 | **Youth flipping.** Players aged 23 or under gain attributes every season up to their hidden potential, and they are valued 30% higher than players aged 24–30. Buying a young player, holding him for a few seasons and selling just before he turns 24 reliably makes money. | Buy cheap 17–20-year-olds, sell at 23. | `ageOneYear()` and `value()` in `src/player.js` | Phase 1 (kept 2026-11-15) |
 | 3 | **Second chances.** A player you sell goes onto the free-agent list. Half the list carries over each season, so he can still be there a season later, a year older, and you can buy him back. | Sell a player you regret selling? Check Transfers next season. | `endSeason()` in `src/season.js` | Phase 1b |
 | 4 | **Idle-round income.** The Premier League's 38-round season ends while the 24-club EFL divisions play on to round 46. Premier League clubs keep collecting weekly income in those eight idle rounds (about €0.6M a season). | Nothing to do — enjoy the bonus, or note that EFL clubs get the same weekly income spread over more matches. | `playRound()` in `src/season.js` | Phase 1b |
+| 5 | **Free mid-match re-slotting.** Changing formation in the live view costs no substitution and can be done any number of times; it re-slots the players on the pitch to their best positions. | Switch shape freely during a match, e.g. to 4-3-3 when chasing a goal, or to re-slot after a red card. | `setFormation()` in `src/match.js` | Phase 2 |
 
 ## Design decisions that came out of this list
 
