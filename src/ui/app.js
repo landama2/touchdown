@@ -74,7 +74,7 @@ function tick() {
   if (m.done) stopClock();
   if (m.ev.slice(seen).some(e => e.side === i && (e.type === 'injury' || e.type === 'red'))) { stopClock(); msg = 'Play paused: make a change if you need one.'; }
   if (!timer || m.min % 5 === 0) save();
-  render();
+  if (document.activeElement?.tagName !== 'SELECT') render(); // ponytail: skip one redraw so an open dropdown survives; the next tick catches up
 }
 
 function profile() {
@@ -134,7 +134,7 @@ const views = {
 
 const actions = {
   start(id) { takeClub(s, id); tab = 'Squad'; tableDiv = s.clubs[id].div; },
-  reset() { stopClock(); if (s.me === null || confirm('Abandon this career and start a new game?')) { s = newWorld(); sel = viewing = null; tableDiv = 0; } },
+  reset() { if (s.me === null || confirm('Abandon this career and start a new game?')) { stopClock(); s = newWorld(); sel = viewing = null; tableDiv = 0; } },
   tab(_, el) { tab = el.dataset.tab; sel = viewing = null; },
   div(id) { tableDiv = id; },
   view(id) { viewing = id; },

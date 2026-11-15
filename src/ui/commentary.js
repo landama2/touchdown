@@ -13,6 +13,6 @@ const T = {
 
 export function line(e, team) {
   const list = T[e.type === 'red' && e.second ? 'second' : e.type], text = list[(e.min + e.id) % list.length];
-  return `${e.min}' ${team} — ` + text.replace('{name}', e.name).replace('{in}', e.inName)
-    .replace('{assist}', e.assistName ? `, set up by ${e.assistName}` : '');
+  return `${e.min}' ${team} — ` + text.replace('{name}', () => e.name).replace('{in}', () => e.inName)
+    .replace('{assist}', () => (e.assistName ? `, set up by ${e.assistName}` : ''));
 }

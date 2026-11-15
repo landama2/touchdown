@@ -7,6 +7,8 @@ test('commentary names the minute, team and players of each kind of event', () =
     /^12' ARS — GOAL! .*A Striker.*, set up by B Winger\.$/);
   assert.doesNotMatch(line({ min: 12, side: 0, type: 'goal', id: 3, name: 'A Striker' }, 'ARS'), /set up/);
   assert.equal(line({ min: 70, side: 1, type: 'sub', id: 4, name: 'Off', in: 5, inName: 'On' }, 'CHE'), "70' CHE — Substitution: On replaces Off.");
+  // (min + id) % 2 === 1 picks 'goes into the book'; a `$&` in the name must stay literal.
+  assert.equal(line({ min: 1, side: 0, type: 'yellow', id: 2, name: 'A $& B' }, 'X'), "1' X — A $& B goes into the book.");
   assert.match(line({ min: 50, side: 1, type: 'red', id: 9, name: 'Hard Man', second: true }, 'LEE'), /Second yellow for Hard Man/);
   for (const type of ['save', 'miss', 'yellow', 'red', 'injury'])
     for (let min = 1; min <= 3; min++) assert.match(line({ min, side: 0, type, id: 1, name: 'Z Name' }, 'X'), /Z Name/);
