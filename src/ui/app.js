@@ -1,7 +1,9 @@
 import { POS, ATTRS, overall, value } from '../player.js';
 import { createWorld } from '../world.js';
 import { FORMATIONS, slots, bestXI, fixLineup, strength } from '../lineup.js';
-import { takeClub, myClub, myFixture, playRound, table, endSeason } from '../season.js';
+import { takeClub, myClub, myFixture, kickOff, playRound, table, endSeason } from '../season.js';
+import { stepMinute, substitute, setFormation, MAX_SUBS } from '../match.js';
+import { line } from './commentary.js';
 import { buy, sell, MAX_SQUAD } from '../transfers.js';
 import { KEY, serialize, deserialize } from '../save.js';
 import { crestSvg, kitSvg } from './art.js';
@@ -13,6 +15,8 @@ const save = () => { try { localStorage.setItem(KEY, serialize(s)); } catch {} }
 
 let s = load() || newWorld();
 let tab = 'Squad', sel = null, viewing = null, tableDiv = s.me === null ? 0 : s.clubs[s.me].div, msg = '';
+let timer = null, speed = 400, subOut = null; // live match: clock, ms per match minute, player picked to come off
+const SPEEDS = [['Slow', 1000], ['Normal', 400], ['Fast', 100], ['Very fast', 25]];
 
 const $ = id => document.getElementById(id);
 // Real names contain characters such as & and ' — escape everything taken from data.
@@ -25,6 +29,53 @@ const badge = (id, size = 20) => crestSvg(s.clubs[id], size);
 const HEAD = '<th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Value</th>';
 const cells = p => `<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${overall(p)}</td><td class="n">${money(value(p))}</td>`;
 const nameBtn = (p, act) => `<td><button class="link" data-act="${act}" data-id="${p.id}">${esc(p.name)}</button></td>`;
+
+const mySide = () => s.live.sides.findIndex(S => !S.auto);
+const formationSelect = (act, current) => `<select data-act="${act}">${Object.keys(FORMATIONS).map(f => `<option${f === current ? ' selected' : ''}>${f}</option>`).join('')}</select>`;
+
+function liveView() {
+  const m = s.live, S = m.sides[mySide()], [H, A] = m.sides;
+  const feed = [...m.ev].reverse().map(e => `<div class="${e.type === 'goal' ? 'goal' : ''}">${esc(line(e, s.clubs[m.sides[e.side].club].short))}</div>`).join('');
+  const btn = (act, id, text) => m.done ? '' : `<button data-act="${act}" data-id="${id}">${text}</button>`;
+  const onRow = o => { const p = m.pl[o.id]; return `<tr class="${subOut === o.id ? 'sel' : ''}"><td class="${o.pos !== p.pos ? 'oop' : ''}">${o.pos}</td><td>${esc(p.name)}${p.yc ? ' 🟨' : ''}${p.inj ? ' <span class="oop">injured</span>' : ''}</td><td class="n">${Math.round(p.fit)}%</td><td class="n">${p.rt.toFixed(1)}</td><td>${btn('off', o.id, 'Off')}</td></tr>`; };
+  const benchRow = id => { const p = m.pl[id]; return `<tr><td class="dim">${p.pos}</td><td>${esc(p.name)}</td><td></td><td></td><td>${btn('on', id, 'On')}</td></tr>`; };
+  const controls = m.done ? '<button class="primary" data-act="play">Continue</button>'
+    : `<button class="primary" data-act="${timer ? 'pause' : 'go'}">${timer ? 'Pause' : m.min ? 'Resume' : 'Kick off'}</button>
+      <label>Speed <select data-act="speed">${SPEEDS.map(([t, ms]) => `<option value="${ms}"${ms === speed ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+      <label>Formation ${formationSelect('liveFormation', S.formation)}</label>
+      <button data-act="play">Skip to result</button>`;
+  return `<p class="fixture score">${badge(H.club, 28)} ${clubName(H.club)} ${H.st.goals} – ${A.st.goals} ${clubName(A.club)} ${badge(A.club, 28)}</p>
+    <h2>${m.done ? 'Full time' : m.min ? `${m.min}'` : 'Kick-off'}</h2><div class="bar">${controls}</div>
+    <div class="live"><div class="feed" aria-live="polite">${feed || '<div class="dim">The teams are walking out.</div>'}</div>
+    <div class="wrap"><table><tr><th>Pos</th><th>On the pitch</th><th class="n">Fit</th><th class="n">Rating</th><th></th></tr>${S.on.map(onRow).join('')}
+    <tr><th colspan="5">Bench · substitutions ${S.subs}/${MAX_SUBS}${subOut !== null ? ` · ${esc(m.pl[subOut].name)} comes off: pick who comes on` : ''}</th></tr>${S.bench.map(benchRow).join('')}</table></div></div>`;
+}
+
+function report(r) {
+  const icon = { goal: '⚽', yellow: '🟨', red: '🟥' }, key = r.ev.filter(e => icon[e.type]);
+  const total = r.stats[0].poss + r.stats[1].poss;
+  const stat = (name, f) => `<tr><td class="n">${f(r.stats[0])}</td><td>${name}</td><td class="n">${f(r.stats[1])}</td></tr>`;
+  const mine = r.ratings.filter(x => x.side === (r.h === s.me ? 0 : 1)), best = r.ratings[0];
+  return `<h2>Last round</h2><div class="score">${clubName(r.h)} ${r.hg} – ${r.ag} ${clubName(r.a)}</div>
+    ${key.map(e => `<div>${e.min}' ${icon[e.type]} ${esc(e.name)}${e.assistName ? ` <span class="dim">(assist ${esc(e.assistName)})</span>` : ''} <span class="dim">— ${clubName(e.side ? r.a : r.h)}</span></div>`).join('') || '<div class="dim">No goals or cards.</div>'}
+    <div class="wrap"><table class="stats"><tr><th class="n">${esc(s.clubs[r.h].short)}</th><th></th><th class="n">${esc(s.clubs[r.a].short)}</th></tr>
+    ${stat('Possession', st => Math.round(st.poss / total * 100) + '%')}${stat('Shots', st => st.shots)}${stat('On target', st => st.on)}${stat('Fouls', st => st.fouls)}${stat('Yellow cards', st => st.yc)}${stat('Red cards', st => st.rc)}</table></div>
+    <p>Player of the match: <b>${esc(best.name)}</b> (${best.rt.toFixed(1)}, ${clubName(best.side ? r.a : r.h)})</p>
+    <h3>Your ratings</h3><div class="wrap"><table>${mine.map(x => `<tr><td>${esc(x.name)}</td><td class="n">${x.rt.toFixed(1)}</td></tr>`).join('')}</table></div>`;
+}
+
+const stopClock = () => { clearInterval(timer); timer = null; };
+const startClock = () => { stopClock(); timer = setInterval(tick, speed); };
+function tick() {
+  const m = s.live;
+  if (!m || m.done) return stopClock();
+  const seen = m.ev.length, i = mySide();
+  stepMinute(m);
+  if (m.done) stopClock();
+  if (m.ev.slice(seen).some(e => e.side === i && (e.type === 'injury' || e.type === 'red'))) { stopClock(); msg = 'Play paused: make a change if you need one.'; }
+  if (!timer || m.min % 5 === 0) save();
+  render();
+}
 
 function profile() {
   const p = [...myClub(s).players, ...s.market].find(x => x.id === viewing);
@@ -41,13 +92,14 @@ const views = {
     const row = (p, slot) => `<tr class="${sel === p.id ? 'sel' : ''}"><td class="${slot && slot !== p.pos ? 'oop' : 'dim'}">${slot || 'Sub'}</td>${nameBtn(p, 'pick')}${cells(p)}<td><button data-act="view" data-id="${p.id}">Profile</button></td></tr>`;
     const bench = byPos(club.players.filter(p => !s.lineup.includes(p.id)));
     return `<div class="club">${crestSvg(club, 56)}${kitSvg(club.kit, 56)}<b>${esc(club.name)}</b></div>
-      <div class="bar"><label>Formation <select data-act="formation">${Object.keys(FORMATIONS).map(f => `<option${f === s.formation ? ' selected' : ''}>${f}</option>`).join('')}</select></label>
+      <div class="bar"><label>Formation ${formationSelect('formation', s.formation)}</label>
       <button data-act="auto">Auto-pick best XI</button><span class="dim">Attack ${st.att.toFixed(1)} · Defence ${st.def.toFixed(1)}</span></div>
       <p class="dim">Click two names to swap them. Orange slot = playing out of position.</p>
       <div class="wrap"><table><tr><th>Slot</th>${HEAD}<th></th></tr>${s.lineup.map((id, i) => row(club.players.find(p => p.id === id), pos[i])).join('')}
       <tr><th colspan="7">Bench</th></tr>${bench.map(p => row(p)).join('')}</table></div>`;
   },
   Match() {
+    if (s.live) return liveView();
     const d = myClub(s).div, rounds = Math.max(...s.divisions.map(x => x.fixtures.length));
     let h = '';
     if (s.done) h += `<h2>Season ${s.season} complete — you finished ${table(s, d).indexOf(s.me) + 1} in the ${esc(s.divisions[d].name)}.</h2><button class="primary" data-act="end">Start next season</button>`;
@@ -55,13 +107,13 @@ const views = {
       const f = myFixture(s);
       h += `<h2>Round ${s.round + 1} of ${rounds}</h2>` + (f
         ? `<p class="fixture">${badge(f[0], 28)} ${clubName(f[0])} v ${clubName(f[1])} ${badge(f[1], 28)} <span class="dim">(${f[0] === s.me ? 'home' : 'away'})</span></p>`
-        : `<p class="dim">No fixture for ${clubName(s.me)} this round — the ${esc(s.divisions[d].name)} season is over. Other divisions are still playing.</p>`)
-        + '<button class="primary" data-act="play">Play round</button>';
+        + '<button class="primary" data-act="live">Play live</button> <button data-act="play">Quick result</button>'
+        : `<p class="dim">No fixture for ${clubName(s.me)} this round — the ${esc(s.divisions[d].name)} season is over. Other divisions are still playing.</p>`
+        + '<button class="primary" data-act="play">Play round</button>');
     }
     if (s.last) {
       const res = s.last[d], mine = res.find(r => r.h === s.me || r.a === s.me), others = res.filter(r => r !== mine);
-      if (mine) h += `<h2>Last round</h2><div class="score">${clubName(mine.h)} ${mine.hg} – ${mine.ag} ${clubName(mine.a)}</div>
-        ${mine.ev.filter(e => e.type === 'goal').map(e => `<div>${e.min}' ⚽ ${esc(e.name)} <span class="dim">(${clubName(e.side ? mine.a : mine.h)})</span></div>`).join('') || '<div class="dim">No goals.</div>'}`;
+      if (mine) h += report(mine);
       if (others.length) h += `<h2>Other results</h2>${others.map(r => `<div>${clubName(r.h)} ${r.hg} – ${r.ag} ${clubName(r.a)}</div>`).join('')}`;
     }
     return h;
@@ -82,7 +134,7 @@ const views = {
 
 const actions = {
   start(id) { takeClub(s, id); tab = 'Squad'; tableDiv = s.clubs[id].div; },
-  reset() { if (s.me === null || confirm('Abandon this career and start a new game?')) { s = newWorld(); sel = viewing = null; tableDiv = 0; } },
+  reset() { stopClock(); if (s.me === null || confirm('Abandon this career and start a new game?')) { s = newWorld(); sel = viewing = null; tableDiv = 0; } },
   tab(_, el) { tab = el.dataset.tab; sel = viewing = null; },
   div(id) { tableDiv = id; },
   view(id) { viewing = id; },
@@ -97,7 +149,18 @@ const actions = {
     else if (j >= 0) s.lineup[j] = sel;
     sel = null;
   },
-  play() { playRound(s); },
+  play() { stopClock(); playRound(s); subOut = null; },
+  live() { kickOff(s); subOut = null; },
+  go() { startClock(); },
+  pause() { stopClock(); },
+  speed(_, el) { speed = +el.value; if (timer) startClock(); },
+  liveFormation(_, el) { setFormation(s.live, mySide(), el.value); subOut = null; },
+  off(id) { subOut = subOut === id ? null : id; },
+  on(id) {
+    if (subOut === null) { msg = 'Click Off next to the player who is coming off first.'; return; }
+    msg = substitute(s.live, mySide(), subOut, id) || 'Substitution made.';
+    subOut = null;
+  },
   end() { endSeason(s); tab = 'Table'; tableDiv = myClub(s).div; },
   buy(id) { msg = buy(s, id) || 'Signed.'; },
   sell(id) { msg = sell(s, id) || 'Sold.'; if (viewing === id) viewing = null; },
@@ -111,7 +174,8 @@ function render() {
     return;
   }
   $('info').innerHTML = `${badge(s.me, 22)}${clubName(s.me)} · ${esc(s.divisions[myClub(s).div].name)} · Season ${s.season} · Budget ${money(s.budget)}`;
-  $('nav').innerHTML = Object.keys(views).map(t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}">${t}</button>`).join('') + '<button data-act="reset">New game</button>';
+  if (s.live) tab = 'Match'; // the other screens wait for the final whistle
+  $('nav').innerHTML = (s.live ? ['Match'] : Object.keys(views)).map(t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}">${t}</button>`).join('') + '<button data-act="reset">New game</button>';
   $('main').innerHTML = `<div class="msg" role="status">${msg}</div>` + profile() + views[tab]();
   msg = '';
 }

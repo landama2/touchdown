@@ -41,6 +41,12 @@
   .club { display:flex; align-items:center; gap:16px; margin:12px 0; }
   .club b { font-size:18px; }
   .fixture { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .live { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+  .feed { max-height:460px; overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
+  .feed .goal { color:var(--accent); font-weight:600; }
+  table.stats { width:auto; min-width:280px; }
+  table.stats td:nth-child(2) { text-align:center; color:var(--dim); }
+  @media (max-width:700px) { .live { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
