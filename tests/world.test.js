@@ -61,12 +61,16 @@ test('playerFromData keeps name, age and position and applies strengths', () => 
   for (const k of Object.keys(WEIGHTS.FW)) assert.ok(strong.pot >= strong.attrs[k], k);
 });
 
-test('playerFromData uses imported stats when given, ignoring strengths', () => {
-  const stats = ALL_ATTRS.map((_, i) => 1 + (i % 20));
-  const p = playerFromData(makeRng(4), 9, ['Stat Player', 'MF', 21, 10, ['pace']], stats);
-  assert.deepEqual(ALL_ATTRS.map(k => p.attrs[k]), stats);
+test('playerFromData keeps the imported profile at the rating\'s level, ignoring strengths', () => {
+  const stats = ALL_ATTRS.map((_, i) => 6 + (i % 7));           // a profile with distinct values, far from any clamp
+  const row = ['Stat Player', 'MF', 25, 14, ['pace']];
+  const plain = playerFromData(makeRng(4), 9, row);
+  const p = playerFromData(makeRng(4), 9, row, stats);
+  const d = p.attrs[ALL_ATTRS[0]] - stats[0];
+  ALL_ATTRS.forEach((k, i) => assert.equal(p.attrs[k], Math.max(1, Math.min(20, stats[i] + d)), k));
+  assert.ok(Math.abs(overall(p) - overall(plain)) <= 3, `${overall(p)} vs ${overall(plain)}`);
   const best = Math.max(...Object.keys(WEIGHTS.MF).map(k => p.attrs[k]));
-  assert.ok(p.pot >= best && p.pot <= Math.min(20, best + 2));
+  assert.ok(p.pot >= best && p.pot <= 20);
 });
 
 test('createWorld shifts a league\'s data ratings by its calibration', () => {
@@ -82,7 +86,8 @@ test('createWorld applies stats by club and player name', () => {
   const stats = { Alpha: { 'Alpha GK1': Array(ALL_ATTRS.length).fill(12) } };
   const s = createWorld(1, MINI, stats);
   const gk = s.clubs[0].players.find(p => p.name === 'Alpha GK1');
-  assert.ok(ALL_ATTRS.every(k => gk.attrs[k] === 12));
+  const v = ALL_ATTRS.map(k => gk.attrs[k]);
+  assert.ok(v.every(x => x === v[0]), 'flat profile stays flat');
   const other = s.clubs[0].players.find(p => p.name === 'Alpha GK2');
   assert.ok(!ALL_ATTRS.every(k => other.attrs[k] === 12));
 });

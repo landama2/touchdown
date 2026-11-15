@@ -45,3 +45,26 @@ test('the Premier League is stronger than the Championship, which is stronger th
   const avg = d => { const ps = s.divisions[d].clubIds.flatMap(id => s.clubs[id].players); return ps.reduce((t, p) => t + overall(p), 0) / ps.length; };
   assert.ok(avg(0) > avg(1) && avg(1) > avg(2), `${avg(0)} ${avg(1)} ${avg(2)}`);
 });
+
+test('imported players sit on the same scale as their generated teammates', () => {
+  const s = createWorld(1);
+  const imported = new Set(Object.entries(STATS).flatMap(([club, ps]) => Object.keys(ps).map(n => `${club}|${n}`)));
+  let gap = 0, n = 0;
+  for (const c of s.clubs) {
+    const own = c.players.filter(p => imported.has(`${c.name}|${p.name}`)), gen = c.players.filter(p => !imported.has(`${c.name}|${p.name}`));
+    if (own.length < 3 || gen.length < 3) continue;
+    const avg = ps => ps.reduce((t, p) => t + overall(p), 0) / ps.length;
+    gap += Math.abs(avg(own) - avg(gen)); n++;
+  }
+  assert.ok(gap / n < 8, `mean within-club gap ${(gap / n).toFixed(1)}`);
+});
+
+test('the free-agent list has players worth signing below the Premier League', () => {
+  const s = createWorld(1);
+  const best = Math.max(...s.market.map(p => overall(p)));
+  const weakestChampionshipXI = Math.min(...s.divisions[1].clubIds.map(id => {
+    const o = s.clubs[id].players.map(p => overall(p)).sort((a, b) => b - a);
+    return o[10];                                   // the 11th-best player
+  }));
+  assert.ok(best > weakestChampionshipXI, `${best} vs ${weakestChampionshipXI}`);
+});

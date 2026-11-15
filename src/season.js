@@ -1,7 +1,7 @@
 import { makeRng } from './rng.js';
-import { POS, createPlayer, ageOneYear } from './player.js';
+import { createPlayer, ageOneYear } from './player.js';
 import { makeFixtures } from './fixtures.js';
-import { blankStats, MARKET_SIZE, FREE_AGENT_QUALITY } from './world.js';
+import { blankStats, MARKET_SIZE, newFreeAgent } from './world.js';
 import { bestXI, fixLineup } from './lineup.js';
 import { simMatch } from './match.js';
 
@@ -85,7 +85,7 @@ export function endSeason(s) {
   }
   const kept = sample(rng, s.market, MARKET_KEEP).filter(p => p.age < RETIRE_AGE);
   for (const p of kept) ageOneYear(rng, p);
-  s.market = [...kept, ...Array.from({ length: MARKET_SIZE - kept.length }, () => createPlayer(rng, s.nid++, rng.pick(POS), FREE_AGENT_QUALITY))];
+  s.market = [...kept, ...Array.from({ length: MARKET_SIZE - kept.length }, () => newFreeAgent(rng, s.nid++))];
   for (const d of s.divisions) d.fixtures = makeFixtures(d.clubIds);
   s.seed = rng.seed;
   s.round = 0; s.done = false; s.last = null; s.season++;
