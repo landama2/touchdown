@@ -35,7 +35,7 @@ const MIGRATIONS = {
     s.records = s.divisions.map(blankRecords);
     for (const c of s.clubs) c.rec = { win: null, goals: null };
     s.history = s.history.map(h => ({ season: h.season, pos: h.pos, div: h.pos === null ? null : s.clubs[s.me].div, prize: h.prize, cup: null,
-      divs: h.champions.map(name => ({ champion: s.clubs.findIndex(c => c.name === name), up: [], down: [], playoff: null, awards: null })) }));
+      divs: h.champions.map(name => ({ champion: s.clubs.find(c => c.name === name)?.id ?? null, up: [], down: [], playoff: null, awards: null })) }));
     delete s.round;
   },
 };

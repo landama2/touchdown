@@ -90,11 +90,11 @@ test('a version 4 save in mid-season: the rest of the league on the calendar, pl
   const s = createWorld(25, MINI);
   takeClub(s, 6);
   const old = asV4(s, 5);
-  old.history = [{ season: 0, champions: ['Bravo', 'Golf', 'Lima'], pos: 3, prize: 1 }];
+  old.history = [{ season: 0, champions: ['Bravo', 'Golf', 'Gone FC'], pos: 3, prize: 1 }];
   const b = deserialize(JSON.stringify(old));
   assert.equal(b.version, SAVE_VERSION);
   assert.deepEqual([b.cup, b.round, b.live, b.last], [null, undefined, null, null]);
-  assert.deepEqual(b.history[0].divs.map(d => d.champion), [1, 6, 15]);
+  assert.deepEqual(b.history[0].divs.map(d => d.champion), [1, 6, null]);
   assert.equal(b.history[0].div, 1);
   const leagueItems = b.days.flatMap(d => d.items).filter(i => i.comp === 'league');
   assert.equal(leagueItems.length, (6 - 5) + (18 - 5) + (10 - 5));
