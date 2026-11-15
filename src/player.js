@@ -32,7 +32,7 @@ export function createPlayer(rng, id, pos, quality, age = rng.int(17, 34)) {
   }
   const best = Math.max(...Object.keys(WEIGHTS[pos]).map(k => attrs[k]));
   const pot = clamp(best + (age < 23 ? rng.int(0, 2) : 0), 1, 20);
-  return { id, name: rng.pick(FIRST) + ' ' + rng.pick(LAST), pos, age, attrs, pot, ...freshState() };
+  return { id, name: rng.pick(FIRST) + ' ' + rng.pick(LAST), pos, age, attrs, pot, ...freshState(), contract: null };
 }
 
 export function overall(p, pos = p.pos, w = WEIGHTS[pos]) {
@@ -41,9 +41,12 @@ export function overall(p, pos = p.pos, w = WEIGHTS[pos]) {
   return Math.round(sum / total * 5);
 }
 
+// Transfer value in euros at real-world scale: about €0.45M at overall 50 (a League One regular),
+// €10M at 76, €78M at 93; ×1.3 under 24, ×0.6 over 30. Rounded to €10k, never below €10k.
+const VALUE = { at50: 0.45e6, growth: 0.12 };
 export function value(p) {
   const ageFactor = p.age < 24 ? 1.3 : p.age > 30 ? 0.6 : 1;
-  return Math.round((overall(p) / 10) ** 4 * ageFactor) * 1000;
+  return Math.max(10e3, Math.round(VALUE.at50 * Math.exp(VALUE.growth * (overall(p) - 50)) * ageFactor / 1e4) * 1e4);
 }
 
 // Called once per player at season rollover. `pot` caps the attributes that matter for the position.
