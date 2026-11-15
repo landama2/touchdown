@@ -63,8 +63,8 @@ test('hard training injures more than light; recovery per day follows the schedu
     return n;
   };
   assert.ok(injuries('Hard') > 2 * injuries('Light'));
-  assert.deepEqual(['Light', 'Normal', 'Hard'].map(intensity => recoverRate(plan({ intensity }))), [9, 8, 6]);
-  assert.equal(recoverRate(plan({ focus: 'Rest' })), 10);
+  assert.deepEqual(['Light', 'Normal', 'Hard'].map(intensity => recoverRate(plan({ intensity }))), [6, 5, 3]);
+  assert.equal(recoverRate(plan({ focus: 'Rest' })), 7);
 });
 
 test('training setters check what they are given', () => {

@@ -102,7 +102,7 @@ Labels: Very low < 20 ≤ Low < 40 ≤ Okay < 60 ≤ Good < 80 ≤ Superb.
   - Half the time the attribute is his individual focus; otherwise it comes from the team focus. Keepers always train their own key attributes.
   - Nothing grows above the hidden potential `pot`. A pick at the cap is lost (fun surprise #10).
 - Players aged 31 and over lose a physical point with chance 0.05 a week (about 2 a season, as before), whatever the schedule.
-- Condition regained per day: Light 9, Normal 8, Hard 6, plus 2 on Rest.
+- Condition regained per day: Light 6, Normal 5, Hard 3, plus 2 on Rest (lowered from 9/8/6 after playtesting: at those rates every player was fresh on every match day).
 - Free agents do not train. They keep the old `ageOneYear()` rollover, and they heal and recover at the Normal rate.
 
 **Days between matches.**
@@ -502,8 +502,8 @@ test('hard training injures more than light; recovery per day follows the schedu
     return n;
   };
   assert.ok(injuries('Hard') > 2 * injuries('Light'));
-  assert.deepEqual(['Light', 'Normal', 'Hard'].map(intensity => recoverRate(plan({ intensity }))), [9, 8, 6]);
-  assert.equal(recoverRate(plan({ focus: 'Rest' })), 10);
+  assert.deepEqual(['Light', 'Normal', 'Hard'].map(intensity => recoverRate(plan({ intensity }))), [6, 5, 3]);
+  assert.equal(recoverRate(plan({ focus: 'Rest' })), 7);
 });
 
 test('training setters check what they are given', () => {
@@ -551,7 +551,7 @@ export const FOCUS = {
   Rest: [],       // nobody improves; condition comes back REST_RECOVER a day faster
 };
 // grow: × the growth chance; recover: condition regained per day; injury: × the training-injury chance.
-export const INTENSITY = { Light: { grow: 0.7, recover: 9, injury: 0.5 }, Normal: { grow: 1, recover: 8, injury: 1 }, Hard: { grow: 1.3, recover: 6, injury: 2.5 } };
+export const INTENSITY = { Light: { grow: 0.7, recover: 6, injury: 0.5 }, Normal: { grow: 1, recover: 5, injury: 1 }, Hard: { grow: 1.3, recover: 3, injury: 2.5 } };
 const GROWTH = 0.1, DECLINE = 0.05, INJURY = 0.004, REST_RECOVER = 2; // chances per player per week
 
 export const defaultTraining = () => ({ focus: 'Balanced', intensity: 'Normal', ind: {} });

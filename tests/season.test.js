@@ -422,3 +422,11 @@ test('your training schedule trains your squad, AI clubs train Balanced; the sum
   endSeason(s);
   assert.ok(s.clubs.every(c => c.players.every(p => p.gain === 0 && p.yc === 0 && p.cond === 100 && p.sharp === 100)));
 });
+
+test('condition matters: some players start a match day still tired from the last one', () => {
+  const s = world(34);
+  takeClub(s, 6);
+  let tired = 0;
+  while (!s.done) { tired += s.clubs.reduce((t, c) => t + c.players.filter(p => p.cond < 100).length, 0); playDay(s); }
+  assert.ok(tired > 0, 'every player was fully fresh on every match day');
+});

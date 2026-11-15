@@ -17,8 +17,8 @@ export const FOCUS = {
   Physical: ATTRS.physical,
   Rest: [],       // nobody improves; condition comes back REST_RECOVER a day faster
 };
-// grow: × the growth chance; recover: condition regained per day; injury: × the training-injury chance.
-export const INTENSITY = { Light: { grow: 0.7, recover: 9, injury: 0.5 }, Normal: { grow: 1, recover: 8, injury: 1 }, Hard: { grow: 1.3, recover: 6, injury: 2.5 } };
+// grow: × the growth chance; recover: condition regained per day; injury: × the training-injury chance. (tuned in Phase 5: a full match takes about a week to recover)
+export const INTENSITY = { Light: { grow: 0.7, recover: 6, injury: 0.5 }, Normal: { grow: 1, recover: 5, injury: 1 }, Hard: { grow: 1.3, recover: 3, injury: 2.5 } };
 const GROWTH = 0.1, DECLINE = 0.05, INJURY = 0.004, REST_RECOVER = 2; // chances per player per week
 
 export const defaultTraining = () => ({ focus: 'Balanced', intensity: 'Normal', ind: {} });
