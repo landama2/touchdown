@@ -2,6 +2,8 @@ import { makeRng } from './rng.js';
 import { POS, WEIGHTS, ALL_ATTRS, createPlayer, overall } from './player.js';
 import { makeFixtures } from './fixtures.js';
 import { SAVE_VERSION } from './save.js';
+import { slots, newFam } from './lineup.js';
+import { defaultTactics } from './tactics.js';
 import { LEAGUES } from './data/england.js';
 import STATS, { CALIBRATION } from './data/england-stats.js';
 
@@ -37,7 +39,7 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
   const rng = makeRng(seed);
   const s = {
     version: SAVE_VERSION, seed, nid: 1,
-    me: null, formation: '4-4-2', lineup: [], budget: 0,
+    me: null, formation: '4-4-2', lineup: [], bench: [], tactics: defaultTactics(slots('4-4-2')), fam: newFam(), budget: 0,
     season: 1, round: 0, done: false,
     clubs: [], divisions: [], market: [], history: [], last: null, live: null,
   };

@@ -2,7 +2,8 @@ import { makeRng } from './rng.js';
 import { createPlayer, ageOneYear } from './player.js';
 import { makeFixtures } from './fixtures.js';
 import { blankStats, MARKET_SIZE, newFreeAgent } from './world.js';
-import { bestXI, fixLineup } from './lineup.js';
+import { slots, bestXI, autoBench, fixLineup, newFam, learnFam } from './lineup.js';
+import { defaultTactics } from './tactics.js';
 import { simMatch, startMatch, stepMinute, matchResult } from './match.js';
 
 const RETIRE_AGE = 35;
@@ -27,11 +28,15 @@ export function takeClub(s, clubId) {
   s.me = clubId;
   s.budget = tier(s.clubs[clubId]) * 1.5e6;
   s.lineup = bestXI(s.clubs[clubId], s.formation);
+  s.bench = autoBench(s.clubs[clubId], s.lineup);
+  s.tactics = defaultTactics(slots(s.formation));
+  s.fam = newFam();
 }
 
 function entry(s, id) {
   const club = s.clubs[id];
-  return id === s.me ? { club, ids: s.lineup, formation: s.formation } : { club, ids: bestXI(club, '4-4-2'), formation: '4-4-2' };
+  return id === s.me ? { club, ids: s.lineup, formation: s.formation, bench: s.bench, tactics: s.tactics, fam: s.fam }
+    : { club, ids: bestXI(club, '4-4-2'), formation: '4-4-2' }; // AI: best bench, default tactics (see makeSide)
 }
 
 function record(st, scored, conceded) {
@@ -57,7 +62,7 @@ export function kickOff(s) {
 export function playRound(s) {
   if (s.done) return null;
   if (s.me !== null) fixLineup(s);
-  const live = s.live;
+  const live = s.live, played = s.me !== null && myFixture(s);
   if (live) { for (const S of live.sides) S.auto = true; while (!live.done) stepMinute(live); }
   const rng = makeRng(s.seed);
   s.last = s.divisions.map(d => (d.fixtures[s.round] || []).map(([h, a]) => { // a smaller division has finished
@@ -68,6 +73,7 @@ export function playRound(s) {
     return r;
   }));
   if (s.me !== null) s.budget += 25e3 * tier(myClub(s)); // weekly income
+  if (played) learnFam(s.fam, s.formation);
   s.live = null;
   s.seed = rng.seed;
   s.round++;

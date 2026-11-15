@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, MARKET_SIZE } from '../src/world.js';
-import { FORMATIONS, slots, bestXI, fixLineup, strength } from '../src/lineup.js';
+import { FORMATIONS, BENCH, slots, bestXI, autoBench, fixLineup, strength, swap, newFam, learnFam } from '../src/lineup.js';
 import { takeClub, myClub, myFixture, kickOff, playRound, table, endSeason } from '../src/season.js';
 import { stepMinute, matchResult } from '../src/match.js';
 import { MINI } from './fixtures/mini.js';
@@ -174,4 +174,73 @@ test('kickOff does nothing when the human club has no fixture', () => {
   for (let r = 0; r < 6; r++) playRound(s);
   assert.equal(kickOff(s), null);
   assert.equal(s.live, null);
+});
+
+test('autoBench picks seven squad players outside the XI, a keeper first', () => {
+  const s = world(1), club = s.clubs[0], ids = bestXI(club, '4-4-2'), bench = autoBench(club, ids);
+  assert.equal(bench.length, BENCH);
+  assert.equal(new Set(bench).size, BENCH);
+  assert.ok(bench.every(id => !ids.includes(id) && club.players.some(p => p.id === id)));
+  assert.equal(club.players.find(p => p.id === bench[0]).pos, 'GK');
+});
+
+test('fixLineup repairs the bench and the slot tactics', () => {
+  const s = world(2);
+  takeClub(s, 5);
+  assert.equal(s.bench.length, BENCH);
+  const [sold] = s.bench;
+  myClub(s).players = myClub(s).players.filter(p => p.id !== sold);
+  s.bench.push(s.bench[1], s.lineup[0]); // a duplicate and a starter
+  s.tactics.slots[8].role = 'Winger';
+  s.formation = '4-3-3';
+  fixLineup(s);
+  assert.equal(s.bench.length, myClub(s).players.length - 11); // 17 players left: room for six
+  assert.equal(new Set(s.bench).size, s.bench.length);
+  assert.ok(!s.bench.includes(sold) && s.bench.every(id => !s.lineup.includes(id)));
+  assert.equal(s.tactics.slots[8].role, 'Striker'); // slot 8 is a forward in 4-3-3
+});
+
+test('swap moves players between the XI, the bench and the reserves', () => {
+  const s = world(3);
+  takeClub(s, 0);
+  myClub(s).players.push(s.market.pop()); // test squads hold 18: XI + bench, so add a reserve
+  const reserve = myClub(s).players.find(p => !s.lineup.includes(p.id) && !s.bench.includes(p.id)).id;
+  const [x, y, b] = [s.lineup[4], s.lineup[7], s.bench[2]];
+  swap(s, x, y);
+  assert.deepEqual([s.lineup[4], s.lineup[7]], [y, x]);
+  swap(s, y, b);
+  assert.deepEqual([s.lineup[4], s.bench[2]], [b, y]);
+  swap(s, reserve, y);
+  assert.equal(s.bench[2], reserve);
+  assert.ok(!s.lineup.includes(y) && !s.bench.includes(y));
+});
+
+test('familiarity: each match teaches the formation played; the others fade to a floor of 0.5', () => {
+  const fam = newFam();
+  assert.deepEqual(fam, { '4-4-2': 1, '4-3-3': 0.5, '3-5-2': 0.5, '5-3-2': 0.5, '4-5-1': 0.5 });
+  learnFam(fam, '4-3-3');
+  assert.deepEqual(fam, { '4-4-2': 0.98, '4-3-3': 0.6, '3-5-2': 0.5, '5-3-2': 0.5, '4-5-1': 0.5 });
+  for (let k = 0; k < 9; k++) learnFam(fam, '4-3-3');
+  assert.equal(fam['4-3-3'], 1);
+  assert.equal(fam['4-4-2'], 0.8);
+});
+
+test('your tactics reach your match, and playing teaches the formation', () => {
+  const s = world(4);
+  takeClub(s, 6);
+  s.formation = '4-3-3';
+  fixLineup(s);
+  s.tactics.mentality = 1;
+  s.tactics.slots[6].role = 'Playmaker';
+  s.tactics.takers.pen = s.lineup[9];
+  const m = kickOff(s), S = m.sides.find(x => !x.auto);
+  assert.equal(S.tac.mentality, 1);
+  assert.equal(S.on[6].role, 'Playmaker');
+  assert.equal(S.takers.pen, s.lineup[9]);
+  assert.deepEqual(S.bench, s.bench);
+  assert.equal(S.fam['4-3-3'], 0.5);
+  s.tactics.mentality = -2; // changes after kick-off stay out of the running match
+  assert.equal(S.tac.mentality, 1);
+  playRound(s);
+  assert.equal(s.fam['4-3-3'], 0.6);
 });

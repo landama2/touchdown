@@ -1,5 +1,5 @@
 import { POS, overall } from './player.js';
-import { ROLES } from './tactics.js';
+import { ROLES, fitSlots } from './tactics.js';
 
 export const FORMATIONS = { '4-4-2': [1, 4, 4, 2], '4-3-3': [1, 4, 3, 3], '3-5-2': [1, 3, 5, 2], '5-3-2': [1, 5, 3, 2], '4-5-1': [1, 4, 5, 1] };
 export const SLOT_WEIGHT = { GK: [0, 1.5], DF: [0, 1], MF: [0.5, 0.5], FW: [1, 0] }; // [attack, defence]
@@ -20,10 +20,20 @@ export function bestXI(club, formation) {
   });
 }
 
+// Repairs the human club's matchday plan after a sale or a formation change: a valid XI, a bench of
+// up to BENCH squad players outside the XI (gaps filled by autoBench), and slot tactics that fit.
 export function fixLineup(s) {
   const club = s.clubs[s.me], ids = new Set(club.players.map(p => p.id));
   if (s.lineup.length !== 11 || new Set(s.lineup).size !== 11 || s.lineup.some(id => !ids.has(id)))
     s.lineup = bestXI(club, s.formation);
+  const bench = [...new Set(s.bench)].filter(id => ids.has(id) && !s.lineup.includes(id));
+  s.bench = [...bench, ...autoBench(club, [...s.lineup, ...bench])].slice(0, BENCH);
+  s.tactics.slots = fitSlots(s.tactics.slots, slots(s.formation));
+}
+
+// Swaps two of the human club's players between XI slots, the bench and the reserves.
+export function swap(s, a, b) {
+  for (const list of [s.lineup, s.bench]) list.forEach((id, k) => { if (id === a) list[k] = b; else if (id === b) list[k] = a; });
 }
 
 export function strength(club, ids, formation) {
@@ -50,4 +60,12 @@ export function autoBench(club, taken) {
   const rest = club.players.filter(p => !taken.includes(p.id)).sort((a, b) => overall(b) - overall(a) || a.id - b.id);
   const first = POS.map(pos => rest.find(p => p.pos === pos)).filter(Boolean);
   return [...first, ...rest.filter(p => !first.includes(p))].slice(0, BENCH).map(p => p.id);
+}
+
+// Formation familiarity, 0.5-1 per formation: AI clubs play 4-4-2, so a club you take over knows only that.
+// Each match played in a shape teaches it; the others fade a little.
+const FAM_GAIN = 0.1, FAM_LOSS = 0.02, FAM_MIN = 0.5;
+export const newFam = () => Object.fromEntries(Object.keys(FORMATIONS).map(f => [f, f === '4-4-2' ? 1 : FAM_MIN]));
+export function learnFam(fam, used) {
+  for (const f in fam) fam[f] = Math.round(Math.min(1, Math.max(FAM_MIN, fam[f] + (f === used ? FAM_GAIN : -FAM_LOSS))) * 100) / 100;
 }

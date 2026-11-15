@@ -5,6 +5,8 @@ import { MINI } from './fixtures/mini.js';
 import { takeClub, kickOff, playRound } from '../src/season.js';
 import { stepMinute } from '../src/match.js';
 import { serialize, deserialize, SAVE_VERSION } from '../src/save.js';
+import { BENCH, slots, newFam } from '../src/lineup.js';
+import { defaultTactics } from '../src/tactics.js';
 
 test('a career survives a save/load round trip and continues identically', () => {
   const a = createWorld(21, MINI);
@@ -50,4 +52,24 @@ test('a version 2 save loads: the live match slot is added and old results are d
   assert.equal(b.last, null);
   playRound(b);
   assert.equal(b.round, 2);
+});
+
+test('a version 3 save loads with default tactics, also in a match in progress', () => {
+  const s = createWorld(24, MINI);
+  takeClub(s, 1);
+  kickOff(s);
+  for (let k = 0; k < 30; k++) stepMinute(s.live);
+  const old = JSON.parse(serialize(s));
+  old.version = 3;
+  delete old.bench; delete old.tactics; delete old.fam;
+  for (const S of old.live.sides) { delete S.tac; delete S.takers; delete S.fam; for (const o of S.on) { delete o.role; delete o.duty; delete o.shoot; delete o.tackle; } }
+  const b = deserialize(JSON.stringify(old));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.deepEqual(b.tactics, defaultTactics(slots(b.formation)));
+  assert.deepEqual(b.fam, newFam());
+  assert.equal(b.live.sides[0].tac.mentality, 0);
+  while (!b.live.done) stepMinute(b.live);
+  playRound(b);
+  assert.equal(b.round, 1);
+  assert.equal(b.bench.length, BENCH);
 });
