@@ -1,5 +1,6 @@
-// Small fake leagues for engine tests. Sizes 4, 6, 6 so the top division runs out of
-// fixtures before the others, like the real 20-club Premier League next to 24-club EFL divisions.
+// Small fake leagues for engine tests. Sizes 4, 10, 6: the top division plays fewer rounds than the
+// others, like the real 20-club Premier League next to 24-club EFL divisions, and the middle one is
+// big enough for promotion, play-off and relegation places not to overlap (2 + 4 + 3).
 const PALETTE = ['#c8102e', '#003399', '#ffcc00', '#006633', '#ffffff', '#111111'];
 const PATTERN_CYCLE = ['plain', 'stripes', 'hoops', 'halves', 'sash', 'sleeves'];
 const SHAPE = [['GK', 2], ['DF', 6], ['MF', 6], ['FW', 4]];
@@ -19,6 +20,7 @@ function club(name, rating) {
 
 export const MINI = [
   { name: 'Top League', clubs: [club('Alpha', 15), club('Bravo', 15), club('Charlie', 14), club('Delta', 14)] },
-  { name: 'Middle League', clubs: [club('Echo', 12), club('Foxtrot', 12), club('Golf', 12), club('Hotel', 11), club('India', 11), club('Juliet', 11)] },
+  { name: 'Middle League', clubs: [club('Echo', 12), club('Foxtrot', 12), club('Golf', 12), club('Hotel', 11), club('India', 11), club('Juliet', 11),
+    club('Quebec', 11), club('Romeo', 10), club('Sierra', 10), club('Tango', 10)] },
   { name: 'Low League', clubs: [club('Kilo', 9), club('Lima', 9), club('Mike', 8), club('November', 8), club('Oscar', 8), club('Papa', 8)] },
 ];

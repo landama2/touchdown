@@ -4,6 +4,9 @@ import { makeFixtures } from './fixtures.js';
 import { SAVE_VERSION } from './save.js';
 import { slots, newFam } from './lineup.js';
 import { defaultTactics } from './tactics.js';
+import { buildCalendar } from './calendar.js';
+import { cupRounds, newCup } from './cup.js';
+import { blankRecords } from './awards.js';
 import { LEAGUES } from './data/england.js';
 import STATS, { CALIBRATION } from './data/england-stats.js';
 
@@ -40,8 +43,8 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
   const s = {
     version: SAVE_VERSION, seed, nid: 1,
     me: null, formation: '4-4-2', lineup: [], bench: [], tactics: defaultTactics(slots('4-4-2')), fam: newFam(), budget: 0,
-    season: 1, round: 0, done: false,
-    clubs: [], divisions: [], market: [], history: [], last: null, live: null,
+    season: 1, day: -1, next: 0, days: [], done: false, cup: null, playoffs: [],
+    clubs: [], divisions: [], market: [], history: [], records: [], last: null, live: null,
   };
   leagues.forEach((league, div) => {
     const shift = calibration[league.name] || 0;
@@ -52,13 +55,27 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
         id, name: c.name, short: c.short, colours: [...c.colours], kit: { ...c.kit }, div,
         quality: rows.reduce((t, row) => t + row[3], 0) / rows.length,
         players: rows.map(row => playerFromData(rng, s.nid++, row, stats[c.name]?.[row[0]])),
-        st: blankStats(),
+        st: blankStats(), rec: { win: null, goals: null },
       });
       return id;
     });
-    s.divisions.push({ name: league.name, clubIds, fixtures: makeFixtures(clubIds) });
+    s.divisions.push({ name: league.name, clubIds, fixtures: [] });
+    s.records.push(blankRecords());
   });
   for (let i = 0; i < MARKET_SIZE; i++) s.market.push(newFreeAgent(rng, s.nid++));
+  scheduleSeason(s, rng);
   s.seed = rng.seed;
   return s;
+}
+
+// Cup seeding: top division first, then by squad quality. The weakest clubs play the preliminary round.
+const seeding = clubs => [...clubs].sort((a, b) => a.div - b.div || b.quality - a.quality || a.id - b.id).map(c => c.id);
+
+// A new season's schedule: league fixtures, the calendar, the cup's first round, no play-offs yet.
+export function scheduleSeason(s, rng) {
+  for (const d of s.divisions) d.fixtures = makeFixtures(d.clubIds);
+  s.days = buildCalendar(s.divisions.map(d => d.fixtures.length), cupRounds(s.clubs.length));
+  s.cup = newCup(rng, seeding(s.clubs));
+  s.playoffs = s.divisions.map(() => null);
+  s.day = -1; s.next = 0; s.done = false; s.last = null;
 }

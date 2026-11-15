@@ -5,7 +5,7 @@ import { validateLeagues } from '../src/data/validate.js';
 import { LEAGUES } from '../src/data/england.js';
 import STATS, { CALIBRATION } from '../src/data/england-stats.js';
 import { createWorld } from '../src/world.js';
-import { takeClub, playRound, endSeason } from '../src/season.js';
+import { takeClub, playDay, endSeason } from '../src/season.js';
 
 test('the three English data files are valid together', () => {
   assert.deepEqual(validateLeagues(LEAGUES), []);
@@ -16,8 +16,7 @@ test('the default world is the English pyramid and plays a full season', () => {
   const s = createWorld(1);
   assert.deepEqual(s.divisions.map(d => d.clubIds.length), [20, 24, 24]);
   takeClub(s, 0);
-  while (!s.done) playRound(s);
-  assert.equal(s.round, 46);
+  while (!s.done) playDay(s);
   for (const d of s.divisions) for (const id of d.clubIds) assert.equal(s.clubs[id].st.p, 2 * (d.clubIds.length - 1));
   endSeason(s);
   assert.equal(s.season, 2);
@@ -72,7 +71,7 @@ test('the free-agent list has players worth signing below the Premier League', (
 test('a season of real leagues plays like real football', () => {
   const s = createWorld(1);
   let n = 0, goals = 0, home = 0, yellows = 0, reds = 0, pens = 0;
-  while (!s.done) for (const div of playRound(s)) for (const r of div) {
+  while (!s.done) for (const r of playDay(s).filter(x => x.item.comp === 'league')) {
     n++; goals += r.hg + r.ag; if (r.hg > r.ag) home++;
     yellows += r.stats[0].yc + r.stats[1].yc; reds += r.stats[0].rc + r.stats[1].rc;
     pens += r.ev.filter(e => e.kind === 'pen').length;

@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, MARKET_SIZE } from '../src/world.js';
 import { FORMATIONS, BENCH, slots, bestXI, autoBench, fixLineup, strength, swap, newFam, learnFam } from '../src/lineup.js';
-import { takeClub, myClub, myFixture, kickOff, playRound, table, endSeason } from '../src/season.js';
+import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, endSeason } from '../src/season.js';
+import { cupRounds } from '../src/cup.js';
 import { stepMinute, matchResult } from '../src/match.js';
 import { MINI } from './fixtures/mini.js';
 
@@ -40,11 +41,12 @@ test('a full season: every club plays everyone home and away, stats are consiste
   const s = world(4);
   takeClub(s, 6);
   const budget0 = s.budget, seed0 = s.seed;
-  playRound(s);
+  playDay(s);
   assert.notEqual(s.seed, seed0);
-  while (!s.done) assert.equal(playRound(s).length, 3);
-  assert.equal(s.round, 10);
-  assert.equal(playRound(s), null);
+  while (!s.done) assert.ok(playDay(s).every(r => r.item && s.days[s.next - 1].items.some(i => i.comp === r.item.comp)));
+  assert.equal(s.next, s.days.length);
+  assert.equal(s.day, s.days.at(-1).day);
+  assert.equal(playDay(s), null);
   assert.ok(s.budget > budget0);
   assert.ok(s.budget - budget0 <= 2 * budget0, `income ${s.budget - budget0} vs start ${budget0}`);
   s.divisions.forEach((d, i) => {
@@ -59,27 +61,28 @@ test('a full season: every club plays everyone home and away, stats are consiste
   });
 });
 
-test('divisions of different sizes: the smaller one finishes early, the season ends with the longest', () => {
+test('the calendar: days with no match for you, a day can hold several competitions', () => {
   const s = world(9);
-  takeClub(s, 0); // Top League: 4 clubs, 6 rounds; the others have 10
-  for (let r = 0; r < 6; r++) { assert.ok(myFixture(s)); playRound(s); }
+  takeClub(s, 0); // a top club: a bye in the cup's preliminary round
+  let idle = 0, mine = 0;
+  while (!s.done) {
+    const f = myFixture(s), today = s.days[s.next];
+    if (f) { mine++; assert.ok(today.items.includes(f.item)); assert.ok(f.h === 0 || f.a === 0); } else idle++;
+    playDay(s);
+  }
+  assert.ok(idle > 0 && mine >= 6, `${mine} matches, ${idle} days off`);
   assert.equal(myFixture(s), null);
-  assert.equal(s.done, false);
-  const res = playRound(s);
-  assert.deepEqual(res[0], []);
-  assert.equal(res[1].length, 3);
-  while (!s.done) playRound(s);
-  assert.equal(s.round, 10);
-  assert.ok(s.divisions[0].clubIds.every(id => s.clubs[id].st.p === 6));
-  assert.equal(myFixture(s), null);
+  assert.ok(s.days.some(d => new Set(d.items.map(i => i.comp)).size > 1 || d.items.length > 1));
 });
 
-test('myFixture returns the human club\'s match', () => {
+test('myFixture returns the human club\'s next match with its calendar item', () => {
   const s = world(10);
   takeClub(s, 7);
   const f = myFixture(s);
-  assert.ok(f.includes(7));
-  assert.ok(s.divisions[1].fixtures[0].some(m => m[0] === f[0] && m[1] === f[1]));
+  assert.ok(f.h === 7 || f.a === 7);
+  assert.deepEqual(f.item, { comp: 'league', div: 1, round: 0 });
+  assert.ok(s.divisions[1].fixtures[0].some(m => m[0] === f.h && m[1] === f.a));
+  assert.equal(f.neutral, false);
 });
 
 test('endSeason rolls over; three seasons keep squads intact', () => {
@@ -88,16 +91,17 @@ test('endSeason rolls over; three seasons keep squads intact', () => {
   endSeason(s); // not done yet: no-op
   assert.equal(s.season, 1);
   for (let y = 1; y <= 3; y++) {
-    while (!s.done) playRound(s);
+    while (!s.done) playDay(s);
     const seedBefore = s.seed;
     endSeason(s);
     assert.notEqual(s.seed, seedBefore);
     assert.equal(s.season, y + 1);
-    assert.equal(s.round, 0);
-    assert.equal(s.done, false);
+    assert.deepEqual([s.next, s.day, s.done, s.last], [0, -1, false, null]);
     assert.equal(s.history.length, y);
-    assert.equal(s.history[y - 1].champions.length, 3);
-    assert.ok(s.history[y - 1].pos >= 1 && s.history[y - 1].pos <= 4);
+    const h = s.history[y - 1];
+    assert.equal(h.divs.length, 3);
+    assert.ok(h.pos >= 1 && h.pos <= MINI[h.div].clubs.length);
+    assert.deepEqual(s.divisions.map(d => d.clubIds.length), [4, 10, 6]);
     assert.ok(s.clubs.every(c => c.players.length === 18 && c.st.p === 0 && c.players.every(p => p.age <= 35)));
     assert.equal(new Set(s.lineup).size, 11);
   }
@@ -107,22 +111,22 @@ test('endSeason rolls over; three seasons keep squads intact', () => {
 test('prize money uses the size of the human club\'s division', () => {
   const s = world(12);
   takeClub(s, 0); // 4-club division, tier 3
-  while (!s.done) playRound(s);
+  while (!s.done) playDay(s);
   const pos = table(s, 0).indexOf(0) + 1, before = s.budget;
   endSeason(s);
-  assert.equal(s.history[0].prize, (4 + 1 - pos) * 40e3 * 3);
+  assert.equal(s.history[0].prize, (4 + 1 - pos) * 40e3 * 3 + (s.history[0].cup.winner === 0 ? 500e3 : 0));
   assert.equal(s.budget, before + s.history[0].prize);
 });
 
 test('same seed and same choices give the same career; works with no human club', () => {
-  const run = () => { const s = world(6); while (!s.done) playRound(s); endSeason(s); return s; };
+  const run = () => { const s = world(6); while (!s.done) playDay(s); endSeason(s); return s; };
   assert.deepEqual(run(), run());
 });
 
 test("free agents: half of last season's list stays, a year older; the rest are new", () => {
   const s = world(8);
   const ageBefore = new Map(s.market.map(p => [p.id, p.age]));
-  while (!s.done) playRound(s);
+  while (!s.done) playDay(s);
   endSeason(s);
   assert.equal(s.market.length, MARKET_SIZE);
   assert.equal(new Set(s.market.map(p => p.id)).size, MARKET_SIZE);
@@ -135,7 +139,7 @@ test('free agents at retirement age leave the list', () => {
   const s = world(8);
   for (const p of s.market) p.age = 35;
   const old = new Set(s.market.map(p => p.id));
-  while (!s.done) playRound(s);
+  while (!s.done) playDay(s);
   endSeason(s);
   assert.equal(s.market.length, MARKET_SIZE);
   assert.ok(s.market.every(p => !old.has(p.id)));
@@ -148,11 +152,11 @@ test('a live match: kick off, play it minute by minute, and the round records ex
   assert.equal(kickOff(s), m); // already started: the same match comes back
   assert.equal(m.sides.find(S => !S.auto).club, 6);
   while (!m.done) stepMinute(m);
-  const want = matchResult(m), res = playRound(s);
+  const want = matchResult(m), res = playDay(s);
   assert.equal(s.live, null);
-  assert.deepEqual(res[1].find(r => r.h === 6 || r.a === 6), want);
+  assert.deepEqual(res.find(r => r.h === 6 || r.a === 6), { ...want, item: { comp: 'league', div: 1, round: 0 } });
   assert.equal(s.clubs[6].st.gf, want.h === 6 ? want.hg : want.ag);
-  assert.equal(s.round, 1);
+  assert.equal(s.next, 1);
 });
 
 test('playing the round during a live match hands the rest of it to the assistant', () => {
@@ -160,8 +164,8 @@ test('playing the round during a live match hands the rest of it to the assistan
   takeClub(s, 6);
   const m = kickOff(s);
   for (let k = 0; k < 30; k++) stepMinute(m);
-  const res = playRound(s);
-  const mine = res[1].find(r => r.h === 6 || r.a === 6);
+  const res = playDay(s);
+  const mine = res.find(r => r.h === 6 || r.a === 6);
   assert.equal(mine.ev.length, m.ev.length);
   assert.ok(m.done && m.sides.every(S => S.auto));
   assert.equal(s.live, null);
@@ -170,8 +174,8 @@ test('playing the round during a live match hands the rest of it to the assistan
 
 test('kickOff does nothing when the human club has no fixture', () => {
   const s = world(9);
-  takeClub(s, 0); // Top League: 6 rounds, the season has 10
-  for (let r = 0; r < 6; r++) playRound(s);
+  takeClub(s, 0);
+  while (myFixture(s)) playDay(s); // to the first day without a match for club 0
   assert.equal(kickOff(s), null);
   assert.equal(s.live, null);
 });
@@ -241,6 +245,110 @@ test('your tactics reach your match, and playing teaches the formation', () => {
   assert.equal(S.fam['4-3-3'], 0.5);
   s.tactics.mentality = -2; // changes after kick-off stay out of the running match
   assert.equal(S.tac.mentality, 1);
-  playRound(s);
+  playDay(s);
   assert.equal(s.fam['4-3-3'], 0.6);
+});
+
+const season = (seed, me = null) => { const s = world(seed); if (me !== null) takeClub(s, me); while (!s.done) playDay(s); return s; };
+
+test('the cup: every club enters, the weakest in a preliminary round, one winner after a neutral final', () => {
+  const s = world(15), n = s.clubs.length; // 20 clubs: 4 preliminary ties, then 16
+  assert.equal(s.cup.rounds[0].ties.length, n - 16);
+  assert.deepEqual([...s.cup.byes, ...s.cup.rounds[0].ties.flatMap(t => [t.h, t.a])].sort((a, b) => a - b), s.clubs.map(c => c.id));
+  const prelim = s.cup.rounds[0].ties.flatMap(t => [t.h, t.a]);
+  assert.ok(s.divisions[2].clubIds.every(id => prelim.includes(id)) && prelim.every(id => s.clubs[id].div > 0), 'the weakest clubs play the preliminary round');
+  const finals = [];
+  while (!s.done) for (const r of playDay(s)) if (r.item.comp === 'cup' && r.item.round === cupRounds(n) - 1) finals.push(r);
+  assert.equal(s.cup.rounds.length, cupRounds(n));
+  for (const rd of s.cup.rounds) for (const t of rd.ties) {
+    assert.ok(t.w === t.h || t.w === t.a);
+    assert.equal(t.legs.length, 1);
+    assert.equal(t.pens !== null, t.legs[0][0] === t.legs[0][1]); // penalties exactly when level
+  }
+  assert.equal(s.cup.rounds.at(-1).ties.length, 1);
+  assert.equal(finals.length, 1);
+  endSeason(s);
+  const final = s.history[0].cup;
+  assert.ok(final.winner !== final.runnerUp && [final.winner, final.runnerUp].includes(finals[0].h));
+});
+
+test('play-offs: 3rd-6th, two legs with the higher seed at home second, a final; the winner goes up', () => {
+  const s = world(16);
+  const legs = [];
+  while (!s.done) for (const r of playDay(s)) if (r.item.comp === 'playoff') legs.push(r);
+  for (const d of [1, 2]) {
+    const p = s.playoffs[d], [semi1, semi2] = p.rounds[0].ties, final = p.rounds[1].ties[0];
+    assert.ok([semi1, semi2, final].every(t => t.w === t.h || t.w === t.a));
+    assert.deepEqual([semi1.legs.length, semi2.legs.length, final.legs.length], [2, 2, 1]);
+    const first = legs.find(r => r.item.div === d && r.item.round === 0 && r.item.leg === 0 && (r.h === semi1.a));
+    assert.equal(first.a, semi1.h, 'lower seed at home in the first leg');
+    assert.deepEqual([final.h, final.a], [semi1.w, semi2.w]);
+  }
+  const tables = s.divisions.map((_, d) => table(s, d));
+  assert.deepEqual(s.playoffs[1].rounds[0].ties.map(t => [t.h, t.a]), [[tables[1][2], tables[1][5]], [tables[1][3], tables[1][4]]]);
+  const winners = [1, 2].map(d => s.playoffs[d].rounds[1].ties[0].w);
+  endSeason(s);
+  const h = s.history[0];
+  for (const d of [1, 2]) {
+    assert.deepEqual(h.divs[d].up, [tables[d][0], tables[d][1], winners[d - 1]]);
+    assert.equal(h.divs[d].playoff, winners[d - 1]);
+    for (const id of h.divs[d].up) assert.equal(s.clubs[id].div, d - 1);
+  }
+});
+
+test('promotion and relegation: three up and three down at each boundary, none down from the bottom', () => {
+  const s = season(17), tables = s.divisions.map((_, d) => table(s, d));
+  endSeason(s);
+  const h = s.history[0];
+  assert.deepEqual(h.divs.map(x => [x.up.length, x.down.length]), [[0, 3], [3, 3], [3, 0]]);
+  assert.deepEqual(h.divs[0].down, tables[0].slice(-3));
+  for (const id of h.divs[0].down) assert.equal(s.clubs[id].div, 1);
+  for (const id of h.divs[1].down) assert.equal(s.clubs[id].div, 2);
+  assert.deepEqual(s.divisions.map(d => d.clubIds.length), [4, 10, 6]);
+  s.divisions.forEach((d, i) => assert.ok(d.clubIds.every(id => s.clubs[id].div === i)));
+  assert.equal(new Set(s.divisions.flatMap(d => d.clubIds)).size, s.clubs.length);
+  assert.deepEqual(s.divisions.map(d => d.fixtures.length), [6, 18, 10]);
+});
+
+test('awards and records: the season\'s best players and the biggest numbers are kept', () => {
+  const s = season(18), tables = s.divisions.map((_, d) => table(s, d));
+  const players = s.clubs.flatMap(c => c.players.filter(p => p.stats).map(p => ({ p, c })));
+  for (const [d, dv] of s.divisions.entries()) {
+    const mine = players.filter(x => dv.clubIds.includes(x.c.id));
+    const goals = mine.reduce((t, x) => t + x.p.stats.goals, 0), scored = dv.clubIds.reduce((t, id) => t + s.clubs[id].st.gf, 0);
+    assert.equal(goals, scored, 'every league goal has a scorer');
+  }
+  const top = players.filter(x => x.c.div === 1).reduce((b, x) => !b || x.p.stats.goals > b.p.stats.goals ? x : b, null);
+  const champPts = s.clubs[tables[0][0]].st.pts, topGoals = top.p.stats.goals;
+  endSeason(s);
+  const aw = s.history[0].divs[1].awards;
+  assert.equal(aw.scorer.v, topGoals);
+  assert.ok(aw.player && aw.player.v >= 3 && aw.player.v <= 10);
+  assert.deepEqual(s.records[0].points, { v: champPts, club: tables[0][0], season: 1 });
+  assert.equal(s.records[1].goals.v, aw.scorer.v);
+  assert.ok(s.records[1].win.hg !== s.records[1].win.ag);
+  assert.ok(s.clubs.some(c => c.rec.win) && s.clubs.some(c => c.rec.goals));
+  assert.ok(s.clubs.every(c => c.players.every(p => p.stats === undefined)), 'season stats are cleared');
+});
+
+test('weekly income: one payment per week of the season, whatever the number of matches', () => {
+  const s = world(19);
+  takeClub(s, 0); // top division: tier 3
+  const start = s.budget;
+  let gates = 0;
+  while (!s.done) for (const r of playDay(s)) if (r.h === 0 && !(r.item.comp === 'cup' && r.item.round === cupRounds(s.clubs.length) - 1)) gates++;
+  const weeks = Math.floor(s.days.at(-1).day / 7) + 1;
+  assert.equal(s.budget - start, weeks * 25e3 * 3 + gates * 20e3 * 3);
+});
+
+test('upcoming lists the next matches of the human club in date order, cup ties once drawn', () => {
+  const s = world(20);
+  takeClub(s, 16); // bottom division: in the cup's preliminary round
+  const next = upcoming(s, 5);
+  assert.equal(next.length, 5);
+  const f = myFixture(s);
+  assert.deepEqual([next[0].day, next[0].h, next[0].a, next[0].item, next[0].neutral], [s.days[0].day, f.h, f.a, f.item, false]);
+  assert.ok(next.every((x, k) => (x.h === 16 || x.a === 16) && (k === 0 || x.day >= next[k - 1].day)));
+  assert.ok(next.some(x => x.item.comp === 'cup'), 'the preliminary round is drawn at the start of the season');
+  assert.deepEqual(upcoming({ ...s, me: null }, 5), []);
 });

@@ -23,8 +23,13 @@ test('createWorld builds one division per league from the data', () => {
   const s = createWorld(99, MINI), data = MINI.flatMap(l => l.clubs);
   assert.equal(s.version, SAVE_VERSION);
   assert.deepEqual(s.divisions.map(d => d.name), MINI.map(l => l.name));
-  assert.deepEqual(s.divisions.map(d => d.clubIds.length), [4, 6, 6]);
-  assert.deepEqual(s.divisions.map(d => d.fixtures.length), [6, 10, 10]);
+  assert.deepEqual(s.divisions.map(d => d.clubIds.length), [4, 10, 6]);
+  assert.deepEqual(s.divisions.map(d => d.fixtures.length), [6, 18, 10]);
+  assert.deepEqual([s.season, s.day, s.next, s.done, s.last], [1, -1, 0, false, null]);
+  assert.equal(s.days.flatMap(d => d.items).filter(i => i.comp === 'league').length, 6 + 18 + 10);
+  assert.deepEqual(s.playoffs, [null, null, null]);
+  assert.equal(s.cup.rounds.length, 1);
+  assert.deepEqual(s.records, [0, 1, 2].map(() => ({ points: null, goals: null, win: null })));
   s.clubs.forEach((c, i) => {
     assert.equal(c.id, i);
     assert.equal(c.name, data[i].name);
@@ -34,6 +39,7 @@ test('createWorld builds one division per league from the data', () => {
     assert.deepEqual(c.players.map(p => [p.name, p.pos, p.age]), data[i].players.map(r => [r[0], r[1], r[2]]));
     assert.equal(c.quality, data[i].players.reduce((t, r) => t + r[3], 0) / data[i].players.length);
     assert.deepEqual(c.st, { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 });
+    assert.deepEqual(c.rec, { win: null, goals: null });
   });
   s.divisions.forEach((d, i) => assert.ok(d.clubIds.every(id => s.clubs[id].div === i)));
   const ids = [...s.clubs.flatMap(c => c.players), ...s.market].map(p => p.id);
