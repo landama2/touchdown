@@ -17,7 +17,7 @@
 | 2 | Match engine | Minute-by-minute simulation: possession chains, shots with chance quality, cards, in-match injuries, fatigue, substitutions, player ratings; live commentary view with speed control and in-match changes | 1 | `2026-11-15-touchline-phase-2-match-engine.md` (done 2026-11-15) |
 | 3 | Tactics | Player roles and duties, mentality, pressing, tempo, width, defensive line, set-piece takers, per-player instructions, tactical familiarity; the engine from Phase 2 reads all of it | 2 | `2026-11-15-touchline-phase-3-tactics.md` (done 2026-11-15) |
 | 4 | Competitions & calendar | Day-based calendar, promotion/relegation with play-offs, a knockout cup across all divisions, season awards, club and league records | 1 | `2026-11-15-touchline-phase-4-competitions.md` (done 2026-11-15) |
-| 5 | Squad dynamics | Match fitness and condition, injuries with recovery times, suspensions, morale, form, training schedules that drive attribute development | 2, 4 | to write |
+| 5 | Squad dynamics | Match fitness and condition, injuries with recovery times, suspensions, morale, form, training schedules that drive attribute development | 2, 4 | `2026-11-15-touchline-phase-5-squad-dynamics.md` (done 2026-11-15) |
 | 6 | Contracts & finances | Wages, contract lengths, renewals, release clauses, negotiations; club income (gate, sponsorship, prize, broadcast) and costs; separate transfer and wage budgets | 4 | to write |
 | 7 | Transfer market | Transfer windows, AI clubs buying and selling, bids and counter-offers, loans, free agents, player willingness to move | 6 | to write |
 | 8 | Scouting & knowledge | Attributes of unknown players shown as ranges, scouts with assignments and reports, shortlists, player search and filters | 7 | to write |
@@ -32,7 +32,9 @@ English Premier League, Championship and League One, 2026–27. Squads from publ
 
 Phase 3 note: the formation edge listed in `docs/fun-surprises.md` must survive the tactics rewrite.
 
-Phase 5 note: suspensions give "Tackle harder" its price (fun surprise #6); decide then whether to keep it cheap.
+Phase 5 note (decided 2026-11-15): suspensions price "Tackle harder"; it stays as it is (fun surprise #6).
+
+Phase 9 note: staff scale squad dynamics. Coaches scale `GROWTH` and `INTENSITY` in `src/training.js`; physios scale recovery (`passDays`) and injury length (`INJURIES`) in `src/squad.js`.
 
 ## Architecture decisions that hold for every phase
 
