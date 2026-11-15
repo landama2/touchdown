@@ -428,5 +428,5 @@ test('condition matters: some players start a match day still tired from the las
   takeClub(s, 6);
   let tired = 0;
   while (!s.done) { tired += s.clubs.reduce((t, c) => t + c.players.filter(p => p.cond < 100).length, 0); playDay(s); }
-  assert.ok(tired > 0, 'every player was fully fresh on every match day');
+  assert.ok(tired > 600, `only ${tired} tired player-days: recovery is too fast`); // 894 at 6/5/3 a day; the old 9/8/6 gave 346
 });
