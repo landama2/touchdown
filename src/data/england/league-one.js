@@ -1,6 +1,6 @@
 // League One 2026–27. Compiled 2026-11-15 from Wikipedia season and club squad pages.
 // Club list: "2026–27 EFL League One" (Wikipedia), in the order of that article's team list. Squads: each club's Wikipedia first-team squad (players out on loan left out; loan signings included). All 24 clubs from Wikipedia; none from memory.
-// Ratings and kit designs are Touchline's own estimates (docs/real-data-rules.md). Updated 2026-11-15: ages from Wikidata birth dates (P569), age on 1 Aug 2026; ages still estimates: 211 of 709. League One ratings re-judged player by player.
+// Ratings and kit designs are Touchline's own estimates (docs/real-data-rules.md). Updated 2026-11-15: ages from Wikidata birth dates (P569), age on 1 Aug 2026; ages still estimates: 210 of 709. League One ratings re-judged player by player.
 export default {
   name: 'League One',
   clubs: [
@@ -126,7 +126,7 @@ export default {
         ['Jake Beesley', 'FW', 29, 10],
         ['Antoni Sarcevic', 'MF', 34, 9],
         ['Stephen Humphrys', 'FW', 28, 9],
-        ['Colin Doyle', 'GK', 25, 6],
+        ['Colin Doyle', 'GK', 41, 6],
         ['Hayden Matthews', 'DF', 22, 8],
         ['Aden Baldwin', 'DF', 29, 9],
         ['George Pratt', 'DF', 25, 7],
@@ -710,7 +710,7 @@ export default {
         ['Cole McGhee', 'DF', 20, 5],
         ['George Brown', 'FW', 20, 5],
         ['Ernie Weaver', 'DF', 19, 5],
-        ['Reece James', 'DF', 26, 8],
+        ['Reece James', 'DF', 32, 8],
         ['Jack Phillips', 'GK', 19, 4],
         ['Jarvis Thornton', 'MF', 20, 5],
       ],

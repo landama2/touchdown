@@ -30,7 +30,7 @@ function validateClub(c, at, errors) {
 }
 
 export function validateLeagues(leagues) {
-  const errors = [], count = { name: {}, short: {} };
+  const errors = [], count = { name: {}, short: {} }, where2 = {};
   for (const league of leagues) {
     const where = league?.name || '(unnamed league)';
     if (!league?.name) errors.push('a league has no name');
@@ -38,10 +38,12 @@ export function validateLeagues(leagues) {
     if (league.clubs.length % 2) errors.push(`${where}: needs an even number of clubs, has ${league.clubs.length}`);
     for (const c of league.clubs) {
       validateClub(c, `${where} / ${c?.name || '(unnamed club)'}`, errors);
+      for (const row of Array.isArray(c?.players) ? c.players : []) if (Array.isArray(row)) (where2[`${row[0]}|${row[2]}`] ||= []).push(c.name);
       for (const key of ['name', 'short']) count[key][c[key]] = (count[key][c[key]] || 0) + 1;
     }
   }
   for (const [n, k] of Object.entries(count.name)) if (k > 1) errors.push(`club name used twice: ${n}`);
   for (const [n, k] of Object.entries(count.short)) if (k > 1) errors.push(`short code used twice: ${n}`);
+  for (const [key, clubs] of Object.entries(where2)) if (clubs.length > 1) { const [n, a] = key.split('|'); errors.push(`player listed at two clubs: ${n} (${a}) — ${clubs.join(', ')}`); }
   return errors;
 }

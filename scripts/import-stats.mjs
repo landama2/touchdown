@@ -1,7 +1,7 @@
 // Builds src/data/england-stats.js from data/player_stats.csv (the owner's dataset).
 // Run from the project root: node scripts/import-stats.mjs
 // The CSV has no quoted fields and no commas inside fields, so a plain split is safe.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { ALL_ATTRS } from '../src/player.js';
 import { matchStats, calibrate } from '../src/data/attrmap.js';
 import premierLeague from '../src/data/england/premier-league.js';
@@ -24,6 +24,7 @@ writeFileSync(new URL('../src/data/england-stats.js', import.meta.url),
   + `// Whole-number shift added to every data rating in that league, so players without imported\n`
   + `// attributes sit on the same scale as those with them.\n`
   + `export const CALIBRATION = ${JSON.stringify(calibration).replace(/":/g, '": ').replace(/,/g, ', ').replace('{', '{ ').replace('}', ' }')};\n`);
+mkdirSync(new URL('../.superpowers/sdd/1b/', import.meta.url), { recursive: true });
 writeFileSync(new URL('../.superpowers/sdd/1b/import-different-club.txt', import.meta.url), report.differentClub.join('\n') + '\n');
 
 for (const league of leagues) {

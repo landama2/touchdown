@@ -2,7 +2,7 @@ import { value } from './player.js';
 import { fixLineup } from './lineup.js';
 import { myClub } from './season.js';
 
-export const MIN_SQUAD = 16, MAX_SQUAD = 30, SELL_RATE = 0.8;
+export const MIN_SQUAD = 16, MAX_SQUAD = 32, SELL_RATE = 0.8;
 
 // Only the human club trades in Phase 1. AI transfers arrive in Phase 7.
 export function buy(s, id) {

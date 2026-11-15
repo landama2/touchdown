@@ -1,6 +1,6 @@
 // Championship 2026–27. Compiled 2026-11-15 from Wikipedia season and club squad pages.
 // Club list: "2026–27 EFL Championship" (Wikipedia), in the order of that article's team list. Squads: each club's Wikipedia "First-team squad" (players out on loan left out; loan signings included). All 24 clubs from Wikipedia; none from memory.
-// Ratings and kit designs are Touchline's own estimates (docs/real-data-rules.md). Updated 2026-11-15: ages from Wikidata birth dates (P569), age on 1 Aug 2026; ages still estimates: 81 of 673.
+// Ratings and kit designs are Touchline's own estimates (docs/real-data-rules.md). Updated 2026-11-15: ages from Wikidata birth dates (P569), age on 1 Aug 2026; ages still estimates: 79 of 673.
 export default {
   name: 'Championship',
   clubs: [
@@ -617,7 +617,7 @@ export default {
         ['Luca Bombino', 'DF', 20, 9],
         ['Junior Tchamadeu', 'DF', 22, 10],
         ['Ben Gibson', 'DF', 33, 10],
-        ['Josh Griffiths', 'GK', 33, 8],
+        ['Josh Griffiths', 'GK', 24, 8],
         ['Djibril Soumaré', 'MF', 23, 9],
         ['Frank Fielding', 'GK', 38, 8],
         ['Maksym Talovierov', 'DF', 26, 10],
@@ -795,7 +795,7 @@ export default {
         ['Max Cleworth', 'DF', 23, 10],
         ['Dominic Hyam', 'DF', 30, 12],
         ['Joe Worrall', 'DF', 29, 12],
-        ['Ben Whiteman', 'MF', 29, 12],
+        ['Ben Whiteman', 'MF', 30, 12],
         ['Josh Windass', 'MF', 32, 12],
         ['Bailey Cadamarteri', 'FW', 21, 10],
         ['Issa Kaboré', 'DF', 25, 11],

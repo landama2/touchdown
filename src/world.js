@@ -6,7 +6,7 @@ import { LEAGUES } from './data/england.js';
 import STATS, { CALIBRATION } from './data/england-stats.js';
 
 export const MARKET_SIZE = 40;
-const FREE_AGENT_QUALITY = 9;
+export const FREE_AGENT_QUALITY = 9;
 const STRENGTH_BONUS = 2;
 
 export const blankStats = () => ({ p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 });

@@ -4,7 +4,7 @@
 
 **Not a goal:** reproducing any existing commercial game. Touchline keeps its own name, visual identity, screen layouts and wording. Genre mechanics (tactics, transfers, scouting, training…) are fair game; another product's name, database, ratings, UI look or text are not.
 
-**Real names (decided 2026-11-15):** this is a personal, private project, so real club and player names are wanted, not avoided. Phase 1 shipped with generated fictional names and a deny-list that blocks real town names; that is to be replaced by a real-world data set (see "Real-world data" below). Attribute values are our own estimates, not taken from any game's database. No crests, kits or other artwork.
+**Real names (decided 2026-11-15):** this is a personal, private project, so real club and player names are wanted, not avoided. Phase 1 shipped with generated fictional names and a deny-list that blocks real town names; that is to be replaced by a real-world data set (see "Real-world data" below). Attribute values are our own estimates, not taken from any game's database. Badges and kits are Touchline's own designs in each club's colours (no real crests or logos).
 
 **Fun surprises (decided 2026-11-15):** minor quirks that are fun or interesting for the player are kept, not fixed. Each one is recorded in `docs/fun-surprises.md` and mentioned in the end-of-phase summary. Every phase's review triage must apply this rule.
 

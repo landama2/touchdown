@@ -24,6 +24,11 @@ test('club-level problems are reported', () => {
   has(broken(l => { l[0].clubs[0].players = l[0].clubs[0].players.filter(p => p[1] !== 'GK').concat([['Only Keeper', 'GK', 25, 10]]); }), 'goalkeepers');
 });
 
+test('the same player (name and age) at two clubs is reported; a namesake of another age is not', () => {
+  has(broken(l => { l[2].clubs[0].players[0] = [...l[0].clubs[0].players[0]]; }), 'player listed at two clubs');
+  assert.deepEqual(broken(l => { const p = [...l[0].clubs[0].players[0]]; p[2] += 5; l[2].clubs[0].players[0] = p; }), []);
+});
+
 test('player-level problems are reported', () => {
   has(broken(l => { l[0].clubs[0].players[3][1] = 'ST'; }), 'position');
   has(broken(l => { l[0].clubs[0].players[3][2] = 14; }), 'age');
