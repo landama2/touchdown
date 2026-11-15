@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRng } from '../src/rng.js';
 import { createWorld } from '../src/world.js';
-import { FORMATIONS, bestXI, strength } from '../src/lineup.js';
-import { startMatch, stepMinute, matchResult, simMatch, power, substitute, setFormation, MAX_SUBS } from '../src/match.js';
+import { FORMATIONS, BENCH, slots, bestXI, strength } from '../src/lineup.js';
+import { ROLES, defaultTactics } from '../src/tactics.js';
+import { startMatch, stepMinute, matchResult, simMatch, power, preview, substitute, setFormation, setLiveTactic, MAX_SUBS } from '../src/match.js';
 import { MINI } from './fixtures/mini.js';
 
 const s = createWorld(3, MINI);
@@ -148,4 +149,110 @@ test('setFormation re-slots the same players; a side down to ten loses its last 
   m.sides[0].on.pop(); // as if sent off
   setFormation(m, 0, '4-4-2');
   assert.deepEqual(m.sides[0].on.map(o => o.pos), ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW']);
+});
+const tac = (formation, change = () => {}) => { const t = defaultTactics(slots(formation)); change(t); return t; };
+const mine = (id, change, formation = '4-4-2', fam = {}) => ({ ...side(id, formation), tactics: tac(formation, change), fam });
+// Plays n matches of club 4 (home, with the given tactics) against club 5 and sums side 0's numbers.
+function tally(change, n = 300) {
+  const t = { shots: 0, against: 0, poss: 0, fouls: 0, corners: 0, xg: 0, open: 0 };
+  for (let seed = 1; seed <= n; seed++) {
+    const m = play(seed, mine(4, change), side(5));
+    t.shots += m.sides[0].st.shots; t.against += m.sides[1].st.shots; t.poss += m.sides[0].st.poss; t.fouls += m.sides[0].st.fouls;
+    for (const e of m.ev.filter(x => x.side === 0 && SHOTS.includes(x.type))) {
+      if (e.kind === 'corner') t.corners++;
+      if (!e.kind) { t.xg += e.xg; t.open++; }
+    }
+  }
+  return t;
+}
+
+test('the matchday bench is seven players, a keeper among them; only they are in the match', () => {
+  const m = startMatch(1, side(4), side(5));
+  for (const S of m.sides) {
+    assert.equal(S.bench.length, BENCH);
+    assert.ok(S.bench.some(id => m.pl[id].pos === 'GK'));
+    assert.ok(S.bench.every(id => !S.on.some(o => o.id === id)));
+  }
+  assert.equal(Object.keys(m.pl).length, 2 * (11 + BENCH));
+});
+
+test('preview is the side at kick-off; an unfamiliar formation costs 3% at familiarity 0.5', () => {
+  const entry = mine(4, t => { t.mentality = 1; t.slots[5].role = 'Playmaker'; });
+  assert.deepEqual(preview(entry), power(startMatch(9, entry, side(5)), 0));
+  const known = preview(mine(4, undefined, '4-3-3')), raw = preview(mine(4, undefined, '4-3-3', { '4-3-3': 0.5 }));
+  for (const k of ['att', 'def', 'ctrl']) assert.ok(Math.abs(raw[k] / known[k] - 0.97) < 1e-9, k);
+});
+
+test('team instructions move the match the way their names say', () => {
+  const base = tally();
+  const attacking = tally(t => { t.mentality = 2; }), pressing = tally(t => { t.pressing = 1; });
+  const fast = tally(t => { t.tempo = 1; }), wide = tally(t => { t.width = 1; }), high = tally(t => { t.line = 1; });
+  assert.ok(attacking.shots > base.shots * 1.08 && attacking.against > base.against * 1.08, 'attacking: more shots both ways');
+  assert.ok(pressing.poss > base.poss && pressing.fouls > base.fouls * 1.15 && pressing.against < base.against, 'pressing');
+  assert.ok(fast.shots > base.shots * 1.05 && fast.xg / fast.open < base.xg / base.open * 0.95, 'fast tempo: more, poorer shots');
+  assert.ok(wide.corners > base.corners * 1.15, 'wide: more corners');
+  assert.ok(high.against < base.against * 0.97, 'high line: fewer shots against');
+});
+
+test('roles, duties and instructions change who shoots and who sets up goals', () => {
+  const count = (change, k) => {
+    let shots = 0, assists = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const m = play(seed, mine(4, change), side(5)), id = m.sides[0].on[k]?.id ?? -1;
+      for (const e of m.ev) if (e.side === 0) { if (SHOTS.includes(e.type) && !e.kind && e.id === id) shots++; if (e.assist === id) assists++; }
+    }
+    return { shots, assists };
+  };
+  const cm = count(undefined, 5), playmaker = count(t => { t.slots[5].role = 'Playmaker'; }, 5);
+  assert.ok(playmaker.assists > cm.assists * 1.25, `${playmaker.assists} vs ${cm.assists}`);
+  const st = count(undefined, 9), keen = count(t => { t.slots[9].duty = 'Attack'; t.slots[9].shoot = 1; }, 9);
+  assert.ok(keen.shots > st.shots * 1.5, `${keen.shots} vs ${st.shots}`);
+});
+
+test('the chosen set-piece takers take penalties, free kicks and corners while they are on', () => {
+  let pens = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    const h = mine(4), [, , pen, fk, corner] = h.ids;
+    h.tactics.takers = { pen, fk, corner };
+    const m = startMatch(seed, h, side(5));
+    m.sides[0].auto = false; // no AI substitutions for side 0
+    while (!m.done) {
+      stepMinute(m);
+      const e = m.ev.at(-1), on = id => m.sides[0].on.some(o => o.id === id && !m.pl[id].inj);
+      if (!e || e.side !== 0 || e.min !== m.min) continue;
+      if (e.kind === 'pen' && on(pen)) { pens++; assert.equal(e.id, pen); }
+      if (e.kind === 'fk' && on(fk)) assert.equal(e.id, fk);
+      if (e.kind === 'corner' && e.type === 'goal' && on(corner)) assert.equal(e.assist, corner);
+    }
+  }
+  assert.ok(pens > 20, `${pens} penalties`);
+});
+
+test('penalties: about one match in four has one, and most are scored', () => {
+  let pens = 0, scored = 0;
+  for (let seed = 1; seed <= 400; seed++) for (const e of play(seed, side(4), side(5)).ev) if (e.kind === 'pen') { pens++; if (e.type === 'goal') scored++; }
+  assert.ok(pens / 400 > 0.15 && pens / 400 < 0.4, `${pens / 400} per match`);
+  assert.ok(scored / pens > 0.65 && scored / pens < 0.9, `${scored / pens} scored`);
+});
+
+test('mid-match changes are checked; a new formation keeps the roles that still fit', () => {
+  const m = startMatch(5, mine(4, t => { t.slots[1].role = 'Full-back'; t.slots[6].role = 'Playmaker'; }), side(5));
+  const S = m.sides[0];
+  assert.equal(setFormation(m, 0, '4-4-4'), 'Unknown formation.');
+  assert.equal(setFormation(m, 0, 'constructor'), 'Unknown formation.');
+  assert.equal(S.formation, '4-4-2');
+  assert.equal(substitute(m, 0, S.on[3].id, S.bench[0], 'XX'), 'Unknown position.');
+  assert.equal(S.subs, 0);
+  assert.equal(setLiveTactic(m, 0, 'pressing', 1), null);
+  assert.equal(S.tac.pressing, 1);
+  assert.equal(setLiveTactic(m, 0, 'pressing', 5), 'Unknown team instruction.');
+  const fb = S.on[1].id, pm = S.on[6].id;
+  assert.equal(setFormation(m, 0, '4-3-3'), null);
+  const slot = id => S.on.find(o => o.id === id);
+  assert.equal(slot(fb).pos === 'DF' ? slot(fb).role : 'Full-back', 'Full-back');
+  assert.ok(S.on.every(o => ROLES[o.pos][o.role]));
+  if (slot(pm).pos === 'MF') assert.equal(slot(pm).role, 'Playmaker');
+  const out = S.on.find(o => o.pos === 'MF');
+  assert.equal(substitute(m, 0, out.id, S.bench[0], 'FW'), null);
+  assert.deepEqual(out.role, 'Striker');
 });
