@@ -11,6 +11,8 @@ import { TEAM, TEAM_KEYS, TEAM_NAMES, ROLES, DUTIES, INSTR, TAKERS, setTeam, set
 import { line } from './commentary.js';
 import { buy, sell, MAX_SQUAD } from '../transfers.js';
 import { KEY, serialize, deserialize } from '../save.js';
+import { wageBill, projection } from '../finance.js';
+import { terms, canRenew, renew as renewContract } from '../contracts.js';
 import { crestSvg, kitSvg } from './art.js';
 
 // The UI is the only place allowed to touch Date, localStorage and the DOM.
@@ -27,6 +29,9 @@ const $ = id => document.getElementById(id);
 // Real names contain characters such as & and ' — escape everything taken from data.
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => '€' + (n / 1e6).toFixed(2) + 'M';
+const perWeek = n => `€${n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : Math.round(n / 1e3) + 'k'}/wk`;
+const termsText = t => `${perWeek(t.wage)} for ${t.years} season${t.years > 1 ? 's' : ''}${t.clause ? ` · release clause ${money(t.clause)}` : ''}`;
+const untilText = p => !p.contract ? '–' : p.contract.until === s.season ? '<span class="oop">ends this season</span>' : `season ${p.contract.until}`;
 const byPos = list => [...list].sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || overall(b) - overall(a));
 const label = k => k.replace(/[A-Z]/g, c => ' ' + c.toLowerCase());
 const clubName = id => esc(s.clubs[id].name);
@@ -122,7 +127,7 @@ function profile() {
   const group = ([title, keys]) => `<h3>${title}</h3>` + keys.map(k => `<div><span>${label(k)}</span><b class="${p.attrs[k] >= 15 ? 'hi' : ''}">${p.attrs[k]}</b></div>`).join('');
   return `<div class="attrs"><h3>${esc(p.name)} · ${p.pos} · age ${p.age} · overall ${overall(p)} · ${money(value(p))}
     <button data-act="close" style="float:right">Close</button></h3>
-    <p>Condition ${p.cond}% · sharpness ${Math.round(p.sharp)}% · morale ${moraleLabel(p.morale)} · form ${formAvg(p) ?? '–'} · ${p.yc} league yellow${p.yc === 1 ? '' : 's'}${status(p) ? ` · <span class="oop">${status(p)}</span>` : ''}</p>${Object.entries(ATTRS).map(group).join('')}</div>`;
+    <p>Condition ${p.cond}% · sharpness ${Math.round(p.sharp)}% · morale ${moraleLabel(p.morale)} · form ${formAvg(p) ?? '–'} · ${p.yc} league yellow${p.yc === 1 ? '' : 's'}${status(p) ? ` · <span class="oop">${status(p)}</span>` : ''}${p.contract ? ` · contract ${perWeek(p.contract.wage)} until season ${p.contract.until}${p.contract.clause ? `, release clause ${money(p.contract.clause)}` : ''}` : ''}</p>${Object.entries(ATTRS).map(group).join('')}</div>`;
 }
 
 const views = {
@@ -209,6 +214,8 @@ const views = {
     const award = (title, a, unit) => a ? `<div>${title}: <b>${esc(a.name)}</b> <span class="dim">(${name(a.club)}, ${a.v}${unit})</span></div>` : '';
     const seasons = [...s.history].reverse().map(h => `<h3>Season ${h.season}</h3>
       ${h.pos ? `<p>You finished ${h.pos} in the ${esc(s.divisions[h.div].name)} (prize ${money(h.prize)}).</p>` : ''}
+      ${h.fin ? `<div class="dim">Books: income ${money(h.fin.broadcast + h.fin.sponsor + h.fin.gate + h.fin.prize + h.fin.sales)}, wages ${money(h.fin.wages)}, fees ${money(h.fin.fees)} · balance ${money(h.fin.balance)}</div>` : ''}
+      ${h.left?.length ? `<div class="dim">Left when their contracts ended: ${h.left.map(esc).join(', ')}</div>` : ''}
       ${h.cup ? `<div>${CUP_NAME}: <b>${name(h.cup.winner)}</b> <span class="dim">beat ${name(h.cup.runnerUp)} in the final</span></div>` : ''}
       ${h.divs.map((x, d) => `<div><b>${esc(s.divisions[d].name)}</b> champions: ${name(x.champion)}${x.up.length ? ` · promoted: ${names(x.up)}` : ''}${x.down.length ? ` · relegated: ${names(x.down)}` : ''}</div>
         ${x.awards ? award('Player of the season', x.awards.player, ' avg') + award('Top scorer', x.awards.scorer, ' goals') + award('Young player', x.awards.young, ' avg') : ''}`).join('')}`).join('');
@@ -225,9 +232,29 @@ const views = {
       <h2>Seasons</h2>${seasons || '<p class="dim">The first season is still going.</p>'}<h2>Records</h2>${records}`;
   },
   Transfers() {
-    const list = (players, act, text) => `<div class="wrap"><table><tr>${HEAD}<th></th></tr>${byPos(players).map(p => `<tr>${nameBtn(p, 'view')}${cells(p)}<td><button data-act="${act}" data-id="${p.id}">${text}</button></td></tr>`).join('')}</table></div>`;
-    return `<h2>Free agents</h2>${list(s.market, 'buy', 'Buy')}
-      <h2>Your squad (${myClub(s).players.length}/${MAX_SQUAD}) <span class="dim">— sells for 80% of value</span></h2>${list(myClub(s).players, 'sell', 'Sell')}`;
+    const list = (players, act, text, asks) => `<div class="wrap"><table><tr>${HEAD}<th>${asks ? 'Asks' : ''}</th><th></th></tr>${byPos(players).map(p => `<tr>${nameBtn(p, 'view')}${cells(p)}<td class="dim">${asks ? termsText(terms(s, p)) : ''}</td><td><button data-act="${act}" data-id="${p.id}">${text}</button></td></tr>`).join('')}</table></div>`;
+    return `<p class="dim">Transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(myClub(s)))} of ${perWeek(s.wageBudget)}. A free agent costs his value as a fee, and his wage must fit the wage budget.</p>
+      <h2>Free agents</h2>${list(s.market, 'buy', 'Sign', true)}
+      <h2>Your squad (${myClub(s).players.length}/${MAX_SQUAD}) <span class="dim">— sells for 80% of value</span></h2>${list(myClub(s).players, 'sell', 'Sell', false)}`;
+  },
+  Contracts() {
+    const club = myClub(s);
+    const row = p => {
+      const t = canRenew(s, p) ? terms(s, p) : null;
+      return `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${overall(p)}</td><td class="n">${perWeek(p.contract.wage)}</td><td>${untilText(p)}</td>
+        <td class="n">${p.contract.clause ? money(p.contract.clause) : ''}</td><td>${t ? `<span class="dim">asks ${termsText(t)}</span> <button data-act="renew" data-id="${p.id}">Accept</button>` : ''}</td></tr>`;
+    };
+    return `<h2>Contracts</h2><p>Wage bill ${perWeek(wageBill(club))} of a wage budget of ${perWeek(s.wageBudget)}.</p>
+      <p class="dim">A player whose contract ends this season or next names his terms for a new one: accept them, or he leaves when his contract ends. If too many leave, academy players fill the squad.</p>
+      <div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Wage</th><th>Until</th><th class="n">Clause</th><th>New contract</th></tr>${byPos(club.players).map(row).join('')}</table></div>`;
+  },
+  Finances() {
+    const c = myClub(s), L = c.fin.season, line = (name, v) => `<tr><td>${name}</td><td class="n">${money(v)}</td></tr>`;
+    return `<h2>Finances · season ${s.season}</h2>
+      <p>Balance <b>${money(c.fin.balance)}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(c))} of ${perWeek(s.wageBudget)}</p>
+      <div class="wrap"><table><tr><th>Income this season</th><th></th></tr>${line('Broadcasting', L.broadcast)}${line('Sponsorship', L.sponsor)}${line('Gate receipts', L.gate)}${line('Prize money', L.prize)}${line('Player sales', L.sales)}
+      <tr><th>Costs this season</th><th></th></tr>${line('Wages', L.wages)}${line('Transfer fees', L.fees)}</table></div>
+      <p class="dim">Expected income for a mid-table season: ${money(projection(s, c))}. Each season starts with a transfer budget of half the balance (none in debt) and a wage budget of 70% of the expected income.</p>`;
   },
 };
 
@@ -265,6 +292,7 @@ const actions = {
   },
   end() { endSeason(s); tab = 'History'; tableDiv = myClub(s).div; },
   buy(id) { msg = buy(s, id) || 'Signed.'; },
+  renew(id) { msg = renewContract(s, id) || 'Contract agreed.'; },
   sell(id) { msg = sell(s, id) || 'Sold.'; if (viewing === id) viewing = null; },
 };
 
@@ -275,7 +303,7 @@ function render() {
     $('main').innerHTML = s.divisions.map(d => `<h2>${esc(d.name)}</h2><div class="grid">${d.clubIds.map(id => `<button data-act="start" data-id="${id}">${badge(id, 24)}${clubName(id)}</button>`).join('')}</div>`).join('');
     return;
   }
-  $('info').innerHTML = `${badge(s.me, 22)}${clubName(s.me)} · ${esc(s.divisions[myClub(s).div].name)} · Season ${s.season} · ${s.done ? 'season over' : dateLabel(s.days[s.next].day)} · Budget ${money(s.budget)}`;
+  $('info').innerHTML = `${badge(s.me, 22)}${clubName(s.me)} · ${esc(s.divisions[myClub(s).div].name)} · Season ${s.season} · ${s.done ? 'season over' : dateLabel(s.days[s.next].day)} · Transfers ${money(s.budget)} · Wages ${perWeek(wageBill(myClub(s)))} of ${perWeek(s.wageBudget)}`;
   if (s.live) tab = 'Match'; // the other screens wait for the final whistle
   $('nav').innerHTML = (s.live ? ['Match'] : Object.keys(views)).map(t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}">${t}</button>`).join('') + '<button data-act="reset">New game</button>';
   $('main').innerHTML = `<div class="msg" role="status">${msg}</div>` + profile() + views[tab]();
