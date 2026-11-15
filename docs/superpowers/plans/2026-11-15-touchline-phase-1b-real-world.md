@@ -771,7 +771,7 @@ git commit -m "feat: import player attributes from the owner's dataset"
 - Consumes: Task 2's format and `validateLeagues`; Tasks 3–5's data files; Task 6's generated `src/data/england-stats.js` (`{ clubName: { playerName: number[19] } }` in `ALL_ATTRS` order); `createPlayer(rng, id, pos, quality, age)`, `WEIGHTS`, `POS`, `ALL_ATTRS` from `src/player.js`; `makeFixtures`; `makeRng`.
 - Produces:
   - `LEAGUES: League[]` from `src/data/england.js` — `[premier, championship, leagueOne]`.
-  - `createWorld(seed: number, leagues = LEAGUES, stats = STATS) → State`. Club becomes `{ id, name, short, colours, kit, div, quality, players, st }` where `quality` is the mean data rating of the squad. A player found in `stats[club.name][player.name]` takes those attributes.
+  - `createWorld(seed: number, leagues = LEAGUES, stats = STATS, calibration = CALIBRATION) → State`. Every data rating in a league is first shifted by `calibration[league.name]` (default 0) and clamped to 1–20, so players without imported attributes sit on the dataset's scale. Club becomes `{ id, name, short, colours, kit, div, quality, players, st }` where `quality` is the mean shifted rating of the squad. A player found in `stats[club.name][player.name]` takes those attributes. `CALIBRATION` is the named export of `src/data/england-stats.js` (`{ [leagueName]: integer }`).
   - `playerFromData(rng, id, row: PlayerRow, stats?: number[19]) → Player` — real name, age and position; `createPlayer` with `quality = rating`; with `stats`, the attributes are replaced by `stats` and strengths are ignored; without, each strength +2 (max 20). In both cases `pot` = best key attribute + (0–2 if under 23), max 20.
   - `MARKET_SIZE = 40`, `blankStats()` unchanged. `DIVISIONS`, `CLUBS_PER_DIV`, `SQUAD_SHAPE`, `clubNames` are removed.
   - `playRound(state)`: a division with no fixture for the current round contributes `[]` to the result; the season is done after the longest division's last round.
@@ -864,6 +864,15 @@ test('playerFromData uses imported stats when given, ignoring strengths', () => 
   assert.deepEqual(ALL_ATTRS.map(k => p.attrs[k]), stats);
   const best = Math.max(...Object.keys(WEIGHTS.MF).map(k => p.attrs[k]));
   assert.ok(p.pot >= best && p.pot <= Math.min(20, best + 2));
+});
+
+test('createWorld shifts a league\'s data ratings by its calibration', () => {
+  const plain = createWorld(1, MINI, {}, {});
+  const shifted = createWorld(1, MINI, {}, { 'Top League': 2 });
+  assert.equal(shifted.clubs[0].quality, plain.clubs[0].quality + 2);
+  assert.equal(shifted.clubs[4].quality, plain.clubs[4].quality); // Middle League untouched
+  const avg = s => s.clubs[0].players.reduce((t, p) => t + overall(p), 0) / s.clubs[0].players.length;
+  assert.ok(avg(shifted) > avg(plain) + 5);
 });
 
 test('createWorld applies stats by club and player name', () => {
@@ -1075,7 +1084,7 @@ import assert from 'node:assert/strict';
 import { overall, ALL_ATTRS } from '../src/player.js';
 import { validateLeagues } from '../src/data/validate.js';
 import { LEAGUES } from '../src/data/england.js';
-import STATS from '../src/data/england-stats.js';
+import STATS, { CALIBRATION } from '../src/data/england-stats.js';
 import { createWorld } from '../src/world.js';
 import { takeClub, playRound, endSeason } from '../src/season.js';
 
@@ -1108,6 +1117,8 @@ test('imported stats refer to real squad players and hold 19 attributes 1-20', (
     }
   }
   assert.ok(n > 0, 'no imported players');
+  assert.deepEqual(Object.keys(CALIBRATION).sort(), LEAGUES.map(l => l.name).sort());
+  assert.ok(Object.values(CALIBRATION).every(Number.isInteger));
 });
 
 test('the Premier League is stronger than the Championship, which is stronger than League One', () => {
@@ -1130,7 +1141,7 @@ import { POS, WEIGHTS, ALL_ATTRS, createPlayer } from './player.js';
 import { makeFixtures } from './fixtures.js';
 import { SAVE_VERSION } from './save.js';
 import { LEAGUES } from './data/england.js';
-import STATS from './data/england-stats.js';
+import STATS, { CALIBRATION } from './data/england-stats.js';
 
 export const MARKET_SIZE = 40;
 const FREE_AGENT_QUALITY = 9;
@@ -1151,7 +1162,7 @@ export function playerFromData(rng, id, [name, pos, age, rating, strengths = []]
   return p;
 }
 
-export function createWorld(seed, leagues = LEAGUES, stats = STATS) {
+export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration = CALIBRATION) {
   const rng = makeRng(seed);
   const s = {
     version: SAVE_VERSION, seed, nid: 1,
@@ -1160,12 +1171,14 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS) {
     clubs: [], divisions: [], market: [], history: [], last: null,
   };
   leagues.forEach((league, div) => {
+    const shift = calibration[league.name] || 0;
+    const calibrated = ([name, pos, age, rating, strengths]) => [name, pos, age, Math.max(1, Math.min(20, rating + shift)), strengths];
     const clubIds = league.clubs.map(c => {
-      const id = s.clubs.length;
+      const id = s.clubs.length, rows = c.players.map(calibrated);
       s.clubs.push({
         id, name: c.name, short: c.short, colours: [...c.colours], kit: { ...c.kit }, div,
-        quality: c.players.reduce((t, row) => t + row[3], 0) / c.players.length,
-        players: c.players.map(row => playerFromData(rng, s.nid++, row, stats[c.name]?.[row[0]])),
+        quality: rows.reduce((t, row) => t + row[3], 0) / rows.length,
+        players: rows.map(row => playerFromData(rng, s.nid++, row, stats[c.name]?.[row[0]])),
         st: blankStats(),
       });
       return id;
