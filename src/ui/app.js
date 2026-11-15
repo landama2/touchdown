@@ -1,8 +1,9 @@
 import { POS, ATTRS, overall, value } from '../player.js';
 import { createWorld } from '../world.js';
-import { FORMATIONS, slots, bestXI, fixLineup, strength } from '../lineup.js';
+import { FORMATIONS, BENCH, slots, bestXI, fixLineup, swap } from '../lineup.js';
 import { takeClub, myClub, myFixture, kickOff, playRound, table, endSeason } from '../season.js';
-import { stepMinute, substitute, setFormation, MAX_SUBS } from '../match.js';
+import { stepMinute, substitute, setFormation, setLiveTactic, preview, MAX_SUBS } from '../match.js';
+import { TEAM, TEAM_KEYS, TEAM_NAMES, ROLES, DUTIES, INSTR, TAKERS, setTeam, setSlot, setTaker } from '../tactics.js';
 import { line } from './commentary.js';
 import { buy, sell, MAX_SQUAD } from '../transfers.js';
 import { KEY, serialize, deserialize } from '../save.js';
@@ -31,6 +32,11 @@ const cells = p => `<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${
 const nameBtn = (p, act) => `<td><button class="link" data-act="${act}" data-id="${p.id}">${esc(p.name)}</button></td>`;
 
 const mySide = () => s.live.sides.findIndex(S => !S.auto);
+const options = (pairs, current) => pairs.map(([v, text]) => `<option value="${esc(v)}"${v === current ? ' selected' : ''}>${esc(text)}</option>`).join('');
+const fieldSelect = (act, field, pairs, current, id = '') => `<select data-act="${act}" data-field="${field}"${id === '' ? '' : ` data-id="${id}"`}>${options(pairs, current)}</select>`;
+const levels = key => TEAM[key].map((text, k) => [k - (TEAM[key].length >> 1), text]);
+// One select per team instruction; t is s.tactics or a live side's tac.
+const teamSelects = (act, t) => TEAM_KEYS.map(k => `<label>${TEAM_NAMES[k]} ${fieldSelect(act, k, levels(k), t[k])}</label>`).join('');
 const formationSelect = (act, current) => `<select data-act="${act}">${Object.keys(FORMATIONS).map(f => `<option${f === current ? ' selected' : ''}>${f}</option>`).join('')}</select>`;
 
 function liveView() {
@@ -43,7 +49,7 @@ function liveView() {
     : `<button class="primary" data-act="${timer ? 'pause' : 'go'}">${timer ? 'Pause' : m.min ? 'Resume' : 'Kick off'}</button>
       <label>Speed <select data-act="speed">${SPEEDS.map(([t, ms]) => `<option value="${ms}"${ms === speed ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
       <label>Formation ${formationSelect('liveFormation', S.formation)}</label>
-      <button data-act="play">Skip to result</button>`;
+      <button data-act="play">Skip to result</button></div><div class="bar">${teamSelects('liveTeam', S.tac)}`;
   return `<p class="fixture score">${badge(H.club, 28)} ${clubName(H.club)} ${H.st.goals} – ${A.st.goals} ${clubName(A.club)} ${badge(A.club, 28)}</p>
     <h2>${m.done ? 'Full time' : m.min ? `${m.min}'` : 'Kick-off'}</h2><div class="bar">${controls}</div>
     <div class="live"><div class="feed" aria-live="polite">${feed || '<div class="dim">The teams are walking out.</div>'}</div>
@@ -57,7 +63,7 @@ function report(r) {
   const stat = (name, f) => `<tr><td class="n">${f(r.stats[0])}</td><td>${name}</td><td class="n">${f(r.stats[1])}</td></tr>`;
   const mine = r.ratings.filter(x => x.side === (r.h === s.me ? 0 : 1)), best = r.ratings[0];
   return `<h2>Last round</h2><div class="score">${clubName(r.h)} ${r.hg} – ${r.ag} ${clubName(r.a)}</div>
-    ${key.map(e => `<div>${e.min}' ${icon[e.type]} ${esc(e.name)}${e.assistName ? ` <span class="dim">(assist ${esc(e.assistName)})</span>` : ''} <span class="dim">— ${clubName(e.side ? r.a : r.h)}</span></div>`).join('') || '<div class="dim">No goals or cards.</div>'}
+    ${key.map(e => `<div>${e.min}' ${icon[e.type]} ${esc(e.name)}${e.kind === 'pen' ? ' (pen)' : ''}${e.assistName ? ` <span class="dim">(assist ${esc(e.assistName)})</span>` : ''} <span class="dim">— ${clubName(e.side ? r.a : r.h)}</span></div>`).join('') || '<div class="dim">No goals or cards.</div>'}
     <div class="wrap"><table class="stats"><tr><th class="n">${esc(s.clubs[r.h].short)}</th><th></th><th class="n">${esc(s.clubs[r.a].short)}</th></tr>
     ${stat('Possession', st => Math.round(st.poss / total * 100) + '%')}${stat('Shots', st => st.shots)}${stat('On target', st => st.on)}${stat('Fouls', st => st.fouls)}${stat('Yellow cards', st => st.yc)}${stat('Red cards', st => st.rc)}</table></div>
     <p>Player of the match: <b>${esc(best.name)}</b> (${best.rt.toFixed(1)}, ${clubName(best.side ? r.a : r.h)})</p>
@@ -89,15 +95,31 @@ function profile() {
 const views = {
   Squad() {
     fixLineup(s);
-    const club = myClub(s), pos = slots(s.formation), st = strength(club, s.lineup, s.formation);
-    const row = (p, slot) => `<tr class="${sel === p.id ? 'sel' : ''}"><td class="${slot && slot !== p.pos ? 'oop' : 'dim'}">${slot || 'Sub'}</td>${nameBtn(p, 'pick')}${cells(p)}<td><button data-act="view" data-id="${p.id}">Profile</button></td></tr>`;
-    const bench = byPos(club.players.filter(p => !s.lineup.includes(p.id)));
+    const club = myClub(s), pos = slots(s.formation), find = id => club.players.find(p => p.id === id);
+    const st = preview({ club, ids: s.lineup, formation: s.formation, bench: s.bench, tactics: s.tactics, fam: s.fam });
+    const row = (p, slot) => `<tr class="${sel === p.id ? 'sel' : ''}"><td class="${slot && slot !== p.pos ? 'oop' : 'dim'}">${slot || (s.bench.includes(p.id) ? 'Sub' : '–')}</td>${nameBtn(p, 'pick')}${cells(p)}<td><button data-act="view" data-id="${p.id}">Profile</button></td></tr>`;
+    const reserves = byPos(club.players.filter(p => !s.lineup.includes(p.id) && !s.bench.includes(p.id)));
     return `<div class="club">${crestSvg(club, 56)}${kitSvg(club.kit, 56)}<b>${esc(club.name)}</b></div>
       <div class="bar"><label>Formation ${formationSelect('formation', s.formation)}</label>
-      <button data-act="auto">Auto-pick best XI</button><span class="dim">Attack ${st.att.toFixed(1)} · Defence ${st.def.toFixed(1)}</span></div>
-      <p class="dim">Click two names to swap them. Orange slot = playing out of position.</p>
-      <div class="wrap"><table><tr><th>Slot</th>${HEAD}<th></th></tr>${s.lineup.map((id, i) => row(club.players.find(p => p.id === id), pos[i])).join('')}
-      <tr><th colspan="7">Bench</th></tr>${bench.map(p => row(p)).join('')}</table></div>`;
+      <button data-act="auto">Auto-pick best XI</button><span class="dim">Attack ${st.att.toFixed(1)} · Defence ${st.def.toFixed(1)} · Control ${st.ctrl.toFixed(1)} · knows ${s.formation} ${Math.round(s.fam[s.formation] * 100)}%</span></div>
+      <p class="dim">Click two names to swap them between the XI, the bench and the reserves. Orange slot = playing out of position.</p>
+      <div class="wrap"><table><tr><th>Slot</th>${HEAD}<th></th></tr>${s.lineup.map((id, i) => row(find(id), pos[i])).join('')}
+      <tr><th colspan="7">Bench (${s.bench.length}/${BENCH})</th></tr>${s.bench.map(id => row(find(id))).join('')}
+      <tr><th colspan="7">Reserves</th></tr>${reserves.map(p => row(p)).join('')}</table></div>`;
+  },
+  Tactics() {
+    fixLineup(s);
+    const club = myClub(s), pos = slots(s.formation), t = s.tactics, find = id => club.players.find(p => p.id === id);
+    const pick = (k, field, pairs) => fieldSelect('slot', field, pairs, t.slots[k][field], k);
+    const instr = key => INSTR[key].map((text, k) => [k - 1, text]);
+    const row = (id, k) => `<tr><td>${pos[k]}</td><td>${esc(find(id).name)}</td><td>${pick(k, 'role', Object.keys(ROLES[pos[k]]).map(r => [r, r]))}</td>
+      <td>${pos[k] === 'GK' ? '' : pick(k, 'duty', Object.keys(DUTIES).map(d => [d, d]))}</td><td>${pick(k, 'shoot', instr('shoot'))}</td><td>${pick(k, 'tackle', instr('tackle'))}</td></tr>`;
+    const takers = Object.entries(TAKERS).map(([kind, text]) => `<label>${text} ${fieldSelect('taker', kind, [['', 'Best available'], ...s.lineup.map(id => [String(id), find(id).name])], t.takers[kind] === null ? '' : String(t.takers[kind]))}</label>`).join('');
+    return `<h2>Team instructions</h2><div class="bar">${teamSelects('team', t)}</div>
+      <h2>Players</h2><div class="wrap"><table><tr><th>Pos</th><th>Player</th><th>Role</th><th>Duty</th><th>Shooting</th><th>Tackling</th></tr>${s.lineup.map(row).join('')}</table></div>
+      <h2>Set pieces</h2><p class="dim">A taker who is not on the pitch is replaced by the best available player.</p><div class="bar">${takers}</div>
+      <h2>Formation familiarity</h2><p class="dim">Each match in a formation teaches it; an unfamiliar one costs up to 3% of the team's strength.</p>
+      <div class="bar">${Object.keys(FORMATIONS).map(f => `<span>${f} ${Math.round(s.fam[f] * 100)}%</span>`).join(' · ')}</div>`;
   },
   Match() {
     if (s.live) return liveView();
@@ -144,18 +166,19 @@ const actions = {
   formation(_, el) { s.formation = el.value; s.lineup = bestXI(myClub(s), s.formation); sel = null; },
   pick(id) {
     if (sel === null || sel === id) { sel = sel === id ? null : id; return; }
-    const i = s.lineup.indexOf(sel), j = s.lineup.indexOf(id);
-    if (i >= 0 && j >= 0) [s.lineup[i], s.lineup[j]] = [id, sel];
-    else if (i >= 0) s.lineup[i] = id;
-    else if (j >= 0) s.lineup[j] = sel;
+    swap(s, sel, id);
     sel = null;
   },
+  team(_, el) { msg = setTeam(s.tactics, el.dataset.field, +el.value) || ''; },
+  slot(k, el) { const f = el.dataset.field; msg = setSlot(s.tactics.slots[k], slots(s.formation)[k], f, f === 'role' || f === 'duty' ? el.value : +el.value) || ''; },
+  taker(_, el) { msg = setTaker(s.tactics, el.dataset.field, el.value === '' ? null : +el.value, myClub(s).players) || ''; },
+  liveTeam(_, el) { msg = setLiveTactic(s.live, mySide(), el.dataset.field, +el.value) || ''; },
   play() { stopClock(); playRound(s); subOut = null; },
   live() { kickOff(s); subOut = null; },
   go() { startClock(); },
   pause() { stopClock(); },
   speed(_, el) { speed = +el.value; if (timer) startClock(); },
-  liveFormation(_, el) { setFormation(s.live, mySide(), el.value); subOut = null; },
+  liveFormation(_, el) { msg = setFormation(s.live, mySide(), el.value) || ''; subOut = null; },
   off(id) { subOut = subOut === id ? null : id; },
   on(id) {
     if (subOut === null) { msg = 'Click Off next to the player who is coming off first.'; return; }

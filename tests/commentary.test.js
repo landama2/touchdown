@@ -13,3 +13,11 @@ test('commentary names the minute, team and players of each kind of event', () =
   for (const type of ['save', 'miss', 'yellow', 'red', 'injury'])
     for (let min = 1; min <= 3; min++) assert.match(line({ min, side: 0, type, id: 1, name: 'Z Name' }, 'X'), /Z Name/);
 });
+
+test('penalties, corners and free kicks get their own lines', () => {
+  assert.match(line({ min: 30, side: 0, type: 'goal', kind: 'pen', id: 1, name: 'Spot Man' }, 'ARS'), /^30' ARS — GOAL! .*Spot Man.*(spot|penalty)/);
+  assert.equal(line({ min: 9, side: 1, type: 'save', kind: 'pen', id: 2, name: 'Spot Man' }, 'CHE'), "9' CHE — Penalty saved! Spot Man is denied from the spot.");
+  assert.match(line({ min: 40, side: 0, type: 'goal', kind: 'corner', id: 3, name: 'Big Head', assistName: 'Good Foot' }, 'X'), /Big Head heads in from the corner, set up by Good Foot\.$/);
+  for (const type of ['goal', 'save', 'miss']) for (const kind of ['pen', 'corner', 'fk'])
+    assert.match(line({ min: 5, side: 0, type, kind, id: 1, name: 'Z Name' }, 'X'), /Z Name/);
+});
