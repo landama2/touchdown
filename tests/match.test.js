@@ -298,3 +298,17 @@ test('penalty shootout: a winner, a real score, the same every time, in the matc
   assert.ok(early > 10 && sudden > 5, `${early} ended early, ${sudden} went to sudden death`);
   assert.equal(matchResult(play(1, side(4), side(5))).pens, undefined);
 });
+
+test('a player starts a match with his condition, and readiness scales his strength', () => {
+  const w = createWorld(3, MINI), club = w.clubs[0], ids = bestXI(club, '4-4-2');
+  const home = { club, ids, formation: '4-4-2' }, away = { club: w.clubs[1], ids: bestXI(w.clubs[1], '4-4-2'), formation: '4-4-2' };
+  const set = fields => { for (const id of ids) Object.assign(club.players.find(p => p.id === id), fields); };
+  const fresh = power(startMatch(1, home, away), 0);
+  set({ cond: 60 });
+  const m = startMatch(1, home, away), tired = power(m, 0);
+  assert.equal(m.pl[ids[0]].fit, 60);
+  assert.ok(tired.att < fresh.att && tired.def < fresh.def && tired.ctrl < fresh.ctrl);
+  set({ cond: 100, morale: 100 });
+  const happy = power(startMatch(1, home, away), 0);
+  for (const k of ['att', 'def', 'ctrl']) assert.ok(Math.abs(happy[k] / fresh[k] - 1.02) < 1e-9, k);
+});

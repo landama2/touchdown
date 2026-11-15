@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, MARKET_SIZE } from '../src/world.js';
 import { FORMATIONS, BENCH, slots, bestXI, autoBench, fixLineup, strength, swap, newFam, learnFam } from '../src/lineup.js';
+import { available } from '../src/squad.js';
 import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason } from '../src/season.js';
 import { cupRounds } from '../src/cup.js';
 import { stepMinute, matchResult } from '../src/match.js';
@@ -361,4 +362,24 @@ test('zone: promotion and play-off places below the top division, relegation abo
   assert.deepEqual([0, 1, 2, 3].map(k => zone(s, 0, k)), [null, 'down', 'down', 'down']);
   assert.deepEqual([...Array(10).keys()].map(k => zone(s, 1, k)), ['up', 'up', 'playoff', 'playoff', 'playoff', 'playoff', null, 'down', 'down', 'down']);
   assert.deepEqual([...Array(6).keys()].map(k => zone(s, 2, k)), ['up', 'up', 'playoff', 'playoff', 'playoff', 'playoff']);
+});
+
+test('injured and banned players are left out of the XI and the bench; the rest of your XI stays', () => {
+  const s = world(41);
+  takeClub(s, 5);
+  const club = myClub(s), keep = [...s.lineup];
+  const hurt = club.players.find(p => p.id === s.lineup[5]), banned = club.players.find(p => p.id === s.bench[0]);
+  hurt.inj = { name: 'knock', days: 3 }; banned.ban = 1;
+  fixLineup(s);
+  assert.ok(!s.lineup.includes(hurt.id) && !s.bench.includes(hurt.id) && !s.bench.includes(banned.id) && !s.lineup.includes(banned.id));
+  assert.deepEqual(s.lineup.filter((_, k) => k !== 5), keep.filter((_, k) => k !== 5));
+  assert.ok(!bestXI(club, '4-4-2').includes(hurt.id) && !autoBench(club, s.lineup).includes(banned.id));
+  assert.ok([...s.lineup, ...s.bench].every(id => available(club.players.find(p => p.id === id))));
+});
+
+test('the assistant picks fresh players over tired ones', () => {
+  const s = world(42), club = s.clubs[5], first = bestXI(club, '4-4-2');
+  for (const p of club.players) if (first.includes(p.id)) p.cond = 0;
+  const again = bestXI(club, '4-4-2');
+  assert.equal(again.filter(id => !first.includes(id)).length, club.players.length - 11); // every fresh player is in
 });

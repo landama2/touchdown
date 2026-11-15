@@ -2,6 +2,7 @@ import { makeRng } from './rng.js';
 import { POS } from './player.js';
 import { FORMATIONS, slots, eff, SLOT_WEIGHT, formationBonus, autoBench } from './lineup.js';
 import { ROLES, DUTIES, TEAM_KEYS, defaultSlot, defaultTactics, setTeam, has } from './tactics.js';
+import { readiness } from './squad.js';
 
 // Minute-by-minute match engine. A match is a plain JSON object (see startMatch), so a live match
 // can sit in the career state and be saved half-way through. Each minute: one side has the ball,
@@ -55,7 +56,7 @@ function makeSide({ club, ids, formation, bench = autoBench(club, ids), tactics 
   const pos = slots(formation);
   for (const id of [...ids, ...bench]) {
     const p = club.players.find(x => x.id === id);
-    pl[id] = { name: p.name, pos: p.pos, attrs: p.attrs, side, fit: 100, rt: 6, yc: 0, inj: false, played: ids.includes(id) };
+    pl[id] = { name: p.name, pos: p.pos, attrs: p.attrs, side, fit: p.cond, edge: readiness(p), rt: 6, yc: 0, inj: false, played: ids.includes(id) };
   }
   return {
     club: club.id, formation, auto: true, subs: 0,
@@ -74,15 +75,16 @@ export function startMatch(seed, home, away, neutral = false) {
 }
 
 // Attack, defence and ball control of side i right now. Like strength() (lineup.js) at kick-off with
-// default tactics, but tired players count for less, injured or sent-off players for nothing (the
-// divisors stay those of a full XI), and tactics and formation familiarity shift the result.
+// default tactics and fresh players, but tired players count for less, injured or sent-off players
+// for nothing (the divisors stay those of a full XI), each player's readiness (morale, form,
+// sharpness: src/squad.js) scales him, and tactics and formation familiarity shift the result.
 export function power(m, i) {
   const S = m.sides[i], t = S.tac, bonus = formationBonus(S.formation);
   const fam = 1 - K.FAM_WEIGHT * (1 - (S.fam[S.formation] ?? 1));
   let a = 0, d = 0, c = 0, aw = 0, dw = 0, cw = 0, lean = 0;
   for (const pos of slots(S.formation)) { aw += SLOT_WEIGHT[pos][0]; dw += SLOT_WEIGHT[pos][1]; cw += CONTROL_WEIGHT[pos]; }
   for (const o of active(m, i)) {
-    const p = m.pl[o.id], e = eff(p, o.pos, o.role) * (0.7 + 0.3 * p.fit / 100);
+    const p = m.pl[o.id], e = eff(p, o.pos, o.role) * (0.7 + 0.3 * p.fit / 100) * (p.edge ?? 1); // edge: missing in a version 5 live match
     a += e * SLOT_WEIGHT[o.pos][0]; d += e * SLOT_WEIGHT[o.pos][1] * (1 + K.TACKLE_DEF * o.tackle); c += e * CONTROL_WEIGHT[o.pos];
     lean += DUTIES[o.duty].lean;
   }
@@ -178,7 +180,7 @@ function foul(m, rng, i) {
   if (rng.next() < K.PEN_SHARE) penalty(m, rng, 1 - i);
 }
 
-// ponytail: the injury ends this match only; injuries with recovery time arrive in Phase 5.
+// The match only marks the injury; afterMatch() in src/squad.js gives it a recovery time.
 function injury(m, rng, i) {
   const team = active(m, i);
   if (!team.length) return;
