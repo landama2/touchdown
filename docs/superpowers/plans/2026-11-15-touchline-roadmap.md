@@ -14,7 +14,7 @@
 |---|-------|----------|------------|-----------|
 | 1 | Foundation | ES-module engine, seeded RNG, attribute-based players with hidden potential, 3 divisions × 16 clubs, versioned saves, UI ported | — | `2026-11-15-touchline-phase-1-foundation.md` (done 2026-11-15) |
 | 1b | Real world | English top 3 divisions 2026–27 with real clubs and squads, our own ratings, original badges and kits in club colours, free agents partly carry over | 1 | `2026-11-15-touchline-phase-1b-real-world.md` (done 2026-11-15) |
-| 2 | Match engine | Minute-by-minute simulation: possession chains, shots with chance quality, cards, in-match injuries, fatigue, substitutions, player ratings; live commentary view with speed control and in-match changes | 1 | to write |
+| 2 | Match engine | Minute-by-minute simulation: possession chains, shots with chance quality, cards, in-match injuries, fatigue, substitutions, player ratings; live commentary view with speed control and in-match changes | 1 | `2026-11-15-touchline-phase-2-match-engine.md` (done 2026-11-15) |
 | 3 | Tactics | Player roles and duties, mentality, pressing, tempo, width, defensive line, set-piece takers, per-player instructions, tactical familiarity; the engine from Phase 2 reads all of it | 2 | to write |
 | 4 | Competitions & calendar | Day-based calendar, promotion/relegation with play-offs, a knockout cup across all divisions, season awards, club and league records | 1 | to write |
 | 5 | Squad dynamics | Match fitness and condition, injuries with recovery times, suspensions, morale, form, training schedules that drive attribute development | 2, 4 | to write |
