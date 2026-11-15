@@ -1,7 +1,7 @@
 import { makeRng } from './rng.js';
 import { POS, createPlayer, ageOneYear } from './player.js';
 import { makeFixtures } from './fixtures.js';
-import { blankStats, CLUBS_PER_DIV, MARKET_SIZE } from './world.js';
+import { blankStats, MARKET_SIZE } from './world.js';
 import { bestXI, fixLineup } from './lineup.js';
 import { simMatch } from './match.js';
 
@@ -17,6 +17,11 @@ function sample(rng, list, n) { // n distinct random elements (Fisher–Yates on
 const tier = club => 3 - club.div; // 3 for the top division, 1 for the bottom: scales all money
 
 export const myClub = s => s.clubs[s.me];
+
+export function myFixture(s) {
+  const round = s.divisions[myClub(s).div].fixtures[s.round];
+  return round ? round.find(m => m.includes(s.me)) : null;
+}
 
 export function takeClub(s, clubId) {
   s.me = clubId;
@@ -38,7 +43,7 @@ export function playRound(s) {
   if (s.done) return null;
   if (s.me !== null) fixLineup(s);
   const rng = makeRng(s.seed);
-  s.last = s.divisions.map(d => d.fixtures[s.round].map(([h, a]) => {
+  s.last = s.divisions.map(d => (d.fixtures[s.round] || []).map(([h, a]) => { // a smaller division has finished
     const r = simMatch(rng, entry(s, h), entry(s, a));
     record(s.clubs[h].st, r.hg, r.ag);
     record(s.clubs[a].st, r.ag, r.hg);
@@ -48,7 +53,7 @@ export function playRound(s) {
   if (s.me !== null) s.budget += 25e3 * tier(myClub(s)); // weekly income
   s.seed = rng.seed;
   s.round++;
-  s.done = s.round === s.divisions[0].fixtures.length;
+  s.done = s.round === Math.max(...s.divisions.map(d => d.fixtures.length));
   return s.last;
 }
 
@@ -66,7 +71,7 @@ export function endSeason(s) {
   let pos = null, prize = 0;
   if (s.me !== null) {
     pos = table(s, myClub(s).div).indexOf(s.me) + 1;
-    prize = (CLUBS_PER_DIV + 1 - pos) * 40e3 * tier(myClub(s));
+    prize = (s.divisions[myClub(s).div].clubIds.length + 1 - pos) * 40e3 * tier(myClub(s));
     s.budget += prize;
   }
   s.history.push({ season: s.season, champions, pos, prize });

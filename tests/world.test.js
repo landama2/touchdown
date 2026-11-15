@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRng } from '../src/rng.js';
-import { overall } from '../src/player.js';
+import { overall, WEIGHTS, ALL_ATTRS } from '../src/player.js';
 import { makeFixtures } from '../src/fixtures.js';
-import { PRE, STEM, DENY } from '../src/data/names.js';
-import { createWorld, clubNames, DIVISIONS, CLUBS_PER_DIV } from '../src/world.js';
+import { SAVE_VERSION } from '../src/save.js';
+import { createWorld, playerFromData, MARKET_SIZE } from '../src/world.js';
+import { MINI } from './fixtures/mini.js';
 
 test('makeFixtures: every ordered pair exactly once, every club once per round', () => {
   const ids = [10, 11, 12, 13, 14, 15], rounds = makeFixtures(ids);
@@ -18,53 +19,83 @@ test('makeFixtures: every ordered pair exactly once, every club once per round',
   assert.ok([...seen.values()].every(c => c === 1));
 });
 
-test('clubNames returns n unique names with unique town parts', () => {
-  const names = clubNames(makeRng(1), 48);
-  assert.equal(new Set(names).size, 48);
-  assert.equal(new Set(names.map(n => n.split(' ')[0])).size, 48);
-});
-
-test('createWorld builds 3 divisions of 16 clubs with 22-player squads', () => {
-  const s = createWorld(99);
-  assert.equal(s.version, 1);
-  assert.equal(s.divisions.length, DIVISIONS.length);
-  assert.equal(s.clubs.length, DIVISIONS.length * CLUBS_PER_DIV);
+test('createWorld builds one division per league from the data', () => {
+  const s = createWorld(99, MINI), data = MINI.flatMap(l => l.clubs);
+  assert.equal(s.version, SAVE_VERSION);
+  assert.deepEqual(s.divisions.map(d => d.name), MINI.map(l => l.name));
+  assert.deepEqual(s.divisions.map(d => d.clubIds.length), [4, 6, 6]);
+  assert.deepEqual(s.divisions.map(d => d.fixtures.length), [6, 10, 10]);
   s.clubs.forEach((c, i) => {
     assert.equal(c.id, i);
-    assert.equal(c.players.length, 22);
-    assert.equal(c.players.filter(p => p.pos === 'GK').length, 3);
+    assert.equal(c.name, data[i].name);
+    assert.equal(c.short, data[i].short);
+    assert.deepEqual(c.colours, data[i].colours);
+    assert.deepEqual(c.kit, data[i].kit);
+    assert.deepEqual(c.players.map(p => [p.name, p.pos, p.age]), data[i].players.map(r => [r[0], r[1], r[2]]));
+    assert.equal(c.quality, data[i].players.reduce((t, r) => t + r[3], 0) / data[i].players.length);
     assert.deepEqual(c.st, { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 });
   });
-  s.divisions.forEach((d, i) => {
-    assert.equal(d.clubIds.length, CLUBS_PER_DIV);
-    assert.ok(d.clubIds.every(id => s.clubs[id].div === i));
-    assert.equal(d.fixtures.length, 30);
-  });
+  s.divisions.forEach((d, i) => assert.ok(d.clubIds.every(id => s.clubs[id].div === i)));
   const ids = [...s.clubs.flatMap(c => c.players), ...s.market].map(p => p.id);
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(ids.every(id => id < s.nid));
-  assert.equal(s.market.length, 40);
+  assert.equal(s.market.length, MARKET_SIZE);
   assert.equal(s.me, null);
 });
 
+test('createWorld copies club data instead of sharing it', () => {
+  const s = createWorld(1, MINI);
+  s.clubs[0].kit.shirt = '#000000';
+  s.clubs[0].colours[0] = '#000000';
+  assert.equal(MINI[0].clubs[0].kit.shirt, '#c8102e');
+  assert.equal(MINI[0].clubs[0].colours[0], '#c8102e');
+});
+
+test('playerFromData keeps name, age and position and applies strengths', () => {
+  const plain = playerFromData(makeRng(3), 7, ['Test Player', 'FW', 27, 14]);
+  const strong = playerFromData(makeRng(3), 7, ['Test Player', 'FW', 27, 14, ['pace', 'finishing']]);
+  assert.deepEqual([strong.id, strong.name, strong.pos, strong.age], [7, 'Test Player', 'FW', 27]);
+  assert.equal(strong.attrs.pace, Math.min(20, plain.attrs.pace + 2));
+  assert.equal(strong.attrs.finishing, Math.min(20, plain.attrs.finishing + 2));
+  assert.equal(strong.attrs.dribbling, plain.attrs.dribbling);
+  for (const k of Object.keys(WEIGHTS.FW)) assert.ok(strong.pot >= strong.attrs[k], k);
+});
+
+test('playerFromData uses imported stats when given, ignoring strengths', () => {
+  const stats = ALL_ATTRS.map((_, i) => 1 + (i % 20));
+  const p = playerFromData(makeRng(4), 9, ['Stat Player', 'MF', 21, 10, ['pace']], stats);
+  assert.deepEqual(ALL_ATTRS.map(k => p.attrs[k]), stats);
+  const best = Math.max(...Object.keys(WEIGHTS.MF).map(k => p.attrs[k]));
+  assert.ok(p.pot >= best && p.pot <= Math.min(20, best + 2));
+});
+
+test('createWorld shifts a league\'s data ratings by its calibration', () => {
+  const plain = createWorld(1, MINI, {}, {});
+  const shifted = createWorld(1, MINI, {}, { 'Top League': 2 });
+  assert.equal(shifted.clubs[0].quality, plain.clubs[0].quality + 2);
+  assert.equal(shifted.clubs[4].quality, plain.clubs[4].quality); // Middle League untouched
+  const avg = s => s.clubs[0].players.reduce((t, p) => t + overall(p), 0) / s.clubs[0].players.length;
+  assert.ok(avg(shifted) > avg(plain) + 5);
+});
+
+test('createWorld applies stats by club and player name', () => {
+  const stats = { Alpha: { 'Alpha GK1': Array(ALL_ATTRS.length).fill(12) } };
+  const s = createWorld(1, MINI, stats);
+  const gk = s.clubs[0].players.find(p => p.name === 'Alpha GK1');
+  assert.ok(ALL_ATTRS.every(k => gk.attrs[k] === 12));
+  const other = s.clubs[0].players.find(p => p.name === 'Alpha GK2');
+  assert.ok(!ALL_ATTRS.every(k => other.attrs[k] === 12));
+});
+
 test('higher divisions are stronger', () => {
-  const s = createWorld(7);
+  const s = createWorld(7, MINI);
   const avg = d => { const ps = s.divisions[d].clubIds.flatMap(id => s.clubs[id].players); return ps.reduce((t, p) => t + overall(p), 0) / ps.length; };
   assert.ok(avg(0) > avg(1) && avg(1) > avg(2));
 });
 
 test('createWorld is deterministic and JSON-safe', () => {
-  const a = createWorld(1234);
-  assert.deepEqual(a, createWorld(1234));
-  assert.notDeepEqual(a.clubs.map(c => c.name), createWorld(1235).clubs.map(c => c.name));
+  const a = createWorld(1234, MINI);
+  assert.deepEqual(a, createWorld(1234, MINI));
+  assert.notDeepEqual(a.clubs[0].players, createWorld(1235, MINI).clubs[0].players);
   assert.deepEqual(JSON.parse(JSON.stringify(a)), a);
-});
-
-test('clubNames never uses a denied real town name', () => {
-  for (let seed = 1; seed <= 50; seed++)
-    for (const n of clubNames(makeRng(seed), 48)) assert.ok(!DENY.includes(n.split(' ')[0]), `${n} (seed ${seed})`);
-});
-
-test('name pool leaves headroom over the clubs needed', () => {
-  assert.ok(PRE.length * STEM.length - DENY.length >= 2 * DIVISIONS.length * CLUBS_PER_DIV);
 });

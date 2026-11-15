@@ -1,5 +1,5 @@
 // Bump when the shape of State changes, and add a migration in deserialize().
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2; // 2: clubs come from real data and carry short, colours and kit
 export const KEY = 'touchline.save';
 
 export const serialize = state => JSON.stringify(state);

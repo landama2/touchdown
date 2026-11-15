@@ -1,28 +1,30 @@
 import { makeRng } from './rng.js';
-import { POS, createPlayer } from './player.js';
+import { POS, WEIGHTS, ALL_ATTRS, createPlayer } from './player.js';
 import { makeFixtures } from './fixtures.js';
 import { SAVE_VERSION } from './save.js';
-import { PRE, STEM, SUFFIX, DENY } from './data/names.js';
+import { LEAGUES } from './data/england.js';
+import STATS, { CALIBRATION } from './data/england-stats.js';
 
-export const DIVISIONS = ['First Division', 'Second Division', 'Third Division'];
-export const CLUBS_PER_DIV = 16;
-export const SQUAD_SHAPE = [['GK', 3], ['DF', 7], ['MF', 7], ['FW', 5]];
 export const MARKET_SIZE = 40;
+const FREE_AGENT_QUALITY = 9;
+const STRENGTH_BONUS = 2;
 
 export const blankStats = () => ({ p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 });
 
-export function clubNames(rng, n) {
-  const towns = new Set(), names = [];
-  while (names.length < n) {
-    const town = rng.pick(PRE) + rng.pick(STEM);
-    if (towns.has(town) || DENY.includes(town)) continue;
-    towns.add(town);
-    names.push(town + ' ' + rng.pick(SUFFIX));
-  }
-  return names;
+// A data row becomes a full player. With imported stats the attributes come from the owner's
+// dataset; otherwise they are generated around the rating and the listed strengths are lifted.
+// pot always starts at the best key attribute (+0-2 for under-23s), so it never sits below one.
+export function playerFromData(rng, id, [name, pos, age, rating, strengths = []], stats) {
+  const p = createPlayer(rng, id, pos, rating, age);
+  p.name = name;
+  if (stats) ALL_ATTRS.forEach((k, i) => { p.attrs[k] = stats[i]; });
+  else for (const k of strengths) p.attrs[k] = Math.min(20, p.attrs[k] + STRENGTH_BONUS);
+  const best = Math.max(...Object.keys(WEIGHTS[pos]).map(k => p.attrs[k]));
+  p.pot = Math.min(20, best + (age < 23 ? rng.int(0, 2) : 0));
+  return p;
 }
 
-export function createWorld(seed) {
+export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration = CALIBRATION) {
   const rng = makeRng(seed);
   const s = {
     version: SAVE_VERSION, seed, nid: 1,
@@ -30,20 +32,22 @@ export function createWorld(seed) {
     season: 1, round: 0, done: false,
     clubs: [], divisions: [], market: [], history: [], last: null,
   };
-  const names = clubNames(rng, DIVISIONS.length * CLUBS_PER_DIV);
-  DIVISIONS.forEach((name, d) => {
-    const clubIds = [];
-    for (let i = 0; i < CLUBS_PER_DIV; i++) {
-      const id = s.clubs.length, quality = 15 - d * 3 - i * 0.2;
-      const club = { id, name: names[id], div: d, quality, players: [], st: blankStats() };
-      for (const [pos, n] of SQUAD_SHAPE)
-        for (let k = 0; k < n; k++) club.players.push(createPlayer(rng, s.nid++, pos, quality));
-      s.clubs.push(club);
-      clubIds.push(id);
-    }
-    s.divisions.push({ name, clubIds, fixtures: makeFixtures(clubIds) });
+  leagues.forEach((league, div) => {
+    const shift = calibration[league.name] || 0;
+    const calibrated = ([name, pos, age, rating, strengths]) => [name, pos, age, Math.max(1, Math.min(20, rating + shift)), strengths];
+    const clubIds = league.clubs.map(c => {
+      const id = s.clubs.length, rows = c.players.map(calibrated);
+      s.clubs.push({
+        id, name: c.name, short: c.short, colours: [...c.colours], kit: { ...c.kit }, div,
+        quality: rows.reduce((t, row) => t + row[3], 0) / rows.length,
+        players: rows.map(row => playerFromData(rng, s.nid++, row, stats[c.name]?.[row[0]])),
+        st: blankStats(),
+      });
+      return id;
+    });
+    s.divisions.push({ name: league.name, clubIds, fixtures: makeFixtures(clubIds) });
   });
-  for (let i = 0; i < MARKET_SIZE; i++) s.market.push(createPlayer(rng, s.nid++, rng.pick(POS), 9));
+  for (let i = 0; i < MARKET_SIZE; i++) s.market.push(createPlayer(rng, s.nid++, rng.pick(POS), FREE_AGENT_QUALITY));
   s.seed = rng.seed;
   return s;
 }

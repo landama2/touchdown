@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../src/world.js';
+import { MINI } from './fixtures/mini.js';
 import { takeClub, playRound } from '../src/season.js';
 import { serialize, deserialize, SAVE_VERSION } from '../src/save.js';
 
 test('a career survives a save/load round trip and continues identically', () => {
-  const a = createWorld(21);
+  const a = createWorld(21, MINI);
   takeClub(a, 3);
   playRound(a);
   const b = deserialize(serialize(a));
@@ -22,5 +23,5 @@ test('deserialize returns null for missing, corrupt or wrong-version saves', () 
   assert.equal(deserialize(JSON.stringify({ version: SAVE_VERSION + 1 })), null);
   assert.equal(deserialize(JSON.stringify({ teams: [] })), null); // the old demo's save shape
   assert.equal(deserialize('{"version":1}'), null); // right version, wrong shape
-  assert.equal(deserialize(serialize({ ...createWorld(1), me: 999 })), null); // dangling club index
+  assert.equal(deserialize(serialize({ ...createWorld(1, MINI), me: 999 })), null); // dangling club index
 });

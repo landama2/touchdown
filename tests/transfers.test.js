@@ -2,10 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { value } from '../src/player.js';
 import { createWorld } from '../src/world.js';
+import { MINI } from './fixtures/mini.js';
 import { takeClub, myClub } from '../src/season.js';
 import { buy, sell, MIN_SQUAD, MAX_SQUAD, SELL_RATE } from '../src/transfers.js';
 
-const fresh = () => { const s = createWorld(11); takeClub(s, 40); return s; };
+const fresh = () => { const s = createWorld(11, MINI); takeClub(s, 12); return s; };
 
 test('buy moves the player and charges their value', () => {
   const s = fresh(), p = [...s.market].sort((a, b) => value(a) - value(b))[0];
