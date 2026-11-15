@@ -6,6 +6,8 @@ import { defaultTactics } from './tactics.js';
 import { startMatch, stepMinute, matchResult, shootout } from './match.js';
 import { cupRounds, nextCupRound, addLeg, decide, playoffSemis, playoffFinal } from './cup.js';
 import { addMatch, seasonAwards, noteSeason } from './awards.js';
+import { afterMatch, passDays, offseason } from './squad.js';
+import { defaultTraining, trainingOf, recoverRate, trainWeek, INTENSITY } from './training.js';
 
 const RETIRE_AGE = 35;
 const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
@@ -64,6 +66,7 @@ export function takeClub(s, clubId) {
   s.bench = autoBench(s.clubs[clubId], s.lineup);
   s.tactics = defaultTactics(slots(s.formation));
   s.fam = newFam();
+  s.training = defaultTraining();
 }
 
 function entry(s, id) {
@@ -113,8 +116,24 @@ function advance(s, rng, it) {
   if (it.comp === 'playoff' && it.round === 0 && it.leg === 1) playoffFinal(s.playoffs[it.div]);
 }
 
+// The days from one match day to the next: every club trains once per calendar week crossed, then
+// injuries heal and condition, sharpness and morale move (free agents rest at the Normal rate).
+// Training injuries at the human club become news.
+function between(s, rng, from, to) {
+  const weeks = Math.floor(to / 7) - Math.floor(from / 7);
+  for (const c of s.clubs) {
+    const t = trainingOf(s, c);
+    for (let w = 0; w < weeks; w++) for (const p of trainWeek(rng, c, t))
+      if (c.id === s.me) s.news.push({ type: 'injury', club: c.id, id: p.id, name: p.name, injury: p.inj.name, days: p.inj.days, training: true });
+    passDays(c.players, to - from, recoverRate(t));
+  }
+  passDays(s.market, to - from, INTENSITY.Normal.recover);
+}
+
 // Plays the next calendar day: every match of every competition on it. A live match is played out
 // first; whatever is left of it is handed to the assistant manager (AI substitutions for both sides).
+// Each match leaves condition, form, morale, injuries and bans on both squads (src/squad.js); then
+// the days up to the next match day pass. s.news collects the human club's new injuries and bans.
 // Returns the day's results: matchResult() plus item (the calendar item it belongs to).
 export function playDay(s) {
   if (s.done) return null;
@@ -122,13 +141,14 @@ export function playDay(s) {
   const today = s.days[s.next], live = s.live, played = !!myFixture(s);
   if (live) { for (const S of live.sides) S.auto = true; while (!live.done) stepMinute(live); }
   const rng = makeRng(s.seed);
-  s.last = [];
+  s.last = []; s.news = [];
   for (const it of today.items) for (const f of fixtures(s, it)) {
     const m = live && live.sides[0].club === f.h && live.sides[1].club === f.a ? live : play(rng, s, f);
     if (f.tie) settle(f, m);
     const r = { ...matchResult(m), item: { ...it } };
     if (it.comp === 'league') { record(s.clubs[f.h].st, r.hg, r.ag); record(s.clubs[f.a].st, r.ag, r.hg); addMatch(s, it.div, r); }
     if (f.h === s.me && !f.neutral) s.budget += 20e3 * tier(s.clubs[f.h]); // gate receipts
+    s.news.push(...afterMatch(s, m, it.comp, rng).filter(n => n.club === s.me));
     s.last.push(r);
   }
   for (const it of today.items) advance(s, rng, it);
@@ -139,6 +159,7 @@ export function playDay(s) {
   s.day = today.day;
   s.next++;
   s.done = s.next === s.days.length;
+  if (!s.done) between(s, rng, today.day, s.days[s.next].day);
   return s.last;
 }
 
@@ -160,7 +181,8 @@ export function zone(s, d, pos) {
 const winnerOf = p => p?.rounds[1]?.ties[0].w ?? null;
 
 // Closes the season: prize money, awards, records, promotion and relegation, the history entry;
-// then ages the players, refreshes the free agents and schedules the next season.
+// then ages the players (club players develop in training, free agents at rollover), gives everyone the summer break,
+// refreshes the free agents and schedules the next season.
 export function endSeason(s) {
   if (!s.done) return;
   const rng = makeRng(s.seed);
@@ -191,13 +213,14 @@ export function endSeason(s) {
     c.players = c.players.map(p => {
       if (p.age >= RETIRE_AGE) return createPlayer(rng, s.nid++, p.pos, c.quality - 2, rng.int(17, 19)); // youth replaces retiree
       delete p.stats;
-      ageOneYear(rng, p);
+      p.age++; // growth and decline happen week by week in training (src/training.js)
+      offseason(p);
       return p;
     });
   }
   for (const p of s.market) delete p.stats;
   const kept = sample(rng, s.market, MARKET_KEEP).filter(p => p.age < RETIRE_AGE);
-  for (const p of kept) ageOneYear(rng, p);
+  for (const p of kept) { ageOneYear(rng, p); offseason(p); }
   s.market = [...kept, ...Array.from({ length: MARKET_SIZE - kept.length }, () => newFreeAgent(rng, s.nid++))];
   scheduleSeason(s, rng);
   s.seed = rng.seed;

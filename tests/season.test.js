@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createWorld, MARKET_SIZE } from '../src/world.js';
 import { FORMATIONS, BENCH, slots, bestXI, autoBench, fixLineup, strength, swap, newFam, learnFam } from '../src/lineup.js';
 import { available } from '../src/squad.js';
+import { setTraining } from '../src/training.js';
 import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason } from '../src/season.js';
 import { cupRounds } from '../src/cup.js';
 import { stepMinute, matchResult } from '../src/match.js';
@@ -382,4 +383,42 @@ test('the assistant picks fresh players over tired ones', () => {
   for (const p of club.players) if (first.includes(p.id)) p.cond = 0;
   const again = bestXI(club, '4-4-2');
   assert.equal(again.filter(id => !first.includes(id)).length, club.players.length - 11); // every fresh player is in
+});
+
+test('a season of squad dynamics: nobody plays while out, players get injured and come back', () => {
+  const s = world(31);
+  takeClub(s, 6);
+  const everOut = new Set();
+  let returned = 0;
+  while (!s.done) {
+    const out = new Set(s.clubs.flatMap(c => c.players.filter(p => !available(p)).map(p => p.id)));
+    for (const r of playDay(s)) for (const x of r.ratings) {
+      assert.ok(!out.has(x.id), `${x.name} played while injured or banned`);
+      if (everOut.has(x.id)) returned++;
+    }
+    for (const id of out) everOut.add(id);
+  }
+  assert.ok(everOut.size > 10, `only ${everOut.size} players were ever out`);
+  assert.ok(returned > 0);
+});
+
+test('news lists only your new injuries and bans; condition stays a whole number 0-100', () => {
+  const s = world(32);
+  takeClub(s, 6);
+  for (let k = 0; k < 40 && !s.done; k++) {
+    playDay(s);
+    for (const n of s.news) assert.ok(n.club === 6 && myClub(s).players.some(p => p.id === n.id) && ['injury', 'ban'].includes(n.type), JSON.stringify(n));
+    assert.ok(s.clubs.every(c => c.players.every(p => Number.isInteger(p.cond) && p.cond >= 0 && p.cond <= 100)));
+  }
+});
+
+test('your training schedule trains your squad, AI clubs train Balanced; the summer break resets the season', () => {
+  const s = world(33);
+  takeClub(s, 6);
+  setTraining(s, 'focus', 'Rest');
+  while (!s.done) playDay(s);
+  assert.ok(myClub(s).players.every(p => p.gain === 0));
+  assert.ok(s.clubs.some(c => c.id !== 6 && c.players.some(p => p.gain > 0)));
+  endSeason(s);
+  assert.ok(s.clubs.every(c => c.players.every(p => p.gain === 0 && p.yc === 0 && p.cond === 100 && p.sharp === 100)));
 });

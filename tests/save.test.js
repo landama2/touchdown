@@ -17,6 +17,8 @@ import { stepMinute } from '../src/match.js';
 import { serialize, deserialize, SAVE_VERSION } from '../src/save.js';
 import { BENCH, slots, newFam } from '../src/lineup.js';
 import { defaultTactics } from '../src/tactics.js';
+import { freshState } from '../src/player.js';
+import { defaultTraining } from '../src/training.js';
 
 test('a career survives a save/load round trip and continues identically', () => {
   const a = createWorld(21, MINI);
@@ -109,4 +111,37 @@ test('a version 4 save in mid-season: the rest of the league on the calendar, pl
   assert.equal(c.done, true);
   endSeason(c); // no play-offs were played: 3rd place goes up instead
   assert.equal(c.history[0].divs[1].up.length, 3);
+});
+
+// A save as Phase 4 (version 5) wrote it: no squad dynamics and no training.
+function asV5(s) {
+  const o = JSON.parse(serialize(s));
+  o.version = 5;
+  delete o.training; delete o.news;
+  for (const p of [...o.clubs.flatMap(c => c.players), ...o.market]) for (const k of Object.keys(freshState())) delete p[k];
+  return o;
+}
+
+test('a version 5 save gets fresh players and default training, and plays on', () => {
+  const a = createWorld(22, MINI);
+  takeClub(a, 3);
+  playDay(a);
+  const b = deserialize(JSON.stringify(asV5(a)));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.deepEqual(b.training, defaultTraining());
+  assert.deepEqual(b.news, []);
+  for (const p of [...b.clubs[3].players, ...b.market]) for (const [k, v] of Object.entries(freshState())) assert.deepEqual(p[k], v, k);
+  assert.ok(playDay(b).length);
+});
+
+test('a live match saved by version 5 carries on without readiness', () => {
+  const a = createWorld(23, MINI);
+  takeClub(a, 3);
+  const m = kickOff(a);
+  for (let k = 0; k < 20; k++) stepMinute(m);
+  const o = asV5(a);
+  for (const p of Object.values(o.live.pl)) delete p.edge;
+  const b = deserialize(JSON.stringify(o));
+  while (!b.live.done) stepMinute(b.live);
+  assert.ok(playDay(b).some(r => r.h === 3 || r.a === 3));
 });

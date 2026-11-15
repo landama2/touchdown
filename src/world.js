@@ -7,6 +7,7 @@ import { defaultTactics } from './tactics.js';
 import { buildCalendar } from './calendar.js';
 import { cupRounds, newCup } from './cup.js';
 import { blankRecords } from './awards.js';
+import { defaultTraining } from './training.js';
 import { LEAGUES } from './data/england.js';
 import STATS, { CALIBRATION } from './data/england-stats.js';
 
@@ -42,7 +43,7 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
   const rng = makeRng(seed);
   const s = {
     version: SAVE_VERSION, seed, nid: 1,
-    me: null, formation: '4-4-2', lineup: [], bench: [], tactics: defaultTactics(slots('4-4-2')), fam: newFam(), budget: 0,
+    me: null, formation: '4-4-2', lineup: [], bench: [], tactics: defaultTactics(slots('4-4-2')), fam: newFam(), budget: 0, training: defaultTraining(), news: [],
     season: 1, day: -1, next: 0, days: [], done: false, cup: null, playoffs: [],
     clubs: [], divisions: [], market: [], history: [], records: [], last: null, live: null,
   };

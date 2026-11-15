@@ -3,8 +3,10 @@ import { slots, newFam } from './lineup.js';
 import { TEAM_KEYS, defaultSlot, defaultTactics } from './tactics.js';
 import { buildCalendar } from './calendar.js';
 import { blankRecords } from './awards.js';
+import { freshState } from './player.js';
+import { defaultTraining } from './training.js';
 
-export const SAVE_VERSION = 5; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records
+export const SAVE_VERSION = 6; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training
 export const KEY = 'touchline.save';
 
 export const serialize = state => JSON.stringify(state);
@@ -14,7 +16,8 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
   && Array.isArray(s.lineup) && Array.isArray(s.history) && (s.me === null || s.clubs[s.me] !== undefined)
   && (s.live === null || (typeof s.live === 'object' && Array.isArray(s.live.sides)))
   && Array.isArray(s.bench) && !!s.tactics && Array.isArray(s.tactics.slots) && !!s.fam && typeof s.fam === 'object'
-  && Array.isArray(s.days) && Number.isInteger(s.next) && Array.isArray(s.playoffs) && Array.isArray(s.records) && (s.cup === null || typeof s.cup === 'object');
+  && Array.isArray(s.days) && Number.isInteger(s.next) && Array.isArray(s.playoffs) && Array.isArray(s.records) && (s.cup === null || typeof s.cup === 'object')
+  && !!s.training && typeof s.training.ind === 'object' && Array.isArray(s.news);
 
 // MIGRATIONS[v] upgrades a save from version v to v + 1.
 const MIGRATIONS = {
@@ -37,6 +40,10 @@ const MIGRATIONS = {
     s.history = s.history.map(h => ({ season: h.season, pos: h.pos, div: h.pos === null ? null : s.clubs[s.me].div, prize: h.prize, cup: null,
       divs: h.champions.map(name => ({ champion: s.clubs.find(c => c.name === name)?.id ?? null, up: [], down: [], playoff: null, awards: null })) }));
     delete s.round;
+  },
+  5: s => { // squad dynamics: everyone fresh, default training. A live match's players read edge ?? 1.
+    for (const p of [...s.clubs.flatMap(c => c.players), ...s.market]) Object.assign(p, freshState());
+    s.training = defaultTraining(); s.news = [];
   },
 };
 
