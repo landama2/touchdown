@@ -5,6 +5,7 @@ import { validateLeagues } from '../src/data/validate.js';
 import { LEAGUES } from '../src/data/england.js';
 import STATS, { CALIBRATION } from '../src/data/england-stats.js';
 import { createWorld } from '../src/world.js';
+import { available } from '../src/squad.js';
 import { takeClub, playDay, endSeason } from '../src/season.js';
 
 test('the three English data files are valid together', () => {
@@ -70,15 +71,20 @@ test('the free-agent list has players worth signing below the Premier League', (
 
 test('a season of real leagues plays like real football', () => {
   const s = createWorld(1);
-  let n = 0, goals = 0, home = 0, yellows = 0, reds = 0, pens = 0;
-  while (!s.done) for (const r of playDay(s).filter(x => x.item.comp === 'league')) {
-    n++; goals += r.hg + r.ag; if (r.hg > r.ag) home++;
-    yellows += r.stats[0].yc + r.stats[1].yc; reds += r.stats[0].rc + r.stats[1].rc;
-    pens += r.ev.filter(e => e.kind === 'pen').length;
+  let n = 0, goals = 0, home = 0, yellows = 0, reds = 0, pens = 0, out = 0, matchDays = 0;
+  while (!s.done) {
+    out += s.clubs.reduce((t, c) => t + c.players.filter(p => !available(p)).length, 0); matchDays++;
+    for (const r of playDay(s).filter(x => x.item.comp === 'league')) {
+      n++; goals += r.hg + r.ag; if (r.hg > r.ag) home++;
+      yellows += r.stats[0].yc + r.stats[1].yc; reds += r.stats[0].rc + r.stats[1].rc;
+      pens += r.ev.filter(e => e.kind === 'pen').length;
+    }
   }
+  const missing = out / matchDays / s.clubs.length;
   assert.ok(goals / n >= 2.5 && goals / n <= 2.9, `goals per match ${goals / n}`);
   assert.ok(home / n >= 0.43 && home / n <= 0.47, `home wins ${home / n}`);
   assert.ok(yellows / n >= 2.5 && yellows / n <= 4, `yellows per match ${yellows / n}`);
   assert.ok(reds / n <= 0.3, `reds per match ${reds / n}`);
   assert.ok(pens / n >= 0.15 && pens / n <= 0.4, `penalties per match ${pens / n}`);
+  assert.ok(missing >= 0.5 && missing <= 3, `players out per club ${missing}`);
 });
