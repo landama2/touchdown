@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRng } from '../src/rng.js';
-import { createWorld } from '../src/world.js';
+import { createWorld, MARKET_SIZE } from '../src/world.js';
 import { FORMATIONS, slots, bestXI, fixLineup, strength } from '../src/lineup.js';
 import { simMatch } from '../src/match.js';
 import { takeClub, myClub, playRound, table, endSeason } from '../src/season.js';
@@ -100,4 +100,26 @@ test('endSeason rolls over; three seasons keep squads intact', () => {
 test('same seed and same choices give the same career; works with no human club', () => {
   const run = () => { const s = createWorld(6); while (!s.done) playRound(s); endSeason(s); return s; };
   assert.deepEqual(run(), run());
+});
+
+test("free agents: half of last season's list stays, a year older; the rest are new", () => {
+  const s = createWorld(8);
+  const ageBefore = new Map(s.market.map(p => [p.id, p.age]));
+  while (!s.done) playRound(s);
+  endSeason(s);
+  assert.equal(s.market.length, MARKET_SIZE);
+  assert.equal(new Set(s.market.map(p => p.id)).size, MARKET_SIZE);
+  const kept = s.market.filter(p => ageBefore.has(p.id));
+  assert.equal(kept.length, MARKET_SIZE / 2); // nobody on a fresh list is old enough to retire yet
+  for (const p of kept) assert.equal(p.age, ageBefore.get(p.id) + 1);
+});
+
+test('free agents at retirement age leave the list', () => {
+  const s = createWorld(8);
+  for (const p of s.market) p.age = 35;
+  const old = new Set(s.market.map(p => p.id));
+  while (!s.done) playRound(s);
+  endSeason(s);
+  assert.equal(s.market.length, MARKET_SIZE);
+  assert.ok(s.market.every(p => !old.has(p.id)));
 });

@@ -6,6 +6,14 @@ import { bestXI, fixLineup } from './lineup.js';
 import { simMatch } from './match.js';
 
 const RETIRE_AGE = 35;
+const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
+
+function sample(rng, list, n) { // n distinct random elements (Fisher–Yates on a copy)
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) { const j = rng.int(0, i); [a[i], a[j]] = [a[j], a[i]]; }
+  return a.slice(0, n);
+}
+
 const tier = club => 3 - club.div; // 3 for the top division, 1 for the bottom: scales all money
 
 export const myClub = s => s.clubs[s.me];
@@ -70,7 +78,9 @@ export function endSeason(s) {
       return p;
     });
   }
-  s.market = Array.from({ length: MARKET_SIZE }, () => createPlayer(rng, s.nid++, rng.pick(POS), 9));
+  const kept = sample(rng, s.market, MARKET_KEEP).filter(p => p.age < RETIRE_AGE);
+  for (const p of kept) ageOneYear(rng, p);
+  s.market = [...kept, ...Array.from({ length: MARKET_SIZE - kept.length }, () => createPlayer(rng, s.nid++, rng.pick(POS), 9))];
   for (const d of s.divisions) d.fixtures = makeFixtures(d.clubIds);
   s.seed = rng.seed;
   s.round = 0; s.done = false; s.last = null; s.season++;
