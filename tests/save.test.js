@@ -61,12 +61,14 @@ test('a version 3 save loads with default tactics, also in a match in progress',
   for (let k = 0; k < 30; k++) stepMinute(s.live);
   const old = JSON.parse(serialize(s));
   old.version = 3;
+  old.formation = '4-3-3'; old.lineup = [];
   delete old.bench; delete old.tactics; delete old.fam;
   for (const S of old.live.sides) { delete S.tac; delete S.takers; delete S.fam; for (const o of S.on) { delete o.role; delete o.duty; delete o.shoot; delete o.tackle; } }
   const b = deserialize(JSON.stringify(old));
   assert.equal(b.version, SAVE_VERSION);
   assert.deepEqual(b.tactics, defaultTactics(slots(b.formation)));
-  assert.deepEqual(b.fam, newFam());
+  assert.equal(b.fam['4-3-3'], 1);
+  assert.equal(b.fam['3-5-2'], 0.5);
   assert.equal(b.live.sides[0].tac.mentality, 0);
   while (!b.live.done) stepMinute(b.live);
   playRound(b);

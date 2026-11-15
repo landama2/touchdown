@@ -73,7 +73,7 @@ export function playRound(s) {
     return r;
   }));
   if (s.me !== null) s.budget += 25e3 * tier(myClub(s)); // weekly income
-  if (played) learnFam(s.fam, s.formation);
+  if (played) learnFam(s.fam, s.formation); // the formation you prepared, not mid-match switches
   s.live = null;
   s.seed = rng.seed;
   s.round++;

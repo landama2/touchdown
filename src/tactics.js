@@ -19,7 +19,7 @@ export const teamLabel = (key, v) => TEAM[key][v + span(key)];
 // shoot / assist / foul / header multiply how often the player takes the shot, makes the assist,
 // commits the foul or gets on the end of a corner. Missing = 1.
 export const ROLES = {
-  GK: { Goalkeeper: { w: WEIGHTS.GK } },
+  GK: { Goalkeeper: { w: WEIGHTS.GK, header: 0.04 } },
   DF: {
     'Centre-back': { w: WEIGHTS.DF, header: 1.5 },
     'Full-back': { w: { tackling: 2, pace: 2, crossing: 2, stamina: 2, positioning: 2 }, assist: 1.5, shoot: 0.6, header: 0.5 },

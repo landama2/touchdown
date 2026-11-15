@@ -217,12 +217,15 @@ test('the chosen set-piece takers take penalties, free kicks and corners while t
     const m = startMatch(seed, h, side(5));
     m.sides[0].auto = false; // no AI substitutions for side 0
     while (!m.done) {
+      const before = m.ev.length;
       stepMinute(m);
-      const e = m.ev.at(-1), on = id => m.sides[0].on.some(o => o.id === id && !m.pl[id].inj);
-      if (!e || e.side !== 0 || e.min !== m.min) continue;
-      if (e.kind === 'pen' && on(pen)) { pens++; assert.equal(e.id, pen); }
-      if (e.kind === 'fk' && on(fk)) assert.equal(e.id, fk);
-      if (e.kind === 'corner' && e.type === 'goal' && on(corner)) assert.equal(e.assist, corner);
+      const on = id => m.sides[0].on.some(o => o.id === id && !m.pl[id].inj);
+      for (const e of m.ev.slice(before)) {
+        if (e.side !== 0 || e.min !== m.min) continue;
+        if (e.kind === 'pen' && on(pen)) { pens++; assert.equal(e.id, pen); }
+        if (e.kind === 'fk' && on(fk)) assert.equal(e.id, fk);
+        if (e.kind === 'corner' && e.type === 'goal' && on(corner)) assert.equal(e.assist, corner);
+      }
     }
   }
   assert.ok(pens > 20, `${pens} penalties`);
@@ -233,6 +236,16 @@ test('penalties: about one match in four has one, and most are scored', () => {
   for (let seed = 1; seed <= 400; seed++) for (const e of play(seed, side(4), side(5)).ev) if (e.kind === 'pen') { pens++; if (e.type === 'goal') scored++; }
   assert.ok(pens / 400 > 0.15 && pens / 400 < 0.4, `${pens / 400} per match`);
   assert.ok(scored / pens > 0.65 && scored / pens < 0.9, `${scored / pens} scored`);
+});
+
+test('keepers rarely go up for corners', () => {
+  let corners = 0, keepers = 0;
+  for (let seed = 1; seed <= 400; seed++) {
+    const m = play(seed, side(4), side(5));
+    for (const e of m.ev) if (e.kind === 'corner') { corners++; if (m.pl[e.id].pos === 'GK') keepers++; }
+  }
+  assert.ok(corners > 100, `${corners} corners`);
+  assert.ok(keepers / corners < 0.01, `${keepers} of ${corners} corner attempts by keepers`);
 });
 
 test('mid-match changes are checked; a new formation keeps the roles that still fit', () => {

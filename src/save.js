@@ -17,7 +17,7 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
 const MIGRATIONS = {
   2: s => { s.live = null; s.last = null; }, // old results have no stats or ratings: drop them
   3: s => { // default tactics, also for both sides of a match in progress
-    s.bench = []; s.tactics = defaultTactics(slots(s.formation)); s.fam = newFam();
+    s.bench = []; s.tactics = defaultTactics(slots(s.formation)); s.fam = newFam(); s.fam[s.formation] = 1;
     for (const S of s.live?.sides || []) {
       S.tac = Object.fromEntries(TEAM_KEYS.map(k => [k, 0])); S.takers = { pen: null, fk: null, corner: null }; S.fam = {};
       for (const o of S.on) Object.assign(o, defaultSlot(o.pos));
