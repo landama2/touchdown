@@ -8,6 +8,8 @@ import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, e
 import { serialize, deserialize } from '../src/save.js';
 import { cupRounds } from '../src/cup.js';
 import { stepMinute, matchResult } from '../src/match.js';
+import { SEASON_WEEKS, BROADCAST, MERIT, CUP_PRIZE, sponsorship, gate, wageBill } from '../src/finance.js';
+import { MIN_SQUAD } from '../src/transfers.js';
 import { MINI } from './fixtures/mini.js';
 
 const world = seed => createWorld(seed, MINI);
@@ -43,15 +45,14 @@ test('fixLineup repairs a lineup that references a missing player', () => {
 test('a full season: every club plays everyone home and away, stats are consistent', () => {
   const s = world(4);
   takeClub(s, 6);
-  const budget0 = s.budget, seed0 = s.seed;
+  const bal0 = myClub(s).fin.balance, seed0 = s.seed;
   playDay(s);
   assert.notEqual(s.seed, seed0);
   while (!s.done) assert.ok(playDay(s).every(r => r.item && s.days[s.next - 1].items.some(i => i.comp === r.item.comp)));
   assert.equal(s.next, s.days.length);
   assert.equal(s.day, s.days.at(-1).day);
   assert.equal(playDay(s), null);
-  assert.ok(s.budget > budget0);
-  assert.ok(s.budget - budget0 <= 2 * budget0, `income ${s.budget - budget0} vs start ${budget0}`);
+  assert.notEqual(myClub(s).fin.balance, bal0);
   s.divisions.forEach((d, i) => {
     const games = 2 * (d.clubIds.length - 1);
     const st = d.clubIds.map(id => s.clubs[id].st), sum = k => st.reduce((t, x) => t + x[k], 0);
@@ -105,20 +106,28 @@ test('endSeason rolls over; three seasons keep squads intact', () => {
     assert.equal(h.divs.length, 3);
     assert.ok(h.pos >= 1 && h.pos <= MINI[h.div].clubs.length);
     assert.deepEqual(s.divisions.map(d => d.clubIds.length), [4, 10, 6]);
-    assert.ok(s.clubs.every(c => c.players.length === 18 && c.st.p === 0 && c.players.every(p => p.age <= 35)));
+    assert.ok(s.clubs.every(c => (c.players.length === 18 || (c.id === s.me && c.players.length >= MIN_SQUAD)) && c.st.p === 0 && c.players.every(p => p.age <= 35 && p.contract && p.contract.until >= s.season)));
     assert.equal(new Set(s.lineup).size, 11);
   }
   assert.deepEqual(JSON.parse(JSON.stringify(s)), s);
 });
 
-test('prize money uses the size of the human club\'s division', () => {
+test('prize money: every club by final position, the cup winner and runner-up; the season goes into History', () => {
   const s = world(12);
-  takeClub(s, 0); // 4-club division, tier 3
+  takeClub(s, 0);
   while (!s.done) playDay(s);
-  const pos = table(s, 0).indexOf(0) + 1, before = s.budget;
+  const tables = s.divisions.map((_, d) => table(s, d)), bal = s.clubs.map(c => c.fin.balance), final = s.cup.rounds.at(-1).ties[0];
+  const want = id => {
+    const d = tables.findIndex(t => t.includes(id)), t = tables[d];
+    return MERIT[d] * (t.length - t.indexOf(id)) + (id === final.w ? CUP_PRIZE[0] : id === final.h || id === final.a ? CUP_PRIZE[1] : 0);
+  };
+  const season = { ...myClub(s).fin.season };
   endSeason(s);
-  assert.equal(s.history[0].prize, (4 + 1 - pos) * 40e3 * 3 + (s.history[0].cup.winner === 0 ? 500e3 : 0));
-  assert.equal(s.budget, before + s.history[0].prize);
+  s.clubs.forEach((c, id) => assert.equal(c.fin.balance - bal[id], want(id), c.name));
+  assert.equal(s.history[0].prize, want(0));
+  assert.deepEqual(s.history[0].fin, { ...season, prize: want(0), balance: s.clubs[0].fin.balance });
+  assert.ok(s.clubs.every(c => c.fin.season.wages === 0 && c.fin.season.prize === 0)); // a new ledger
+  assert.ok(Array.isArray(s.history[0].left));
 });
 
 test('same seed and same choices give the same career; works with no human club', () => {
@@ -337,14 +346,27 @@ test('awards and records: the season\'s best players and the biggest numbers are
   assert.ok(s.clubs.every(c => c.players.every(p => p.stats === undefined)), 'season stats are cleared');
 });
 
-test('weekly income: one payment per week of the season, whatever the number of matches', () => {
+test('weekly books: every club gets broadcast and sponsorship money and pays wages once a week; gates for home matches', () => {
   const s = world(19);
-  takeClub(s, 0); // top division: tier 3
-  const start = s.budget;
+  takeClub(s, 0);
+  const c = s.clubs[0], start = c.fin.balance, per = x => Math.round(x / SEASON_WEEKS);
   let gates = 0;
   while (!s.done) for (const r of playDay(s)) if (r.h === 0 && !(r.item.comp === 'cup' && r.item.round === cupRounds(s.clubs.length) - 1)) gates++;
-  const weeks = Math.floor(s.days.at(-1).day / 7) + 1;
-  assert.equal(s.budget - start, weeks * 25e3 * 3 + gates * 20e3 * 3);
+  assert.equal(Math.floor(s.days.at(-1).day / 7) + 1, SEASON_WEEKS);
+  const w = SEASON_WEEKS;
+  assert.deepEqual(c.fin.season, { broadcast: w * per(BROADCAST[0]), sponsor: w * per(sponsorship(c)), gate: gates * gate(c), prize: 0, wages: w * per(wageBill(c) * 52), fees: 0, sales: 0 });
+  assert.equal(c.fin.balance - start, c.fin.season.broadcast + c.fin.season.sponsor + c.fin.season.gate - c.fin.season.wages);
+  assert.ok(s.clubs.every(x => x.fin.season.broadcast > 0 && x.fin.season.wages > 0)); // AI clubs keep books too
+});
+
+test('budgets: set when you take a club and again each season from the books', () => {
+  const s = world(20);
+  takeClub(s, 6);
+  assert.equal(s.budget, Math.max(0, Math.round(myClub(s).fin.balance / 2 / 1e5) * 1e5));
+  assert.ok(s.wageBudget >= wageBill(myClub(s)));
+  while (!s.done) playDay(s);
+  endSeason(s);
+  assert.equal(s.budget, Math.max(0, Math.round(myClub(s).fin.balance / 2 / 1e5) * 1e5));
 });
 
 test('upcoming lists the next matches of the human club in date order, cup ties once drawn', () => {

@@ -8,6 +8,9 @@ import { cupRounds, nextCupRound, addLeg, decide, playoffSemis, playoffFinal } f
 import { addMatch, seasonAwards, noteSeason } from './awards.js';
 import { afterMatch, passDays, offseason } from './squad.js';
 import { defaultTraining, trainingOf, recoverRate, trainWeek, INTENSITY } from './training.js';
+import { payWeeks, payGate, payPrizes, seasonBudgets, blankLedger } from './finance.js';
+import { expireContracts, academy } from './contracts.js';
+import { MIN_SQUAD } from './transfers.js';
 
 const RETIRE_AGE = 35;
 const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
@@ -15,15 +18,12 @@ const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay o
 // play off for one more place, RELEGATED come down. The bottom division has no relegation.
 // ponytail: no size checks; a middle division needs 2 + 4 + 3 = 9 clubs or more, a division with play-offs 6.
 export const PROMOTED = 2, PLAYOFF = 4, RELEGATED = 3;
-const CUP_PRIZE = 500e3;
 
 function sample(rng, list, n) { // n distinct random elements (Fisher–Yates on a copy)
   const a = [...list];
   for (let i = a.length - 1; i > 0; i--) { const j = rng.int(0, i); [a[i], a[j]] = [a[j], a[i]]; }
   return a.slice(0, n);
 }
-
-const tier = club => 3 - club.div; // 3 for the top division, 1 for the bottom: scales all money
 
 export const myClub = s => s.clubs[s.me];
 
@@ -61,12 +61,12 @@ export function upcoming(s, n) {
 
 export function takeClub(s, clubId) {
   s.me = clubId;
-  s.budget = tier(s.clubs[clubId]) * 1.5e6;
   s.lineup = bestXI(s.clubs[clubId], s.formation);
   s.bench = autoBench(s.clubs[clubId], s.lineup);
   s.tactics = defaultTactics(slots(s.formation));
   s.fam = newFam();
   s.training = defaultTraining();
+  seasonBudgets(s);
 }
 
 function entry(s, id) {
@@ -149,12 +149,12 @@ export function playDay(s) {
     if (f.tie) settle(f, m);
     const r = { ...matchResult(m), item: { ...it } };
     if (it.comp === 'league') { record(s.clubs[f.h].st, r.hg, r.ag); record(s.clubs[f.a].st, r.ag, r.hg); addMatch(s, it.div, r); }
-    if (f.h === s.me && !f.neutral) s.budget += 20e3 * tier(s.clubs[f.h]); // gate receipts
+    if (!f.neutral) payGate(s.clubs[f.h]); // gate receipts, every club
     s.news.push(...afterMatch(s, m, it.comp, rng).filter(n => n.club === s.me));
     s.last.push(r);
   }
   for (const it of today.items) advance(s, rng, it);
-  if (s.me !== null) s.budget += 25e3 * tier(myClub(s)) * (Math.floor(today.day / 7) - Math.floor(s.day / 7)); // weekly income
+  payWeeks(s, Math.floor(today.day / 7) - Math.floor(s.day / 7)); // weekly instalments, every club
   if (played) learnFam(s.fam, s.formation); // the formation you prepared, not mid-match switches
   s.live = null;
   s.day = today.day;
@@ -182,7 +182,7 @@ export function zone(s, d, pos) {
 
 const winnerOf = p => p?.rounds[1]?.ties[0].w ?? null;
 
-// Closes the season: prize money, awards, records, promotion and relegation, the history entry;
+// Closes the season: prize money, awards, records, promotion and relegation, contracts, the history entry;
 // then ages the players (club players develop in training, free agents at rollover), gives everyone the summer break,
 // refreshes the free agents and schedules the next season.
 export function endSeason(s) {
@@ -195,12 +195,9 @@ export function endSeason(s) {
     cup: final?.w == null ? null : { winner: final.w, runnerUp: final.w === final.h ? final.a : final.h },
     divs: tables.map((t, d) => ({ champion: t[0], up: [], down: [], playoff: winnerOf(s.playoffs[d]), awards: awards[d] })),
   };
-  if (s.me !== null) {
-    h.div = myClub(s).div; h.pos = tables[h.div].indexOf(s.me) + 1;
-    h.prize = (tables[h.div].length + 1 - h.pos) * 40e3 * tier(myClub(s));
-    if (h.cup?.winner === s.me) h.prize += CUP_PRIZE;
-    s.budget += h.prize;
-  }
+  if (s.me !== null) { h.div = myClub(s).div; h.pos = tables[h.div].indexOf(s.me) + 1; }
+  h.prize = payPrizes(s, tables, h.cup, s.me);
+  h.fin = s.me === null ? null : { ...myClub(s).fin.season, balance: myClub(s).fin.balance };
   noteSeason(s, tables, awards);
   for (let d = 0; d + 1 < tables.length; d++) {
     const below = tables[d + 1];
@@ -209,11 +206,12 @@ export function endSeason(s) {
   }
   h.divs.forEach((x, d) => { for (const id of x.up) s.clubs[id].div = d - 1; for (const id of x.down) s.clubs[id].div = d + 1; });
   s.divisions.forEach((dv, d) => { dv.clubIds = s.clubs.filter(c => c.div === d).map(c => c.id); });
+  h.left = expireContracts(s, rng, MIN_SQUAD);
   s.history.push(h);
   for (const c of s.clubs) {
     c.st = blankStats();
     c.players = c.players.map(p => {
-      if (p.age >= RETIRE_AGE) return createPlayer(rng, s.nid++, p.pos, c.quality - 2, rng.int(17, 19)); // youth replaces retiree
+      if (p.age >= RETIRE_AGE) return academy(s, rng, c, p.pos); // youth replaces retiree
       delete p.stats;
       p.age++; // growth and decline happen week by week in training (src/training.js)
       offseason(p);
@@ -227,5 +225,7 @@ export function endSeason(s) {
   scheduleSeason(s, rng);
   s.seed = rng.seed;
   s.season++;
+  for (const c of s.clubs) c.fin.season = blankLedger();
+  if (s.me !== null) seasonBudgets(s);
   if (s.me !== null) fixLineup(s);
 }
