@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../src/world.js';
 import { MINI } from './fixtures/mini.js';
-import { takeClub, playRound } from '../src/season.js';
+import { takeClub, kickOff, playRound } from '../src/season.js';
+import { stepMinute } from '../src/match.js';
 import { serialize, deserialize, SAVE_VERSION } from '../src/save.js';
 
 test('a career survives a save/load round trip and continues identically', () => {
@@ -24,4 +25,29 @@ test('deserialize returns null for missing, corrupt or wrong-version saves', () 
   assert.equal(deserialize(JSON.stringify({ teams: [] })), null); // the old demo's save shape
   assert.equal(deserialize('{"version":1}'), null); // right version, wrong shape
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), me: 999 })), null); // dangling club index
+});
+
+test('a career saved in the middle of a live match resumes identically', () => {
+  const a = createWorld(22, MINI);
+  takeClub(a, 6);
+  kickOff(a);
+  for (let k = 0; k < 40; k++) stepMinute(a.live);
+  const b = deserialize(serialize(a));
+  assert.deepEqual(b, a);
+  for (const s of [a, b]) { while (!s.live.done) stepMinute(s.live); playRound(s); }
+  assert.deepEqual(b, a);
+});
+
+test('a version 2 save loads: the live match slot is added and old results are dropped', () => {
+  const s = createWorld(23, MINI);
+  takeClub(s, 2);
+  playRound(s);
+  const old = { ...s, version: 2, last: [[{ h: 0, a: 1, hg: 1, ag: 0, ev: [{ min: 5, club: 0, name: 'X' }] }]] };
+  delete old.live;
+  const b = deserialize(JSON.stringify(old));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.equal(b.live, null);
+  assert.equal(b.last, null);
+  playRound(b);
+  assert.equal(b.round, 2);
 });

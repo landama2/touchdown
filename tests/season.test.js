@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, MARKET_SIZE } from '../src/world.js';
 import { FORMATIONS, slots, bestXI, fixLineup, strength } from '../src/lineup.js';
-import { takeClub, myClub, myFixture, playRound, table, endSeason } from '../src/season.js';
+import { takeClub, myClub, myFixture, kickOff, playRound, table, endSeason } from '../src/season.js';
+import { stepMinute, matchResult } from '../src/match.js';
 import { MINI } from './fixtures/mini.js';
 
 const world = seed => createWorld(seed, MINI);
@@ -138,4 +139,39 @@ test('free agents at retirement age leave the list', () => {
   endSeason(s);
   assert.equal(s.market.length, MARKET_SIZE);
   assert.ok(s.market.every(p => !old.has(p.id)));
+});
+
+test('a live match: kick off, play it minute by minute, and the round records exactly that result', () => {
+  const s = world(13);
+  takeClub(s, 6); // Middle League
+  const m = kickOff(s);
+  assert.equal(kickOff(s), m); // already started: the same match comes back
+  assert.equal(m.sides.find(S => !S.auto).club, 6);
+  while (!m.done) stepMinute(m);
+  const want = matchResult(m), res = playRound(s);
+  assert.equal(s.live, null);
+  assert.deepEqual(res[1].find(r => r.h === 6 || r.a === 6), want);
+  assert.equal(s.clubs[6].st.gf, want.h === 6 ? want.hg : want.ag);
+  assert.equal(s.round, 1);
+});
+
+test('playing the round during a live match hands the rest of it to the assistant', () => {
+  const s = world(14);
+  takeClub(s, 6);
+  const m = kickOff(s);
+  for (let k = 0; k < 30; k++) stepMinute(m);
+  const res = playRound(s);
+  const mine = res[1].find(r => r.h === 6 || r.a === 6);
+  assert.equal(mine.ev.length, m.ev.length);
+  assert.ok(m.done && m.sides.every(S => S.auto));
+  assert.equal(s.live, null);
+  assert.equal(s.clubs[6].st.p, 1);
+});
+
+test('kickOff does nothing when the human club has no fixture', () => {
+  const s = world(9);
+  takeClub(s, 0); // Top League: 6 rounds, the season has 10
+  for (let r = 0; r < 6; r++) playRound(s);
+  assert.equal(kickOff(s), null);
+  assert.equal(s.live, null);
 });

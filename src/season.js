@@ -3,7 +3,7 @@ import { createPlayer, ageOneYear } from './player.js';
 import { makeFixtures } from './fixtures.js';
 import { blankStats, MARKET_SIZE, newFreeAgent } from './world.js';
 import { bestXI, fixLineup } from './lineup.js';
-import { simMatch } from './match.js';
+import { simMatch, startMatch, stepMinute, matchResult } from './match.js';
 
 const RETIRE_AGE = 35;
 const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
@@ -39,18 +39,36 @@ function record(st, scored, conceded) {
   if (scored > conceded) { st.w++; st.pts += 3; } else if (scored < conceded) st.l++; else { st.d++; st.pts++; }
 }
 
+// Starts the human club's match of this round as a live match in s.live (returns it), or returns
+// the one already started. Null when the club has no fixture this round.
+export function kickOff(s) {
+  const f = myFixture(s);
+  if (s.live || s.done || !f) return s.live;
+  fixLineup(s);
+  const rng = makeRng(s.seed);
+  s.live = startMatch(rng.int(0, 0xffffffff), entry(s, f[0]), entry(s, f[1]));
+  s.live.sides[f[0] === s.me ? 0 : 1].auto = false;
+  s.seed = rng.seed;
+  return s.live;
+}
+
+// Plays the round. A live match is played out first; whatever is left of it is handed to the
+// assistant manager (AI substitutions for both sides).
 export function playRound(s) {
   if (s.done) return null;
   if (s.me !== null) fixLineup(s);
+  const live = s.live;
+  if (live) { for (const S of live.sides) S.auto = true; while (!live.done) stepMinute(live); }
   const rng = makeRng(s.seed);
   s.last = s.divisions.map(d => (d.fixtures[s.round] || []).map(([h, a]) => { // a smaller division has finished
-    const r = simMatch(rng, entry(s, h), entry(s, a));
+    const r = live && live.sides[0].club === h ? matchResult(live) : simMatch(rng, entry(s, h), entry(s, a));
     record(s.clubs[h].st, r.hg, r.ag);
     record(s.clubs[a].st, r.ag, r.hg);
     if (h === s.me) s.budget += 20e3 * tier(s.clubs[h]); // gate receipts
     return r;
   }));
   if (s.me !== null) s.budget += 25e3 * tier(myClub(s)); // weekly income
+  s.live = null;
   s.seed = rng.seed;
   s.round++;
   s.done = s.round === Math.max(...s.divisions.map(d => d.fixtures.length));

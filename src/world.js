@@ -39,7 +39,7 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
     version: SAVE_VERSION, seed, nid: 1,
     me: null, formation: '4-4-2', lineup: [], budget: 0,
     season: 1, round: 0, done: false,
-    clubs: [], divisions: [], market: [], history: [], last: null,
+    clubs: [], divisions: [], market: [], history: [], last: null, live: null,
   };
   leagues.forEach((league, div) => {
     const shift = calibration[league.name] || 0;
