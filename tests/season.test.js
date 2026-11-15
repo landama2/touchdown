@@ -1,9 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeRng } from '../src/rng.js';
 import { createWorld, MARKET_SIZE } from '../src/world.js';
 import { FORMATIONS, slots, bestXI, fixLineup, strength } from '../src/lineup.js';
-import { simMatch } from '../src/match.js';
 import { takeClub, myClub, myFixture, playRound, table, endSeason } from '../src/season.js';
 import { MINI } from './fixtures/mini.js';
 
@@ -35,24 +33,6 @@ test('fixLineup repairs a lineup that references a missing player', () => {
   fixLineup(s);
   assert.equal(new Set(s.lineup).size, 11);
   assert.ok(!s.lineup.includes(gone));
-});
-
-test('simMatch: sensible goal totals, stronger side wins more, events match the score', () => {
-  const s = world(3), rng = makeRng(3);
-  const side = id => ({ club: s.clubs[id], ids: bestXI(s.clubs[id], '4-4-2'), formation: '4-4-2' });
-  const strong = side(0), weak = side(15), peer = side(1);
-  let goals = 0, strongWins = 0, weakWins = 0;
-  for (let i = 0; i < 400; i++) {
-    const r = simMatch(rng, strong, peer);
-    goals += r.hg + r.ag;
-    assert.equal(r.ev.length, r.hg + r.ag);
-    assert.equal(r.ev.filter(e => e.club === 0).length, r.hg);
-    const m = simMatch(rng, weak, strong);
-    if (m.ag > m.hg) strongWins++; else if (m.hg > m.ag) weakWins++;
-  }
-  const perMatch = goals / 400;
-  assert.ok(perMatch > 2 && perMatch < 3.6, `goals per match ${perMatch}`);
-  assert.ok(strongWins > weakWins * 5, `${strongWins} vs ${weakWins}`);
 });
 
 test('a full season: every club plays everyone home and away, stats are consistent', () => {

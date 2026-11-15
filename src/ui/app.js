@@ -61,7 +61,7 @@ const views = {
     if (s.last) {
       const res = s.last[d], mine = res.find(r => r.h === s.me || r.a === s.me), others = res.filter(r => r !== mine);
       if (mine) h += `<h2>Last round</h2><div class="score">${clubName(mine.h)} ${mine.hg} – ${mine.ag} ${clubName(mine.a)}</div>
-        ${mine.ev.map(e => `<div>${e.min}' ⚽ ${esc(e.name)} <span class="dim">(${clubName(e.club)})</span></div>`).join('') || '<div class="dim">No goals.</div>'}`;
+        ${mine.ev.filter(e => e.type === 'goal').map(e => `<div>${e.min}' ⚽ ${esc(e.name)} <span class="dim">(${clubName(e.side ? mine.a : mine.h)})</span></div>`).join('') || '<div class="dim">No goals.</div>'}`;
       if (others.length) h += `<h2>Other results</h2>${others.map(r => `<div>${clubName(r.h)} ${r.hg} – ${r.ag} ${clubName(r.a)}</div>`).join('')}`;
     }
     return h;

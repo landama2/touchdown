@@ -1,7 +1,7 @@
 import { POS, overall } from './player.js';
 
 export const FORMATIONS = { '4-4-2': [1, 4, 4, 2], '4-3-3': [1, 4, 3, 3], '3-5-2': [1, 3, 5, 2], '5-3-2': [1, 5, 3, 2], '4-5-1': [1, 4, 5, 1] };
-const SLOT_WEIGHT = { GK: [0, 1.5], DF: [0, 1], MF: [0.5, 0.5], FW: [1, 0] }; // [attack, defence]
+export const SLOT_WEIGHT = { GK: [0, 1.5], DF: [0, 1], MF: [0.5, 0.5], FW: [1, 0] }; // [attack, defence]
 
 export const slots = f => FORMATIONS[f].flatMap((n, i) => Array(n).fill(POS[i]));
 export const eff = (p, pos) => overall(p, pos) * (p.pos === pos ? 1 : 0.85);
@@ -31,6 +31,13 @@ export function strength(club, ids, formation) {
     const e = eff(club.players.find(p => p.id === id), pos[i]), [wa, wd] = SLOT_WEIGHT[pos[i]];
     a += e * wa; aw += wa; d += e * wd; dw += wd;
   });
+  const bonus = formationBonus(formation);
+  return { att: a / aw * bonus.att, def: d / dw * bonus.def };
+}
+
+// The formation edge (docs/fun-surprises.md #1): each forward beyond two adds 3% attack, each
+// defender beyond four adds 3% defence. The match engine applies the same multipliers.
+export function formationBonus(formation) {
   const [, nd, , nf] = FORMATIONS[formation];
-  return { att: a / aw * (1 + 0.03 * (nf - 2)), def: d / dw * (1 + 0.03 * (nd - 4)) };
+  return { att: 1 + 0.03 * (nf - 2), def: 1 + 0.03 * (nd - 4) };
 }
