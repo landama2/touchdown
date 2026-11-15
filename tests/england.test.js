@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { overall, ALL_ATTRS } from '../src/player.js';
+import { overall, value, ALL_ATTRS } from '../src/player.js';
 import { validateLeagues } from '../src/data/validate.js';
 import { LEAGUES } from '../src/data/england.js';
 import STATS, { CALIBRATION } from '../src/data/england-stats.js';
@@ -87,4 +87,31 @@ test('a season of real leagues plays like real football', () => {
   assert.ok(reds / n <= 0.3, `reds per match ${reds / n}`);
   assert.ok(pens / n >= 0.15 && pens / n <= 0.4, `penalties per match ${pens / n}`);
   assert.ok(missing >= 0.5 && missing <= 3, `players out per club ${missing}`);
+});
+
+const median = list => [...list].sort((a, b) => a - b)[list.length >> 1];
+
+test('real-world money: stars cost tens of millions, League One regulars a few hundred thousand', () => {
+  const s = createWorld(1), squad = d => s.divisions[d].clubIds.flatMap(id => s.clubs[id].players);
+  const best = squad(0).reduce((b, p) => overall(p) > overall(b) ? p : b), l1 = squad(2);
+  const v = { best: value(best), bestWage: best.contract.wage, l1: median(l1.map(value)), l1Wage: median(l1.map(p => p.contract.wage)) };
+  assert.ok(v.best >= 50e6 && v.best <= 150e6, JSON.stringify(v));
+  assert.ok(v.bestWage >= 120e3 && v.bestWage <= 350e3, JSON.stringify(v));
+  assert.ok(v.l1 >= 0.1e6 && v.l1 <= 1.5e6, JSON.stringify(v));
+  assert.ok(v.l1Wage >= 1.5e3 && v.l1Wage <= 10e3, JSON.stringify(v));
+});
+
+test('a season of real club books: the Premier League is rich, the EFL spends most of its income on wages', () => {
+  const s = createWorld(1);
+  while (!s.done) playDay(s);
+  const div = d => {
+    const L = s.divisions[d].clubIds.map(id => s.clubs[id].fin.season);
+    const income = L.reduce((t, x) => t + x.broadcast + x.sponsor + x.gate, 0);
+    return { income: income / L.length, ratio: L.reduce((t, x) => t + x.wages, 0) / income };
+  };
+  const [pl, ch, l1] = [0, 1, 2].map(div), info = JSON.stringify({ pl, ch, l1 });
+  assert.ok(pl.ratio >= 0.4 && pl.ratio <= 0.8, info);
+  assert.ok(ch.ratio >= 0.75 && ch.ratio <= 1.3, info);
+  assert.ok(l1.ratio >= 0.6 && l1.ratio <= 1.2, info);
+  assert.ok(pl.income >= 5 * ch.income, info);
 });

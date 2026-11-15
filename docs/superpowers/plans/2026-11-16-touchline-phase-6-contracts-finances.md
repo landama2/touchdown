@@ -64,7 +64,7 @@ The age factor is unchanged (×1.3 under 24, ×0.6 over 30), so fun surprise #2 
 
 **Wages** (`wage(p)` in `src/finance.js`, euros a week):
 
-`max(€500, round(€4.5k × e^(0.088 × (overall − 50)) × (0.6 if under 21), to €500))`
+`max(€500, round(€4.5k × e^(0.09 × (overall − 50)) × (0.6 if under 21), to €500))`
 
 | Overall | Weekly wage |
 |---------|-------------|
@@ -98,7 +98,7 @@ The age factor is unchanged (×1.3 under 24, ×0.6 over 30), so fun surprise #2 
 
   | Source | Amount |
   |--------|--------|
-  | Broadcast | €100M Premier League · €12M Championship · €3M League One |
+  | Broadcast | €108M Premier League · €10.5M Championship · €8M League One (tuned in Phase 6) |
   | Merit prize, per place counted from the bottom | €2.5M · €0.1M · €0.05M |
   | Sponsorship | €0.5M × e^(0.6 × (quality − 8)), rounded to €100k |
   | Gate, per home match (not neutral finals) | €80k × e^(0.45 × (quality − 8)), rounded to €1k |
@@ -290,11 +290,11 @@ import { PLAYOFF_DAYS } from './calendar.js';
 // quality), cup prize money. Costs: wages (staff costs arrive in Phase 9). Broadcast, sponsorship and
 // wages are paid in SEASON_WEEKS equal weekly instalments. A club may go into debt (Phase 10's board acts on it).
 export const SEASON_WEEKS = Math.floor(PLAYOFF_DAYS[2] / 7) + 1; // weekly payments from day 0 to the play-off finals
-export const BROADCAST = [100e6, 12e6, 3e6];  // per season, by division (top first); lower divisions use the last
+export const BROADCAST = [108e6, 10.5e6, 8e6];  // per season, by division (top first); lower divisions use the last
 export const MERIT = [2.5e6, 0.1e6, 0.05e6];  // per place counted from the bottom: the last club gets 1×, the champion n×
 export const CUP_PRIZE = [2e6, 1e6];          // winner, runner-up
 const SPONSOR = { at8: 0.5e6, growth: 0.6 }, GATE = { at8: 80e3, growth: 0.45 }; // quality 8 ≈ a League One club
-const WAGE = { at50: 4.5e3, growth: 0.088 };  // a week: overall 50 ≈ a League One regular, 93 ≈ €200k
+const WAGE = { at50: 4.5e3, growth: 0.09 };  // a week: overall 50 ≈ a League One regular, 93 ≈ €200k (tuned in Phase 6)
 const START_SHARE = 0.25, TRANSFER_SHARE = 0.5, WAGE_SHARE = 0.7, WAGE_HEADROOM = 1.05;
 
 const byDiv = (list, d) => list[Math.min(d, list.length - 1)];
