@@ -5,8 +5,10 @@ import { buildCalendar } from './calendar.js';
 import { blankRecords } from './awards.js';
 import { freshState } from './player.js';
 import { defaultTraining } from './training.js';
+import { startContract } from './contracts.js';
+import { newBooks, seasonBudgets } from './finance.js';
 
-export const SAVE_VERSION = 6; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training
+export const SAVE_VERSION = 7; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets
 export const KEY = 'touchline.save';
 
 export const serialize = state => JSON.stringify(state);
@@ -17,7 +19,8 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
   && (s.live === null || (typeof s.live === 'object' && Array.isArray(s.live.sides)))
   && Array.isArray(s.bench) && !!s.tactics && Array.isArray(s.tactics.slots) && !!s.fam && typeof s.fam === 'object'
   && Array.isArray(s.days) && Number.isInteger(s.next) && Array.isArray(s.playoffs) && Array.isArray(s.records) && (s.cup === null || typeof s.cup === 'object')
-  && !!s.training && !!s.training.ind && typeof s.training.ind === 'object' && Array.isArray(s.news);
+  && !!s.training && !!s.training.ind && typeof s.training.ind === 'object' && Array.isArray(s.news)
+  && Number.isFinite(s.wageBudget) && s.clubs.every(c => c.fin && Number.isFinite(c.fin.balance) && !!c.fin.season);
 
 // MIGRATIONS[v] upgrades a save from version v to v + 1.
 const MIGRATIONS = {
@@ -44,6 +47,12 @@ const MIGRATIONS = {
   5: s => { // squad dynamics: everyone fresh, default training. A live match's players read edge ?? 1.
     for (const p of [...s.clubs.flatMap(c => c.players), ...s.market]) Object.assign(p, freshState());
     s.training = defaultTraining(); s.news = [];
+  },
+  6: s => { // contracts from this season, opening books, budgets (money in History stays in the old scale)
+    for (const c of s.clubs) { for (const p of c.players) p.contract = startContract(p, s.season); c.fin = newBooks(s, c); }
+    for (const p of s.market) p.contract = null;
+    s.wageBudget = 0;
+    if (s.me !== null) seasonBudgets(s);
   },
 };
 

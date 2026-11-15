@@ -40,6 +40,7 @@ test('deserialize returns null for missing, corrupt or wrong-version saves', () 
   assert.equal(deserialize('{"version":1}'), null); // right version, wrong shape
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), me: 999 })), null); // dangling club index
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), training: { ...defaultTraining(), ind: null } })), null); // null is not an object here
+  assert.equal(deserialize(serialize({ ...createWorld(1, MINI), wageBudget: undefined })), null); // books missing
 });
 
 test('a career saved in the middle of a live match resumes identically', () => {
@@ -145,4 +146,29 @@ test('a live match saved by version 5 carries on without readiness', () => {
   const b = deserialize(JSON.stringify(o));
   while (!b.live.done) stepMinute(b.live);
   assert.ok(playDay(b).some(r => r.h === 3 || r.a === 3));
+});
+
+// A save as Phase 5 (version 6) wrote it: no contracts, no books, no wage budget.
+function asV6(s) {
+  const o = JSON.parse(serialize(s));
+  o.version = 6;
+  delete o.wageBudget;
+  for (const c of o.clubs) { delete c.fin; for (const p of c.players) delete p.contract; }
+  for (const p of o.market) delete p.contract;
+  return o;
+}
+
+test('a version 6 save gets contracts, books and budgets, and plays on', () => {
+  const a = createWorld(24, MINI);
+  takeClub(a, 3);
+  playDay(a);
+  const b = deserialize(JSON.stringify(asV6(a)));
+  assert.equal(b.version, SAVE_VERSION);
+  for (const c of b.clubs) {
+    assert.ok(Number.isInteger(c.fin.balance) && c.fin.season.wages === 0);
+    for (const p of c.players) assert.ok(p.contract.wage > 0 && p.contract.until >= b.season && p.contract.until <= b.season + 3);
+  }
+  assert.ok(b.market.every(p => p.contract === null));
+  assert.ok(b.wageBudget > 0 && b.budget >= 0);
+  assert.ok(playDay(b).length);
 });
