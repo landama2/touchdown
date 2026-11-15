@@ -19,6 +19,10 @@ export const WEIGHTS = {
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
+// Squad-dynamics fields every player carries (their meaning is in src/squad.js). A fresh player
+// plays exactly as strong as his attributes say.
+export const freshState = () => ({ cond: 100, sharp: 100, morale: 50, form: [], yc: 0, ban: 0, inj: null, gain: 0 });
+
 export function createPlayer(rng, id, pos, quality, age = rng.int(17, 34)) {
   const attrs = {};
   for (const k of ALL_ATTRS) {
@@ -28,7 +32,7 @@ export function createPlayer(rng, id, pos, quality, age = rng.int(17, 34)) {
   }
   const best = Math.max(...Object.keys(WEIGHTS[pos]).map(k => attrs[k]));
   const pot = clamp(best + (age < 23 ? rng.int(0, 2) : 0), 1, 20);
-  return { id, name: rng.pick(FIRST) + ' ' + rng.pick(LAST), pos, age, attrs, pot };
+  return { id, name: rng.pick(FIRST) + ' ' + rng.pick(LAST), pos, age, attrs, pot, ...freshState() };
 }
 
 export function overall(p, pos = p.pos, w = WEIGHTS[pos]) {
