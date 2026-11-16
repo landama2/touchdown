@@ -32,6 +32,7 @@ const SPEEDS = [['Slow', 1000], ['Normal', 400], ['Fast', 100], ['Very fast', 25
 
 const $ = id => document.getElementById(id);
 // Real names contain characters such as & and ' — escape everything taken from data.
+const ordinal = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => '€' + (n / 1e6).toFixed(2) + 'M';
 const perWeek = n => `€${n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n < 1e4 ? (n / 1e3).toFixed(1) + 'k' : Math.round(n / 1e3) + 'k'}/wk`;
@@ -50,6 +51,7 @@ const status = p => p.inj ? `${esc(p.inj.name)}, ${outFor(p.inj.days)}` : p.ban 
 const SQUAD_HEAD = '<th class="n">Cond</th><th>Morale</th><th class="n">Form</th><th>Status</th>';
 const squadCells = p => `<td class="n">${p.cond}%</td><td>${moraleLabel(p.morale)}</td><td class="n">${formAvg(p) ?? '–'}</td><td class="${available(p) ? 'dim' : 'oop'}">${status(p)}</td>`;
 // The human club's new injuries and bans from the day just played.
+const cupGoal = k => { const r = cupRoundName(k, s.clubs.length); return /^Round/.test(r) ? `${CUP_NAME} ${r.toLowerCase()}` : `the ${CUP_NAME} ${r.toLowerCase()}`; };
 const NEWS = {
   injury: n => `🚑 ${esc(n.name)} is out for ${outFor(n.days)} (${esc(n.injury)}${n.training ? ', in training' : ''}).`,
   ban: n => `🟥 ${esc(n.name)} is banned for ${n.matches} match${n.matches > 1 ? 'es' : ''}.`,
@@ -61,8 +63,8 @@ const NEWS = {
   job: n => `📨 ${clubName(n.club)} offer you their job (see Inbox).`,
   warning: n => `⚠️ The ${clubName(n.club)} board is losing patience (confidence ${n.conf}).`,
   sacked: n => `❌ ${clubName(n.club)} have sacked you.`,
-  target: n => `🎯 The ${clubName(n.club)} board wants you to ${n.league} and reach the ${CUP_NAME} ${cupRoundName(n.cup, s.clubs.length).toLowerCase()}.`,
-  review: n => `📋 Season review: you finished ${n.pos}; the board wanted you to ${n.target}${n.met ? ' — target met' : ' — target missed'}. Reputation ${n.was} → ${n.rep}.`,
+  target: n => `🎯 The ${clubName(n.club)} board wants you to ${n.league} and reach ${cupGoal(n.cup)}.`,
+  review: n => `📋 Season review: you finished ${ordinal(n.pos)}; the board wanted you to ${n.target}${n.met ? ' — target met' : ' — target missed'}. Reputation ${n.was} → ${n.rep}.`,
   request: n => `🏦 You asked the board for more ${n.kind} budget: ${n.yes ? 'agreed' : 'refused'}.`,
 };
 const newsText = () => s.news.map(n => NEWS[n.type](n)).join('<br>');
@@ -387,8 +389,8 @@ views.Board = () => {
   const asked = s.career.asked === s.season;
   return `<h2>The board</h2><p>Confidence ${confText(c)} <span class="dim">· below ${Math.round(line)} you are sacked (after ${MIN_GAMES} league games)</span></p>
     <div class="wrap"><table><tr><th>Target</th><th>Now</th></tr>
-    <tr><td>League: ${esc(b[k][0])} (${b[k][1] === 1 ? '1st' : `top ${b[k][1]}`})</td><td>${pos ? `${pos}${pos === 1 ? 'st' : pos === 2 ? 'nd' : pos === 3 ? 'rd' : 'th'}` : '–'}</td></tr>
-    <tr><td>${CUP_NAME}: reach the ${cupRoundName(cupTarget(s, c.id), s.clubs.length).toLowerCase()}</td><td></td></tr></table></div>
+    <tr><td>League: ${esc(b[k][0])} (${b[k][1] === 1 ? '1st' : `top ${b[k][1]}`})</td><td>${c.st.p ? ordinal(pos) : '–'}</td></tr>
+    <tr><td>Cup: reach ${cupGoal(cupTarget(s, c.id))}</td><td></td></tr></table></div>
     <p class="dim">Every league result is weighed against what a squad like yours should get; the board also watches the table each week and does not like debt or a wage bill over budget. Going out of the cup early costs, cup wins from the target round on help. At the end of the season the target is judged, and promotion and relegation count.</p>
     <h2>Budgets</h2><p>Transfer budget ${money(s.budget)} · wage budget ${perWeek(s.wageBudget)} (wages and staff ${perWeek(wageBill(c) + staffBill(s, c))})</p>
     <p class="dim">Once a season you may ask for more. The board agrees while its confidence is ${ASK.conf} or more and the club is out of debt; otherwise it says no and thinks less of you for asking.</p>
@@ -506,8 +508,8 @@ function dispatch(e) {
   const el = e.target.closest('[data-act]');
   if (!el || (e.type === 'click') === (el.tagName === 'SELECT')) return; // selects act on change, everything else on click
   actions[el.dataset.act](+el.dataset.id, el);
+  render(); // before save: the Inbox marks items read as it draws
   save();
-  render();
 }
 document.addEventListener('click', dispatch);
 document.addEventListener('change', dispatch);
