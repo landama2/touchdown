@@ -9,8 +9,9 @@ import { startContract } from './contracts.js';
 import { newBooks, seasonBudgets } from './finance.js';
 import { staffScouts } from './scouting.js';
 import { aiStaff, standardStaff } from './staff.js';
+import { BOARD_START, REP_START } from './world.js';
 
-export const SAVE_VERSION = 10; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad
+export const SAVE_VERSION = 11; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad. 11: boards, the manager's career, the inbox
 export const KEY = 'touchline.save';
 
 export const serialize = state => JSON.stringify(state);
@@ -25,7 +26,8 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
   && Number.isFinite(s.wageBudget) && s.clubs.every(c => c.fin && Number.isFinite(c.fin.balance) && !!c.fin.season)
   && Array.isArray(s.offers) && !!s.talks && Array.isArray(s.deals) && s.clubs.every(c => Number.isFinite(c.lentPay))
   && !!s.known && typeof s.known === 'object' && Array.isArray(s.scouts) && Array.isArray(s.shortlist)
-  && Array.isArray(s.youth) && s.clubs.every(c => c.staff && Number.isInteger(c.staff.coaching));
+  && Array.isArray(s.youth) && s.clubs.every(c => c.staff && Number.isInteger(c.staff.coaching))
+  && Array.isArray(s.jobs) && Array.isArray(s.inbox) && (s.career === null || Number.isFinite(s.career.rep)) && s.clubs.every(c => Number.isFinite(c.conf) && Number.isInteger(c.games));
 
 // MIGRATIONS[v] upgrades a save from version v to v + 1.
 const MIGRATIONS = {
@@ -64,6 +66,11 @@ const MIGRATIONS = {
   9: s => { // standard staff everywhere, an empty youth squad (the first intake comes in the summer); staff costs in the ledger
     aiStaff(s); if (s.me !== null) s.clubs[s.me].staff = standardStaff(s.clubs[s.me].div);
     s.youth = []; for (const c of s.clubs) c.fin.season.staff = 0;
+  },
+  10: s => { // every board starts at BOARD_START with this season's league games counted; a career in progress starts at REP_START; empty inbox
+    for (const c of s.clubs) { c.conf = BOARD_START; c.games = c.st.p; }
+    s.career = s.me === null ? null : { rep: REP_START, asked: null, warned: null, spells: [{ club: s.me, from: s.season, to: null, how: null }] };
+    s.jobs = []; s.inbox = [];
   },
 };
 
