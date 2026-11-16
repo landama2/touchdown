@@ -21,7 +21,7 @@
 | 6 | Contracts & finances | Wages, contract lengths, renewals, release clauses, negotiations; club income (gate, sponsorship, prize, broadcast) and costs; separate transfer and wage budgets | 4 | `2026-11-16-touchline-phase-6-contracts-finances.md` (done 2026-11-16) |
 | 7 | Transfer market | Transfer windows, AI clubs buying and selling, bids and counter-offers, loans, free agents, player willingness to move | 6 | `2026-11-16-touchline-phase-7-transfer-market.md` (done 2026-11-16) |
 | 8 | Scouting & knowledge | Attributes of unknown players shown as ranges, scouts with assignments and reports, shortlists, player search and filters | 7 | `2026-11-16-touchline-phase-8-scouting.md` (done 2026-11-16) |
-| 9 | Youth & staff | Annual academy intake, youth squad, staff (coaches, scouts, physios) with their own attributes that affect training, scouting accuracy and recovery; hiring and firing | 5, 8 | to write |
+| 9 | Youth & staff | Annual academy intake, youth squad, staff (coaches, scouts, physios) with their own attributes that affect training, scouting accuracy and recovery; hiring and firing | 5, 8 | `2026-11-16-touchline-phase-9-youth-staff.md` (done 2026-11-16) |
 | 10 | Manager career | Board expectations and confidence, job security, sackings, job offers at other clubs, manager reputation, inbox with news and decisions | 6, 7 | to write |
 | 11 | Interface | Touchline's own visual identity, player and club profile screens, 2D pitch match view, sortable/filterable tables, save slots with export/import, keyboard and screen-reader support | 2–10 | to write |
 | 12 | Balance & soak | 20-season automated runs checked against statistical targets (goals per match 2.5–2.9, home wins 43–47%, plausible wage/value curves), performance budget, save-size budget | all | to write |
@@ -34,7 +34,7 @@ Phase 3 note: the formation edge listed in `docs/fun-surprises.md` must survive 
 
 Phase 5 note (decided 2026-11-15): suspensions price "Tackle harder"; it stays as it is (fun surprise #6).
 
-Phase 9 note: staff scale squad dynamics. Coaches scale `GROWTH` and `INTENSITY` in `src/training.js`; physios scale recovery (`passDays`) and injury length (`INJURIES`) in `src/squad.js`.
+Phase 9 note (done 2026-11-16): staff are levels 1-5 per area (owner's choice), not individual people. Coaching scales growth and the youth intake, Scouting the number and speed of scouts, Medical injury length; level 3 is the calibrated game. Training intensity and recovery rates were left as calibrated.
 
 Phase 6 notes (decided 2026-11-16):
 - Phase 7 uses each club's `fin.balance` for bids, pays release clauses (`p.contract.clause`), and replaces the rule that a free agent costs his value as a fee.
@@ -50,6 +50,10 @@ Phase 7 notes (decided 2026-11-16):
 Phase 8 notes (decided 2026-11-16):
 - Phase 9's scouts get attributes and wages: their judging can scale `TASKS` (days and knowledge reached) and `MAX_WIDTH` / `OVR_WIDTH` in `src/scouting.js`, and hiring replaces the fixed `SCOUTS` numbers.
 - AI clubs see true values; only the human club is fogged.
+
+Phase 9 notes (decided 2026-11-16):
+- Only the human club pays for staff, and only beyond its division's standard (`STANDARD` in `src/finance.js`); staff costs count against the wage budget. Phase 10's board should set that budget from income and debt.
+- AI clubs have no youth squads; their gaps are still filled by generated academy players.
 
 ## Architecture decisions that hold for every phase
 
