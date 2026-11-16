@@ -19,7 +19,7 @@
 | 4 | Competitions & calendar | Day-based calendar, promotion/relegation with play-offs, a knockout cup across all divisions, season awards, club and league records | 1 | `2026-11-15-touchline-phase-4-competitions.md` (done 2026-11-15) |
 | 5 | Squad dynamics | Match fitness and condition, injuries with recovery times, suspensions, morale, form, training schedules that drive attribute development | 2, 4 | `2026-11-15-touchline-phase-5-squad-dynamics.md` (done 2026-11-15) |
 | 6 | Contracts & finances | Wages, contract lengths, renewals, release clauses, negotiations; club income (gate, sponsorship, prize, broadcast) and costs; separate transfer and wage budgets | 4 | `2026-11-16-touchline-phase-6-contracts-finances.md` (done 2026-11-16) |
-| 7 | Transfer market | Transfer windows, AI clubs buying and selling, bids and counter-offers, loans, free agents, player willingness to move | 6 | to write |
+| 7 | Transfer market | Transfer windows, AI clubs buying and selling, bids and counter-offers, loans, free agents, player willingness to move | 6 | `2026-11-16-touchline-phase-7-transfer-market.md` (done 2026-11-16) |
 | 8 | Scouting & knowledge | Attributes of unknown players shown as ranges, scouts with assignments and reports, shortlists, player search and filters | 7 | to write |
 | 9 | Youth & staff | Annual academy intake, youth squad, staff (coaches, scouts, physios) with their own attributes that affect training, scouting accuracy and recovery; hiring and firing | 5, 8 | to write |
 | 10 | Manager career | Board expectations and confidence, job security, sackings, job offers at other clubs, manager reputation, inbox with news and decisions | 6, 7 | to write |
@@ -41,6 +41,11 @@ Phase 6 notes (decided 2026-11-16):
 - Phase 10's board acts on debt and sets the season budgets that `seasonBudgets()` in `src/finance.js` now sets with fixed shares.
 - AI clubs in the EFL run at a loss (Championship wages are about 1.2× income) and drift into debt; Phase 7 must re-tune club money before AI bids use `fin.balance`.
 - The wage budget floor (wage bill × 1.15) lets a manager raise wages every season; Phase 10's board should tie the wage budget to income and debt.
+
+Phase 7 notes (decided 2026-11-16):
+- EFL broadcast money was raised (Championship €12M, League One €4M) so AI clubs can trade without drifting into debt; the Phase 6 target "PL income ≥ 5× Championship" became 4×.
+- Premier League clubs still bank about €60M a season each (median balance about €250M by season 3), and the biggest fees reach about €130M by then. Phase 10's board and Phase 12's soak should rein this in.
+- Phase 8 replaces the browse-one-club list on the Transfers screen with player search, filters and shortlists; asking prices and refusals stay in `src/market.js`.
 
 ## Architecture decisions that hold for every phase
 
