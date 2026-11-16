@@ -12,8 +12,10 @@ import { line } from './commentary.js';
 import { buy, sell, bid, acceptCounter, talksOn, loanIn, setListing, acceptOffer, rejectOffer, counterOffer, MAX_SQUAD } from '../transfers.js';
 import { SUMMER_END, JANUARY, QUICK_SALE, inWindow, windowOpen, justJoined, asking, signingFee, refusal, loanable, loanPay } from '../market.js';
 import { KEY, serialize, deserialize } from '../save.js';
-import { TASKS, estimate, ranges, assign, recall, toggleShortlist, searchPlayers } from '../scouting.js';
-import { wageBill, projection } from '../finance.js';
+import { TASKS, taskDays, estimate, ranges, assign, recall, toggleShortlist, searchPlayers } from '../scouting.js';
+import { AREAS, COACHING, MEDICAL, SCOUTS, SCOUT_SPEED, setStaff } from '../staff.js';
+import { YOUTH_MAX, LEAVE_AGE, ceilingRange, promote, release } from '../youth.js';
+import { wage, wageBill, projection, staffBill, STAFF_COST, STANDARD } from '../finance.js';
 import { terms, canRenew, renew as renewContract } from '../contracts.js';
 import { crestSvg, kitSvg } from './art.js';
 
@@ -64,8 +66,8 @@ const windowText = () => s.done ? `Summer window open until ${dateLabel(SUMMER_E
   : `Window closed: the ${s.day < JANUARY[0] ? `January window opens ${dateLabel(JANUARY[0])}` : 'summer window opens when the season ends'}`;
 const feeOf = id => Math.round(+$(`fee-${id}`).value * 1e6);
 // Where a player is: his club, or null on the free-agent list.
-const clubOfPlayer = p => s.clubs.find(c => c.players.includes(p)) ?? null;
-const allPlayers = () => [...s.clubs.flatMap(c => c.players), ...s.market];
+const clubOfPlayer = p => s.youth.includes(p) ? myClub(s) : s.clubs.find(c => c.players.includes(p)) ?? null; // youth players are yours
+const allPlayers = () => [...s.clubs.flatMap(c => c.players), ...s.market, ...s.youth];
 // A [lo, hi] estimate as text: one number when known exactly.
 const span = ([lo, hi], f = String) => lo === hi ? f(lo) : `${f(lo)}–${f(hi)}`;
 const moneySpan = ([lo, hi]) => lo === hi ? money(lo) : `€${(lo / 1e6).toFixed(2)}–${(hi / 1e6).toFixed(2)}M`;
@@ -250,6 +252,7 @@ const views = {
       ${h.fin ? `<div class="dim">Books: income ${money(h.fin.broadcast + h.fin.sponsor + h.fin.gate + h.fin.prize + h.fin.sales)}, wages ${money(h.fin.wages)}, fees ${money(h.fin.fees)} · balance ${money(h.fin.balance)}</div>` : ''}
       ${h.left?.length ? `<div class="dim">Left when their contracts ended: ${h.left.map(esc).join(', ')}</div>` : ''}
       ${h.deals?.length ? `<div class="dim">Your deals: ${h.deals.map(dealText).join(' · ')}</div>` : ''}
+      ${h.youthLeft?.length ? `<div class="dim">Left the youth squad at ${LEAVE_AGE}: ${h.youthLeft.map(esc).join(', ')}</div>` : ''}
       ${h.cup ? `<div>${CUP_NAME}: <b>${name(h.cup.winner)}</b> <span class="dim">beat ${name(h.cup.runnerUp)} in the final</span></div>` : ''}
       ${h.divs.map((x, d) => `<div><b>${esc(s.divisions[d].name)}</b> champions: ${name(x.champion)}${x.up.length ? ` · promoted: ${names(x.up)}` : ''}${x.down.length ? ` · relegated: ${names(x.down)}` : ''}</div>
         ${x.awards ? award('Player of the season', x.awards.player, ' avg') + award('Top scorer', x.awards.scorer, ' goals') + award('Young player', x.awards.young, ' avg') : ''}`).join('')}`).join('');
@@ -323,7 +326,7 @@ const views = {
     return `<h2>Finances · season ${s.season}</h2>
       <p>Balance <b>${money(c.fin.balance)}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(c))} of ${perWeek(s.wageBudget)}</p>
       <div class="wrap"><table><tr><th>Income this season</th><th></th></tr>${line('Broadcasting', L.broadcast)}${line('Sponsorship', L.sponsor)}${line('Gate receipts', L.gate)}${line('Prize money', L.prize)}${line('Player sales', L.sales)}
-      <tr><th>Costs this season</th><th></th></tr>${line('Wages', L.wages)}${line('Transfer fees', L.fees)}</table></div>
+      <tr><th>Costs this season</th><th></th></tr>${line('Wages', L.wages)}${line('Transfer fees', L.fees)}${line('Staff beyond the standard', L.staff)}</table></div>
       <p class="dim">Expected income for a mid-table season: ${money(projection(s, c))}. Each season starts with a transfer budget of half the balance (none in debt) and a wage budget of 70% of the expected income, never below the wage bill + 15%. Renewing a player at the same wage always fits.</p>`;
   },
 };
@@ -338,10 +341,31 @@ views.Scouting = () => {
     const c = clubOfPlayer(p), e = estimate(s, p, c);
     return `<tr><td>${star(p.id)}</td>${nameBtn(p, 'view')}<td>${clubCell(c)}</td>${estCells(p, e)}<td>${e.ovr[0] < e.ovr[1] && s.scouts.some(x => !x.task) ? `<button data-act="scoutPlayer" data-id="${p.id}">Scout</button>` : ''}</td></tr>`;
   });
-  const days = Object.entries(TASKS).map(([k, t]) => `${k === 'free' ? 'the free agents' : 'a ' + k}: ${t.days} days, to ${t.level}%`).join(' · ');
-  return `<h2>Scouts</h2><p class="dim">Send a scout to watch a player, a club, a division or the free agents. When he reports, you know everyone he watched: ${days}. What you know fades over two seasons, and Premier League players are always known.</p>
+  const days = Object.entries(TASKS).map(([k, t]) => `${k === 'free' ? 'the free agents' : 'a ' + k}: ${taskDays(s, k)} days, to ${t.level}%`).join(' · ');
+  return `<h2>Scouts</h2><p class="dim">Send a scout to watch a player, a club, a division or the free agents. When he reports, you know everyone he watched: ${days}. What you know fades over two seasons, and Premier League players are always known. Your scouting staff level (Staff) sets how many scouts you have and how fast they work.</p>
     <div class="wrap"><table>${scouts}</table></div>
     <h2>Shortlist</h2>${list.length ? `<div class="wrap"><table><tr><th></th><th>Name</th><th>Club</th>${EST_HEAD.replace('<th>Name</th>', '')}<th></th></tr>${list.join('')}</table></div>` : '<p class="dim">Empty: add players with ☆ on Transfers or a profile.</p>'}`;
+};
+
+views.Staff = () => {
+  const c = myClub(s), std = STANDARD[Math.min(c.div, STANDARD.length - 1)];
+  const effect = {
+    coaching: l => `young players grow ×${COACHING[l - 1]} as fast; youth intake ${2 + l} a year`,
+    scouting: l => `${SCOUTS[l - 1]} scout${SCOUTS[l - 1] > 1 ? 's' : ''}, reports in ×${SCOUT_SPEED[l - 1]} the time`,
+    medical: l => `injuries last ×${MEDICAL[l - 1]} as long`,
+  };
+  const row = a => `<tr><td>${a[0].toUpperCase() + a.slice(1)}</td><td><select data-act="staff" data-field="${a}">${options([1, 2, 3, 4, 5].map(l => [String(l), `Level ${l} · ${perWeek(STAFF_COST[l - 1])}`]), String(c.staff[a]))}</select></td><td class="dim">${effect[a](c.staff[a])}</td></tr>`;
+  const extra = staffBill(s, c);
+  return `<h2>Staff</h2><p class="dim">Your club's budget already pays for level ${std} staff in every area (the ${esc(s.divisions[c.div].name)} standard). Each area above it costs the difference every week, and below it saves it; the difference counts against your wage budget.</p>
+    <div class="wrap"><table>${AREAS.map(row).join('')}</table></div>
+    <p>Beyond the standard: <b>${extra < 0 ? 'saving ' + perWeek(-extra) : perWeek(extra)}</b> · wage bill ${perWeek(wageBill(c))} · wage budget ${perWeek(s.wageBudget)}</p>`;
+};
+
+views.Youth = () => {
+  const rows = byPos(s.youth).map(p => { const [lo, hi] = ceilingRange(s, p); return `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${overall(p)}</td><td class="n">${lo}–${hi}</td>
+    <td><button data-act="promote" data-id="${p.id}">Promote (${perWeek(wage(p))})</button> <button data-act="releaseYouth" data-id="${p.id}">Release</button></td></tr>`; }).join('');
+  return `<h2>Youth squad (${s.youth.length}/${YOUTH_MAX})</h2><p class="dim">Youngsters train every week but play no matches and earn nothing. A new intake arrives each summer; at ${LEAVE_AGE} those still here leave. Ceiling: the overall your coaches think he can reach (better coaching, a closer guess). When contracts end and the first team runs short, the best youth player in the position steps up.</p>
+    ${rows ? `<div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Ceiling</th><th></th></tr>${rows}</table></div>` : '<p class="dim">Empty until the summer intake.</p>'}`;
 };
 
 const actions = {
@@ -391,6 +415,9 @@ const actions = {
     const [kind, id] = el.value.split(':');
     msg = assign(s, k, id === undefined ? { kind } : { kind, id: +id }) || 'Scout sent.';
   },
+  staff(_, el) { msg = setStaff(s, el.dataset.field, +el.value) || 'Staff changed.'; },
+  promote(id) { msg = promote(s, id, MAX_SQUAD) || 'Promoted to the first team.'; },
+  releaseYouth(id) { msg = release(s, id) || 'Released.'; if (viewing === id) viewing = null; },
   scoutPlayer(id) { const k = s.scouts.findIndex(x => !x.task); msg = k < 0 ? 'Every scout is busy.' : assign(s, k, { kind: 'player', id }) || `Scout ${k + 1} sent: report in ${TASKS.player.days} days.`; },
   bid(id) { msg = bid(s, id, feeOf(id)) || 'Bid accepted: he has signed.'; },
   counter(id) { msg = acceptCounter(s, id) || 'Deal done: he has signed.'; },
