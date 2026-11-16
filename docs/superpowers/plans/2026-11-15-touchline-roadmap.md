@@ -39,6 +39,8 @@ Phase 9 note: staff scale squad dynamics. Coaches scale `GROWTH` and `INTENSITY`
 Phase 6 notes (decided 2026-11-16):
 - Phase 7 uses each club's `fin.balance` for bids, pays release clauses (`p.contract.clause`), and replaces the rule that a free agent costs his value as a fee.
 - Phase 10's board acts on debt and sets the season budgets that `seasonBudgets()` in `src/finance.js` now sets with fixed shares.
+- AI clubs in the EFL run at a loss (Championship wages are about 1.2× income) and drift into debt; Phase 7 must re-tune club money before AI bids use `fin.balance`.
+- The wage budget floor (wage bill × 1.15) lets a manager raise wages every season; Phase 10's board should tie the wage budget to income and debt.
 
 ## Architecture decisions that hold for every phase
 

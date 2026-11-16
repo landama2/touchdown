@@ -25,3 +25,4 @@ Small quirks in Touchline's rules that a curious player can find and use. They a
 ## Design decisions that came out of this list
 
 - **Free agents partly carry over (2026-11-15).** The free-agent list used to be fully regenerated each season. It is to keep half of the previous list (aged one year, retirees dropped) and top up with new players. Scheduled in `docs/superpowers/plans/2026-11-15-touchline-phase-1b-real-world.md`, Task 1.
+| 16 | **The academy conveyor.** When contracts end and your squad drops below 16, the academy sends free 17-19-year-olds, and they are worth real money at a big club. Fill the squad with veterans on one-season deals, sell the academy kids, let the veterans' contracts end, and new kids arrive. It costs squad quality and is capped by squad size. | Running short of money at a Championship club? Sign cheap 33-year-olds for a season and sell the kids. | `expireContracts()` and `academy()` in `src/contracts.js` | Phase 6 |
