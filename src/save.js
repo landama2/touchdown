@@ -8,7 +8,7 @@ import { defaultTraining } from './training.js';
 import { startContract } from './contracts.js';
 import { newBooks, seasonBudgets } from './finance.js';
 
-export const SAVE_VERSION = 7; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets
+export const SAVE_VERSION = 8; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans
 export const KEY = 'touchline.save';
 
 export const serialize = state => JSON.stringify(state);
@@ -20,7 +20,8 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
   && Array.isArray(s.bench) && !!s.tactics && Array.isArray(s.tactics.slots) && !!s.fam && typeof s.fam === 'object'
   && Array.isArray(s.days) && Number.isInteger(s.next) && Array.isArray(s.playoffs) && Array.isArray(s.records) && (s.cup === null || typeof s.cup === 'object')
   && !!s.training && !!s.training.ind && typeof s.training.ind === 'object' && Array.isArray(s.news)
-  && Number.isFinite(s.wageBudget) && s.clubs.every(c => c.fin && Number.isFinite(c.fin.balance) && !!c.fin.season);
+  && Number.isFinite(s.wageBudget) && s.clubs.every(c => c.fin && Number.isFinite(c.fin.balance) && !!c.fin.season)
+  && Array.isArray(s.offers) && !!s.talks && Array.isArray(s.deals) && s.clubs.every(c => Number.isFinite(c.lentPay));
 
 // MIGRATIONS[v] upgrades a save from version v to v + 1.
 const MIGRATIONS = {
@@ -54,6 +55,7 @@ const MIGRATIONS = {
     s.wageBudget = 0;
     if (s.me !== null) seasonBudgets(s);
   },
+  7: s => { s.offers = []; s.talks = { win: null, by: {} }; s.deals = []; for (const c of s.clubs) c.lentPay = 0; }, // the market opens
 };
 
 export function deserialize(text) {
