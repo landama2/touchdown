@@ -8,6 +8,7 @@ import {
   post, startCareer, acceptJob, declineJob, openOffer, askBoard,
 } from '../src/career.js';
 import { MINI } from './fixtures/mini.js';
+import { serialize, deserialize } from '../src/save.js';
 
 const world = seed => createWorld(seed, MINI);
 // MINI: Top League clubs 0-3 (Alpha strongest), Middle League 4-13, Low League 14-19.
@@ -186,4 +187,47 @@ test('a career season plays out: boards move, the inbox fills, and the world sta
   assert.ok(a.clubs.some(c => c.conf !== START));
   assert.ok(a.inbox.length > 1);
   assert.ok(a.inbox.every(n => Number.isInteger(n.season) && typeof n.read === 'boolean'));
+});
+
+test('a summer sacking is recorded under the season it ended, and that club does not offer the job back that summer', () => {
+  const s = world(1);
+  startCareer(s, 5);
+  s.career.rep = 100; // within reach of every club
+  s.clubs[5].conf = 0; s.clubs[5].games = MIN_GAMES;
+  s.season++; s.day = -1; // as endSeason leaves the state before its boardDay
+  boardDay(s);
+  assert.equal(s.me, null);
+  assert.deepEqual(s.career.spells.map(x => [x.club, x.to, x.how]), [[5, s.season - 1, 'sacked']]);
+  assert.ok(s.jobs.some(j => j.club === 5 && !j.offered));
+});
+
+test('a human sacking through the real game loop: out of work, the world plays on and saves', () => {
+  const s = world(2);
+  startCareer(s, 10);
+  while (s.clubs[10].games < MIN_GAMES) playDay(s);
+  s.clubs[10].conf = 0;
+  playDay(s);
+  assert.equal(s.me, null);
+  assert.deepEqual(s.career.spells.map(x => [x.club, x.how]), [[10, 'sacked']]);
+  assert.equal(s.career.spells[0].to, s.season);
+  for (let i = 0; i < 5; i++) playDay(s);
+  assert.deepEqual(deserialize(serialize(s)), s);
+  while (!s.done) playDay(s);
+  endSeason(s);
+  assert.equal(s.me, null);
+  assert.deepEqual(deserialize(serialize(s)), s);
+});
+
+test('a vacancy opened on the last day of the season carries into the next through endSeason', () => {
+  const s = world(3);
+  startCareer(s, 10);
+  while (s.next < s.days.length - 1) playDay(s);
+  s.clubs[10].conf = 100;
+  s.clubs[12].conf = 0; s.clubs[12].games = MIN_GAMES;
+  const season = s.season;
+  playDay(s);
+  assert.ok(s.done && s.jobs.some(j => j.club === 12 && j.season === season));
+  endSeason(s);
+  assert.equal(s.season, season + 1);
+  assert.deepEqual(s.jobs.filter(j => j.club === 12).map(j => [j.season, j.until]), [[s.season, VACANCY_DAYS - 1]]);
 });

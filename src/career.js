@@ -127,10 +127,11 @@ function hire(s, id) {
   post(s, targets(s, id));
 }
 // The human manager leaves the club ('sacked' or 'left'): it gets a new manager after a vacancy.
+const ended = s => s.day < 0 ? s.season - 1 : s.season; // the season being left: the end-of-season board check runs after the rollover
 function leave(s, how) {
   const c = s.clubs[s.me];
   c.conf = START; c.games = 0;
-  Object.assign(s.career.spells.at(-1), { to: s.season, how });
+  Object.assign(s.career.spells.at(-1), { to: ended(s), how });
   s.jobs.push({ club: c.id, season: s.season, until: s.day + VACANCY_DAYS, offered: false });
   s.me = null; s.live = null; s.youth = []; s.scouts = []; s.offers = []; s.talks = { win: null, by: {} }; s.budget = 0; s.wageBudget = 0;
 }
@@ -138,7 +139,7 @@ function leave(s, how) {
 // and, while the manager has a club, it is bigger than that club.
 const wants = (s, id) => id !== s.me && s.career.rep >= level(s, id) - REP.gate && (s.me === null || level(s, id) > level(s, s.me));
 function offer(s, j) {
-  if (j.offered || !s.career || !wants(s, j.club) || s.career.spells.some(x => x.club === j.club && x.how === 'sacked' && x.to === s.season)) return;
+  if (j.offered || !s.career || !wants(s, j.club) || s.career.spells.some(x => x.club === j.club && x.how === 'sacked' && x.to === ended(s))) return;
   j.offered = true;
   s.news.push({ type: 'job', club: j.club, until: j.until });
 }

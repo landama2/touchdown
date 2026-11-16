@@ -32,6 +32,7 @@ Small quirks in Touchline's rules that a curious player can find and use. They a
 | 24 | **The rescue job.** Every new manager starts with the board at 60 and cannot be sacked before six league games, however deep the crisis they inherit; that includes the summer check. The revolving door spins for AI clubs too: some sack twice in a season. | Out of work in spring? Take a job with fewer than six league games left: you cannot be sacked before the next season's sixth match. | `hire()`, `boardDay()` in `src/career.js` | Phase 10 |
 | 25 | **Ask at the right time.** The board answers a budget request by a fixed rule: yes when its confidence is 60 or more and the club is out of debt. There is no luck in it. | Check the meter on Board after a winning run, then ask. | `askBoard()` in `src/career.js` | Phase 10 |
 | 26 | **A new job, a new request.** The board hears one budget request a season, but the count starts again with every new job. Ask your old board, then take an offer and ask your new one. | Ask for more money just before accepting a job offer; ask again at your new club. | `hire()` and `askBoard()` in `src/career.js` | Phase 10 |
+| 27 | **Second chances.** A club that sacked you will not offer you its job in the same season, but a vacancy there later on, even one carried into the next season, can come back to you. | Sacked by a big club? Keep your reputation up and watch for its next vacancy. | `offer()` in `src/career.js` | Phase 10 |
 
 ## Design decisions that came out of this list
 
