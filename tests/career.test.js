@@ -4,7 +4,7 @@ import { createWorld } from '../src/world.js';
 import { takeClub, playDay, endSeason, table } from '../src/season.js';
 import {
   START, SACK, MIN_GAMES, MOVE, REP_START, REP, ASK, VACANCY_DAYS, INBOX_MAX,
-  expectedPoints, expectedPos, bands, leagueTarget, cupTarget, level, afterLeague, afterCup, boardDay, seasonReview,
+  expectedPoints, expectedPos, bands, leagueTarget, cupTarget, level, afterLeague, afterCup, boardDay, boardWeeks, seasonReview,
   post, startCareer, acceptJob, declineJob, openOffer, askBoard,
 } from '../src/career.js';
 import { MINI } from './fixtures/mini.js';
@@ -48,6 +48,24 @@ test('going out of the cup early costs confidence; winning from the target round
   afterCup(s, t, 0);
   assert.equal(s.clubs[0].conf, START - MOVE.cupOut);
   assert.equal(s.clubs[19].conf, START + MOVE.cupWin);
+});
+
+test('each week the board looks at the table and the books', () => {
+  const s = world(1);
+  startCareer(s, 13); // the weakest Middle League club: its target is to stay up (7th of 10)
+  for (const c of s.clubs) c.st.p = MIN_GAMES;
+  s.clubs[13].st.pts = 30;           // top of the Middle League: on target
+  s.clubs[4].st.pts = -1;            // the strongest Middle League club, bottom: 3+ places below 'win the league'
+  s.clubs[14].fin.balance = -1;      // top of the Low League on goal difference ties (lowest id) and in debt
+  boardWeeks(s, 2);
+  assert.equal(s.clubs[13].conf, START + 2 * MOVE.onTarget);
+  assert.equal(s.clubs[4].conf, START - 2 * MOVE.below);
+  assert.equal(s.clubs[14].conf, START + 2 * (MOVE.onTarget - MOVE.debt));
+  s.wageBudget = 0;                  // the human club now over its wage budget
+  boardWeeks(s, 1);
+  assert.equal(s.clubs[13].conf, START + 3 * MOVE.onTarget - MOVE.overBudget);
+  const early = world(1); early.clubs[4].st.pts = -1; boardWeeks(early, 1);
+  assert.equal(early.clubs[4].conf, START); // before MIN_GAMES league games the table does not count yet
 });
 
 test('an AI club under the line sacks its manager after MIN_GAMES league games and opens a vacancy', () => {
@@ -111,6 +129,20 @@ test('declining an offer withdraws it', () => {
   boardDay(s);
   assert.ok(openOffer(s, 12));
   declineJob(s, 12);
+  assert.ok(!openOffer(s, 12));
+});
+
+test('a vacancy still open when the season ends stays open for the first days of the next', () => {
+  const s = world(1);
+  startCareer(s, 15);
+  s.clubs[12].conf = 0; s.clubs[12].games = MIN_GAMES;
+  boardDay(s);
+  assert.ok(openOffer(s, 12));
+  s.season++; s.day = -1; // as endSeason leaves the state before its boardDay
+  boardDay(s);
+  assert.ok(openOffer(s, 12));
+  assert.equal(s.jobs.find(j => j.club === 12).until, VACANCY_DAYS - 1);
+  s.day = VACANCY_DAYS; boardDay(s);
   assert.ok(!openOffer(s, 12));
 });
 
