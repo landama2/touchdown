@@ -369,7 +369,7 @@ export function refusal(from, to, p) {
   return null;
 }
 
-// AI money: half the balance for fees (nothing in debt); wages up to 90% of a season's expected income.
+// AI money: half the balance for fees (nothing in debt); wages up to a season's expected income.
 const room = c => Math.max(0, AI.room * c.fin.balance);
 const wageRoom = (s, c, w) => (wageBill(c) + w) * 52 <= AI.wageShare * projection(s, c);
 const aiWage = p => Math.max(wage(p), p.contract?.wage ?? 0);
