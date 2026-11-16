@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorld } from '../src/world.js';
+import { createWorld, BOARD_START, REP_START } from '../src/world.js';
 import { MINI } from './fixtures/mini.js';
 import { takeClub, kickOff, playDay, endSeason, table } from '../src/season.js';
 // A save as Phase 3 (version 4) wrote it: league rounds instead of a calendar; no cup, play-offs or records.
@@ -44,6 +44,7 @@ test('deserialize returns null for missing, corrupt or wrong-version saves', () 
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), offers: undefined })), null); // market missing
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), known: undefined })), null); // scouting missing
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), youth: undefined })), null); // staff and youth missing
+  assert.equal(deserialize(serialize({ ...createWorld(1, MINI), inbox: undefined })), null); // career missing
   const noContract = createWorld(1, MINI); noContract.clubs[0].players[0].contract = null;
   assert.equal(deserialize(serialize(noContract)), null); // a squad player without a contract
 });
@@ -236,4 +237,27 @@ test('a version 9 save gets standard staff and an empty youth squad, and plays o
   assert.deepEqual(b.clubs.map(c => c.staff), a.clubs.map(c => c.staff));
   assert.ok(b.clubs.every(c => c.fin.season.staff === 0));
   assert.ok(playDay(b).length);
+});
+
+// A save as Phase 9 (version 10) wrote it: no boards, no career, no vacancies, no inbox.
+function asV10(s) {
+  const o = JSON.parse(serialize(s));
+  o.version = 10;
+  for (const k of ['career', 'jobs', 'inbox']) delete o[k];
+  for (const c of o.clubs) { delete c.conf; delete c.games; }
+  return o;
+}
+
+test('a version 10 save gets boards, a career at its club and an empty inbox, and plays on', () => {
+  const a = createWorld(28, MINI);
+  takeClub(a, 9);
+  playDay(a);
+  const b = deserialize(JSON.stringify(asV10(a)));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.ok(b.clubs.every(c => c.conf === BOARD_START && c.games === c.st.p));
+  assert.deepEqual(b.career, { rep: REP_START, asked: null, warned: null, spells: [{ club: 9, from: a.season, to: null, how: null }] });
+  assert.deepEqual([b.jobs, b.inbox], [[], []]);
+  assert.ok(playDay(b).length);
+  const picker = deserialize(JSON.stringify(asV10(createWorld(28, MINI))));
+  assert.equal(picker.career, null); // no club picked yet: the club picker, not a career
 });
