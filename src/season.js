@@ -13,6 +13,7 @@ import { expireContracts, academy } from './contracts.js';
 import { MIN_SQUAD, inWindow, windowId, marketDay, returnLoans } from './market.js';
 import { scoutDays, staffScouts, prune } from './scouting.js';
 import { aiStaff, standardStaff } from './staff.js';
+import { intake, trainYouth, ageYouth } from './youth.js';
 
 const RETIRE_AGE = 35;
 const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
@@ -71,6 +72,7 @@ export function takeClub(s, clubId) {
   s.offers = [];
   s.clubs[clubId].staff = standardStaff(s.clubs[clubId].div);
   s.scouts = []; staffScouts(s);
+  s.youth = []; intake(s, makeRng(s.seed ^ 0x9e3779b9)); // a first intake, without touching the career's random sequence
   seasonBudgets(s);
 }
 
@@ -135,6 +137,7 @@ function between(s, rng, from, to) {
       s.news.push({ type: 'injury', club: c.id, id: p.id, name: p.name, injury: p.inj.name, days: p.inj.days, training: true });
   }
   passDays(s.market, to - from, INTENSITY.Normal.recover);
+  trainYouth(s, rng, weeks);
 }
 
 // Plays the next calendar day: every match of every competition on it. A live match is played out
@@ -218,6 +221,7 @@ export function endSeason(s) {
   s.divisions.forEach((dv, d) => { dv.clubIds = s.clubs.filter(c => c.div === d).map(c => c.id); });
   returnLoans(s);
   h.left = expireContracts(s, rng, MIN_SQUAD);
+  h.youthLeft = s.me === null ? [] : ageYouth(s);
   h.deals = s.deals.filter(d => d.from === s.me || d.to === s.me);
   s.deals = [];
   s.history.push(h);
@@ -240,6 +244,7 @@ export function endSeason(s) {
   s.season++;
   for (const c of s.clubs) c.fin.season = blankLedger();
   aiStaff(s); // AI clubs' staff follow their new division
+  if (s.me !== null) intake(s, rng);
   prune(s);
   const exists = new Set([...s.clubs.flatMap(c => c.players), ...s.market].map(p => p.id));
   s.shortlist = s.shortlist.filter(id => exists.has(id)); // retired players drop off

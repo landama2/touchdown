@@ -1,5 +1,6 @@
 import { createPlayer, overall, value } from './player.js';
 import { wage, wageBill, staffBill } from './finance.js';
+import { fromYouth } from './youth.js';
 
 // Contracts. p.contract = { wage (euros a week), until (the last season it covers), clause (release
 // clause in euros, or null) }; free agents have none. A contract ends after season `until`.
@@ -48,7 +49,8 @@ export function academy(s, rng, c, pos) {
 
 // End of season s.season (before the season number moves on): contracts ending now. AI clubs renew
 // them; the human club's players leave for the free-agent list. If that leaves the squad below
-// minSquad, academy players in the leavers' positions fill the gap. Returns the leavers' names.
+// minSquad, academy players in the leavers' positions fill the gap: the best of the youth squad
+// there, else a new one. Returns the leavers' names.
 export function expireContracts(s, rng, minSquad) {
   const left = [];
   for (const c of s.clubs) for (const p of [...c.players]) {
@@ -59,6 +61,6 @@ export function expireContracts(s, rng, minSquad) {
     s.market.push(p);
     left.push(p);
   }
-  if (s.me !== null) for (const p of left) if (s.clubs[s.me].players.length < minSquad) s.clubs[s.me].players.push(academy(s, rng, s.clubs[s.me], p.pos));
+  if (s.me !== null) for (const p of left) if (s.clubs[s.me].players.length < minSquad) s.clubs[s.me].players.push(fromYouth(s, p.pos) ?? academy(s, rng, s.clubs[s.me], p.pos));
   return left.map(p => p.name);
 }
