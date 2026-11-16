@@ -43,6 +43,7 @@ test('deserialize returns null for missing, corrupt or wrong-version saves', () 
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), wageBudget: undefined })), null); // books missing
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), offers: undefined })), null); // market missing
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), known: undefined })), null); // scouting missing
+  assert.equal(deserialize(serialize({ ...createWorld(1, MINI), youth: undefined })), null); // staff and youth missing
   const noContract = createWorld(1, MINI); noContract.clubs[0].players[0].contract = null;
   assert.equal(deserialize(serialize(noContract)), null); // a squad player without a contract
 });
@@ -214,4 +215,25 @@ test('a version 8 save gets scouts and an empty notebook, and plays on', () => {
   assert.deepEqual([b.known, b.shortlist], [{}, []]);
   assert.deepEqual(b.scouts, a.scouts.map(() => ({ task: null, days: 0 })));
   assert.ok(b.scouts.length > 0 && playDay(b).length);
+});
+
+// A save as Phase 8 (version 9) wrote it: no staff, no youth squad, no staff line in the ledger.
+function asV9(s) {
+  const o = JSON.parse(serialize(s));
+  o.version = 9;
+  delete o.youth;
+  for (const c of o.clubs) { delete c.staff; delete c.fin.season.staff; }
+  return o;
+}
+
+test('a version 9 save gets standard staff and an empty youth squad, and plays on', () => {
+  const a = createWorld(27, MINI);
+  takeClub(a, 14);
+  playDay(a);
+  const b = deserialize(JSON.stringify(asV9(a)));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.deepEqual(b.youth, []);
+  assert.deepEqual(b.clubs.map(c => c.staff), a.clubs.map(c => c.staff));
+  assert.ok(b.clubs.every(c => c.fin.season.staff === 0));
+  assert.ok(playDay(b).length);
 });

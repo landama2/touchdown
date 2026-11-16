@@ -8,8 +8,9 @@ import { defaultTraining } from './training.js';
 import { startContract } from './contracts.js';
 import { newBooks, seasonBudgets } from './finance.js';
 import { staffScouts } from './scouting.js';
+import { aiStaff, standardStaff } from './staff.js';
 
-export const SAVE_VERSION = 9; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist
+export const SAVE_VERSION = 10; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad
 export const KEY = 'touchline.save';
 
 export const serialize = state => JSON.stringify(state);
@@ -23,7 +24,8 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
   && !!s.training && !!s.training.ind && typeof s.training.ind === 'object' && Array.isArray(s.news)
   && Number.isFinite(s.wageBudget) && s.clubs.every(c => c.fin && Number.isFinite(c.fin.balance) && !!c.fin.season)
   && Array.isArray(s.offers) && !!s.talks && Array.isArray(s.deals) && s.clubs.every(c => Number.isFinite(c.lentPay))
-  && !!s.known && typeof s.known === 'object' && Array.isArray(s.scouts) && Array.isArray(s.shortlist);
+  && !!s.known && typeof s.known === 'object' && Array.isArray(s.scouts) && Array.isArray(s.shortlist)
+  && Array.isArray(s.youth) && s.clubs.every(c => c.staff && Number.isInteger(c.staff.coaching));
 
 // MIGRATIONS[v] upgrades a save from version v to v + 1.
 const MIGRATIONS = {
@@ -59,6 +61,10 @@ const MIGRATIONS = {
   },
   7: s => { s.offers = []; s.talks = { win: null, by: {} }; s.deals = []; for (const c of s.clubs) c.lentPay = 0; }, // the market opens
   8: s => { s.known = {}; s.shortlist = []; s.scouts = []; staffScouts(s); }, // scouts start with nothing known
+  9: s => { // standard staff everywhere, an empty youth squad (the first intake comes in the summer); staff costs in the ledger
+    aiStaff(s); if (s.me !== null) s.clubs[s.me].staff = standardStaff(s.clubs[s.me].div);
+    s.youth = []; for (const c of s.clubs) c.fin.season.staff = 0;
+  },
 };
 
 export function deserialize(text) {
