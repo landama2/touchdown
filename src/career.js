@@ -145,8 +145,10 @@ function offer(s, j) {
 
 // Sackings, once a day and at the end of the season: a club whose manager has had MIN_GAMES league
 // matches and whose confidence is under the line sacks the manager. The human manager's line is lower with
-// reputation, and he is warned on the way down. Vacancies close after VACANCY_DAYS.
+// reputation, and he is warned on the way down. Vacancies close after VACANCY_DAYS; one still open at the end of
+// a season stays open for the next season's first VACANCY_DAYS days.
 export function boardDay(s) {
+  for (const j of s.jobs) if (j.season === s.season - 1) Object.assign(j, { season: s.season, until: VACANCY_DAYS - 1 }); // open at the summer rollover: open for the new season's first days
   s.jobs = s.jobs.filter(j => j.season === s.season && j.until >= s.day);
   for (const c of s.clubs) {
     const human = c.id === s.me && !!s.career;
