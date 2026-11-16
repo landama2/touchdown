@@ -23,7 +23,10 @@ export const blankLedger = () => ({ broadcast: 0, sponsor: 0, gate: 0, prize: 0,
 export const wage = p => Math.max(500, round(WAGE.at50 * Math.exp(WAGE.growth * (overall(p) - 50)) * (p.age < 21 ? 0.6 : 1), 500));
 export const sponsorship = c => round(SPONSOR.at8 * Math.exp(SPONSOR.growth * (c.quality - 8)), 1e5);
 export const gate = c => round(GATE.at8 * Math.exp(GATE.growth * (c.quality - 8)), 1e3);
-export const wageBill = c => c.players.reduce((t, p) => t + (p.contract?.wage ?? 0), 0);
+// What club c pays a week: its players' wages (for a player on loan there, the borrower's part) plus
+// the part it still pays of the players it has lent out (c.lentPay).
+export const lentPart = p => Math.round(p.contract.wage * (1 - p.loan.share)); // the lender's part
+export const wageBill = c => c.players.reduce((t, p) => t + (p.contract?.wage ?? 0) - (p.loan ? lentPart(p) : 0), 0) + (c.lentPay ?? 0);
 
 // A season's income for club c finishing mid-table: broadcast, half the merit pot, sponsorship, a gate per home league match.
 export function projection(s, c) {

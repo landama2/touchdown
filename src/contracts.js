@@ -24,13 +24,14 @@ export function terms(s, p) {
   return { wage: Math.max(p.contract?.wage ?? 0, ask), years: yearsFor(p.age), clause: star ? Math.round(CLAUSE.times * value(p) / 1e5) * 1e5 : null };
 }
 
-export const canRenew = (s, p) => !!p.contract && p.contract.until <= s.season + 1 && s.season + yearsFor(p.age) > p.contract.until;
+export const canRenew = (s, p) => !!p.contract && !p.loan && p.contract.until <= s.season + 1 && s.season + yearsFor(p.age) > p.contract.until;
 
 // Accepts the terms of the human club's player `id`: the new terms apply now and the contract runs to
 // `season + years`. A raise must fit the wage budget; the same wage always does. Error message or null.
 export function renew(s, id) {
   const club = s.clubs[s.me], p = club.players.find(x => x.id === id);
   if (!p) return 'Not your player.';
+  if (p.loan) return `${p.name} is on loan here.`;
   if (!canRenew(s, p)) return 'He has more than a season left on his contract.';
   const t = terms(s, p);
   if (t.wage > p.contract.wage && wageBill(club) - p.contract.wage + t.wage > s.wageBudget) return 'Over the wage budget.';
