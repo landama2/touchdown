@@ -5,7 +5,7 @@ import { createWorld } from '../src/world.js';
 import { terms } from '../src/contracts.js';
 import { wageBill } from '../src/finance.js';
 import { MINI } from './fixtures/mini.js';
-import { takeClub, myClub } from '../src/season.js';
+import { takeClub, myClub, playDay, endSeason } from '../src/season.js';
 import { buy, sell, MIN_SQUAD, MAX_SQUAD, SELL_RATE } from '../src/transfers.js';
 
 const fresh = () => { const s = createWorld(11, MINI); takeClub(s, 12); s.wageBudget = 1e12; return s; };
@@ -67,4 +67,15 @@ test('selling: the price into the transfer budget and the books; the player leav
   assert.equal(club.fin.balance, bal + Math.round(value(p) * SELL_RATE));
   assert.equal(club.fin.season.sales, Math.round(value(p) * SELL_RATE));
   assert.equal(p.contract, null);
+});
+
+test('a signing after the last match day counts from next season and survives the rollover', () => {
+  const s = fresh();
+  while (!s.done) playDay(s);
+  const p = [...s.market].sort((a, b) => value(a) - value(b))[0], t = terms(s, p);
+  s.budget = 1e12;
+  assert.equal(buy(s, p.id), null);
+  assert.equal(p.contract.until, s.season + t.years);
+  endSeason(s);
+  assert.ok(myClub(s).players.includes(p));
 });

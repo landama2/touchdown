@@ -43,6 +43,7 @@ test('renew: only in the last two seasons of a contract and within the wage budg
   const long = club.players.find(p => p.contract.until >= s.season + 2), soon = club.players.find(p => p.contract.until === s.season);
   assert.ok(!canRenew(s, long) && canRenew(s, soon));
   assert.ok(renew(s, long.id));
+  soon.contract.wage = Math.max(0, terms(s, soon).wage - 1000); // so the renewal is a raise
   s.wageBudget = wageBill(club) - 1;
   assert.equal(renew(s, soon.id), 'Over the wage budget.');
   s.wageBudget = 1e12;
@@ -50,6 +51,21 @@ test('renew: only in the last two seasons of a contract and within the wage budg
   assert.equal(renew(s, soon.id), null);
   assert.deepEqual(soon.contract, { wage: t.wage, until: s.season + t.years, clause: t.clause });
   assert.ok(renew(s, s.clubs[0].players[0].id)); // not your player
+});
+
+test('renew: a renewal at the same wage always fits, even with no wage budget', () => {
+  const s = fresh(2), soon = s.clubs[6].players.find(p => p.contract.until === s.season);
+  soon.contract.wage = terms(s, soon).wage;
+  s.wageBudget = 0;
+  assert.equal(renew(s, soon.id), null);
+});
+
+test('canRenew: only when the new deal would run longer than the old one', () => {
+  const s = fresh(2), p = s.clubs[6].players[0];
+  p.age = 33; p.contract.until = s.season + 1;
+  assert.ok(!canRenew(s, p));
+  p.contract.until = s.season;
+  assert.ok(canRenew(s, p));
 });
 
 test('expiry: AI clubs renew; your players whose contracts end leave, and academy players fill the squad to the minimum', () => {

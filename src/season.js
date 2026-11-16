@@ -226,6 +226,5 @@ export function endSeason(s) {
   s.seed = rng.seed;
   s.season++;
   for (const c of s.clubs) c.fin.season = blankLedger();
-  if (s.me !== null) seasonBudgets(s);
-  if (s.me !== null) fixLineup(s);
+  if (s.me !== null) { seasonBudgets(s); fixLineup(s); }
 }

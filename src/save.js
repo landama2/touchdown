@@ -14,7 +14,7 @@ export const KEY = 'touchline.save';
 export const serialize = state => JSON.stringify(state);
 
 const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
-  && Array.isArray(s.clubs) && Array.isArray(s.divisions) && Array.isArray(s.market)
+  && Array.isArray(s.clubs) && s.clubs.every(c => c.players.every(p => p.contract)) && Array.isArray(s.divisions) && Array.isArray(s.market)
   && Array.isArray(s.lineup) && Array.isArray(s.history) && (s.me === null || s.clubs[s.me] !== undefined)
   && (s.live === null || (typeof s.live === 'object' && Array.isArray(s.live.sides)))
   && Array.isArray(s.bench) && !!s.tactics && Array.isArray(s.tactics.slots) && !!s.fam && typeof s.fam === 'object'

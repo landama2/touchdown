@@ -41,6 +41,8 @@ test('deserialize returns null for missing, corrupt or wrong-version saves', () 
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), me: 999 })), null); // dangling club index
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), training: { ...defaultTraining(), ind: null } })), null); // null is not an object here
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), wageBudget: undefined })), null); // books missing
+  const noContract = createWorld(1, MINI); noContract.clubs[0].players[0].contract = null;
+  assert.equal(deserialize(serialize(noContract)), null); // a squad player without a contract
 });
 
 test('a career saved in the middle of a live match resumes identically', () => {

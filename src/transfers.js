@@ -16,7 +16,7 @@ export function buy(s, id) {
   if (cost > s.budget) return 'Not enough transfer budget.';
   if (wageBill(club) + t.wage > s.wageBudget) return 'Over the wage budget.';
   s.budget -= cost; club.fin.balance -= cost; club.fin.season.fees += cost;
-  p.contract = { wage: t.wage, until: s.season + t.years - 1, clause: t.clause };
+  p.contract = { wage: t.wage, until: s.season + t.years - (s.done ? 0 : 1), clause: t.clause }; // a signing after the last match day counts from next season
   club.players.push(...s.market.splice(i, 1));
   return null;
 }

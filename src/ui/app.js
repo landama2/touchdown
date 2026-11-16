@@ -177,8 +177,10 @@ const views = {
     if (s.done) {
       const pos = table(s, d).indexOf(s.me), z = zone(s, d, pos);
       const playoff = s.playoffs[d] ? s.playoffs[d].rounds[1]?.ties[0].w === s.me : d > 0 && pos === 2; // no play-offs (old save): 3rd goes up
+      const going = myClub(s).players.filter(p => p.contract.until === s.season), n = going.length;
       h += `<h2>Season ${s.season} complete — you finished ${pos + 1} in the ${esc(s.divisions[d].name)}.</h2>
         <p>${z === 'up' || playoff ? 'Promoted!' : z === 'down' ? 'Relegated.' : z === 'playoff' ? 'The play-offs did not go your way.' : ''}</p>
+        ${n ? `<p class="oop">${n} contract${n > 1 ? 's' : ''} end now and ${n > 1 ? 'these players leave' : 'this player leaves'}: ${going.map(p => esc(p.name)).join(', ')}. <button data-act="tab" data-tab="Contracts">Contracts</button></p>` : ''}
         <button class="primary" data-act="end">Start next season</button>`;
     } else {
       const f = myFixture(s), today = s.days[s.next];
@@ -254,7 +256,7 @@ const views = {
       <p>Balance <b>${money(c.fin.balance)}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(c))} of ${perWeek(s.wageBudget)}</p>
       <div class="wrap"><table><tr><th>Income this season</th><th></th></tr>${line('Broadcasting', L.broadcast)}${line('Sponsorship', L.sponsor)}${line('Gate receipts', L.gate)}${line('Prize money', L.prize)}${line('Player sales', L.sales)}
       <tr><th>Costs this season</th><th></th></tr>${line('Wages', L.wages)}${line('Transfer fees', L.fees)}</table></div>
-      <p class="dim">Expected income for a mid-table season: ${money(projection(s, c))}. Each season starts with a transfer budget of half the balance (none in debt) and a wage budget of 70% of the expected income.</p>`;
+      <p class="dim">Expected income for a mid-table season: ${money(projection(s, c))}. Each season starts with a transfer budget of half the balance (none in debt) and a wage budget of 70% of the expected income, never below the wage bill + 15%. Renewing a player at the same wage always fits.</p>`;
   },
 };
 

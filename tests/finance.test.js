@@ -72,10 +72,10 @@ test('season budgets: half the balance to spend on fees (none in debt), wages up
   const s = books(), c = s.clubs[0];
   c.fin.balance = 10e6; seasonBudgets(s);
   assert.equal(s.budget, 5e6);
-  assert.ok(s.wageBudget >= 1.05 * wageBill(c) && s.wageBudget % 1e3 === 0);
+  assert.ok(s.wageBudget >= 1.15 * wageBill(c) && s.wageBudget % 1e3 === 0);
   assert.ok(Math.abs(s.wageBudget - 0.7 * projection(s, c) / 52) <= 500);
   c.fin.balance = -1e6; seasonBudgets(s);
   assert.equal(s.budget, 0);
   const rich = books(12, [5e6]); seasonBudgets(rich);
-  assert.equal(rich.wageBudget, Math.round(1.05 * 5e6 / 1e3) * 1e3);
+  assert.equal(rich.wageBudget, Math.round(1.15 * 5e6 / 1e3) * 1e3);
 });
