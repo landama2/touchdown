@@ -180,7 +180,7 @@ const views = {
       const going = myClub(s).players.filter(p => p.contract.until === s.season), n = going.length;
       h += `<h2>Season ${s.season} complete — you finished ${pos + 1} in the ${esc(s.divisions[d].name)}.</h2>
         <p>${z === 'up' || playoff ? 'Promoted!' : z === 'down' ? 'Relegated.' : z === 'playoff' ? 'The play-offs did not go your way.' : ''}</p>
-        ${n ? `<p class="oop">${n} contract${n > 1 ? 's' : ''} end now and ${n > 1 ? 'these players leave' : 'this player leaves'}: ${going.map(p => esc(p.name)).join(', ')}. <button data-act="tab" data-tab="Contracts">Contracts</button></p>` : ''}
+        ${n ? `<p class="oop">${n} contract${n > 1 ? 's end' : ' ends'} now and ${n > 1 ? 'these players leave' : 'this player leaves'}: ${going.map(p => esc(p.name)).join(', ')}. <button data-act="tab" data-tab="Contracts">Contracts</button></p>` : ''}
         <button class="primary" data-act="end">Start next season</button>`;
     } else {
       const f = myFixture(s), today = s.days[s.next];
