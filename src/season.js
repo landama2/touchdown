@@ -12,6 +12,7 @@ import { payWeeks, payGate, payPrizes, seasonBudgets, blankLedger } from './fina
 import { expireContracts, academy } from './contracts.js';
 import { MIN_SQUAD, inWindow, windowId, marketDay, returnLoans } from './market.js';
 import { scoutDays, staffScouts, prune } from './scouting.js';
+import { aiStaff, standardStaff } from './staff.js';
 
 const RETIRE_AGE = 35;
 const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
@@ -68,6 +69,7 @@ export function takeClub(s, clubId) {
   s.fam = newFam();
   s.training = defaultTraining();
   s.offers = [];
+  s.clubs[clubId].staff = standardStaff(s.clubs[clubId].div);
   s.scouts = []; staffScouts(s);
   seasonBudgets(s);
 }
@@ -237,6 +239,7 @@ export function endSeason(s) {
   s.seed = rng.seed;
   s.season++;
   for (const c of s.clubs) c.fin.season = blankLedger();
+  aiStaff(s); // AI clubs' staff follow their new division
   prune(s);
   const exists = new Set([...s.clubs.flatMap(c => c.players), ...s.market].map(p => p.id));
   s.shortlist = s.shortlist.filter(id => exists.has(id)); // retired players drop off

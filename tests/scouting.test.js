@@ -4,7 +4,8 @@ import { ALL_ATTRS, overall, value } from '../src/player.js';
 import { createWorld } from '../src/world.js';
 import { takeClub, playDay, endSeason } from '../src/season.js';
 import { MINI } from './fixtures/mini.js';
-import { MAX_WIDTH, OVR_WIDTH, FADE_DAYS, YEAR, SCOUTS, TASKS, clock, fogged, knowledge, ranges, estimate, learn, prune, scoutCount, staffScouts,
+import { SCOUTS, SCOUT_SPEED } from '../src/staff.js';
+import { MAX_WIDTH, OVR_WIDTH, FADE_DAYS, YEAR, TASKS, taskDays, clock, fogged, knowledge, ranges, estimate, learn, prune, scoutCount, staffScouts,
   assign, recall, scoutDays, toggleShortlist, searchPlayers } from '../src/scouting.js';
 
 // Managing Kilo (bottom division, club 14), with its scouts. Clubs 0-3 are the top division: famous, fully known.
@@ -55,9 +56,10 @@ test('knowledge fades by 100 every FADE_DAYS; learning never lowers it; prune fo
   assert.deepEqual(s.known, {});
 });
 
-test('scouts: as many as your division allows, sent on tasks, reporting after the task\'s days', () => {
+test('scouts: as many as your scouting level allows, sent on tasks, reporting after the task\'s days', () => {
   const s = fresh(4);
-  assert.equal(s.scouts.length, SCOUTS[2]);
+  assert.equal(s.scouts.length, SCOUTS[s.clubs[14].staff.scouting - 1]);
+  s.clubs[14].staff.scouting = 3; staffScouts(s); // level 3: the base number of scouts and days
   assert.equal(scoutCount(s), SCOUTS[2]);
   assert.equal(assign(s, 9, { kind: 'free' }), 'No such scout.');
   assert.equal(assign(s, 0, { kind: 'player', id: s.clubs[0].players[0].id }), 'You already know everything about him.');
@@ -76,8 +78,9 @@ test('scouts: as many as your division allows, sent on tasks, reporting after th
   assert.equal(s.news.at(-1).n, s.clubs[5].players.length);
   assign(s, 0, { kind: 'division', id: 1 }); recall(s, 0);
   assert.deepEqual(s.scouts[0], { task: null, days: 0 });
-  s.clubs[14].div = 0; staffScouts(s);
-  assert.equal(s.scouts.length, SCOUTS[0]);
+  s.clubs[14].staff.scouting = 5; staffScouts(s);
+  assert.equal(s.scouts.length, SCOUTS[4]);
+  assert.equal(taskDays(s, 'division'), Math.round(TASKS.division.days * SCOUT_SPEED[4]));
 });
 
 test('search: filters on what you can tell, best estimate first; your own players never appear', () => {

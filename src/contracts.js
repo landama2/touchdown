@@ -1,5 +1,5 @@
 import { createPlayer, overall, value } from './player.js';
-import { wage, wageBill } from './finance.js';
+import { wage, wageBill, staffBill } from './finance.js';
 
 // Contracts. p.contract = { wage (euros a week), until (the last season it covers), clause (release
 // clause in euros, or null) }; free agents have none. A contract ends after season `until`.
@@ -34,7 +34,7 @@ export function renew(s, id) {
   if (p.loan) return `${p.name} is on loan here.`;
   if (!canRenew(s, p)) return 'He has more than a season left on his contract.';
   const t = terms(s, p);
-  if (t.wage > p.contract.wage && wageBill(club) - p.contract.wage + t.wage > s.wageBudget) return 'Over the wage budget.';
+  if (t.wage > p.contract.wage && wageBill(club) + staffBill(s, club) - p.contract.wage + t.wage > s.wageBudget) return 'Over the wage budget.';
   p.contract = { wage: t.wage, until: s.season + t.years, clause: t.clause };
   return null;
 }

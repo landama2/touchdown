@@ -10,6 +10,7 @@ import { blankRecords } from './awards.js';
 import { defaultTraining } from './training.js';
 import { newBooks } from './finance.js';
 import { startContract } from './contracts.js';
+import { aiStaff } from './staff.js';
 import { LEAGUES } from './data/england.js';
 import STATS, { CALIBRATION } from './data/england-stats.js';
 
@@ -66,6 +67,7 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
     s.records.push(blankRecords());
   });
   for (const c of s.clubs) { for (const p of c.players) p.contract = startContract(p, s.season); c.fin = newBooks(s, c); c.lentPay = 0; }
+  aiStaff(s);
   for (let i = 0; i < MARKET_SIZE; i++) s.market.push(newFreeAgent(rng, s.nid++));
   scheduleSeason(s, rng);
   s.seed = rng.seed;

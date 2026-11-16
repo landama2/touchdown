@@ -1,5 +1,5 @@
 import { value } from './player.js';
-import { wageBill } from './finance.js';
+import { wageBill, staffBill } from './finance.js';
 import { terms } from './contracts.js';
 import { MIN_SQUAD, MAX_SQUAD, FLOOR, WALKAWAY, ROUNDS, QUICK_SALE, MAX_LOANS, LOAN_AGE, round10k, eur, windowOpen, windowId, justJoined,
   loanEnd, loanPay, asking, signingFee, refusal, move, lend, loanable } from './market.js';
@@ -16,7 +16,7 @@ function atClub(s, id) {
   for (const c of s.clubs) if (c.id !== s.me) { const p = c.players.find(x => x.id === id); if (p) return { p, c }; }
   return null;
 }
-const overWages = (s, extra) => wageBill(s.clubs[s.me]) + extra > s.wageBudget;
+const overWages = (s, extra) => wageBill(s.clubs[s.me]) + staffBill(s, s.clubs[s.me]) + extra > s.wageBudget; // staff beyond the standard count too
 // Why the human club can't take p on now (any deal), or null.
 function cannotTake(s, p) {
   if (s.clubs[s.me].players.length >= MAX_SQUAD) return `Squad is full (${MAX_SQUAD}).`;

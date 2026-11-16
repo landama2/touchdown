@@ -1,5 +1,6 @@
 import { ALL_ATTRS, overall, valueAt } from './player.js';
 import { loanable } from './market.js';
+import { scoutsFor, scoutSpeed } from './staff.js';
 
 // What the human club knows about other players. Premier League players are famous and fully known;
 // so is everyone at your own club. Everyone else (EFL squads, free agents) shows each attribute as a
@@ -7,10 +8,10 @@ import { loanable } from './market.js';
 // hold the true value. Scout reports raise knowledge
 // (0-100) and narrow the ranges; knowledge fades by 100 every FADE_DAYS. Knowledge lives in
 // s.known = { [playerId]: { k, at } } (k at clock time `at`). AI clubs always see the truth.
-// Scouts: s.scouts = [{ task: null | { kind, id }, days }], SCOUTS[division] of them.
+// Scouts: s.scouts = [{ task: null | { kind, id }, days }]; how many, and how fast they report, follow
+// the club's scouting staff level (src/staff.js).
 export const MAX_WIDTH = 3, OVR_WIDTH = 8, FADE_DAYS = 730, YEAR = 365;
-export const SCOUTS = [3, 2, 2];                 // by the human club's division (lower divisions use the last)
-export const TASKS = {                          // days to report, knowledge reached for everyone covered
+export const TASKS = {                          // days to report (at scouting level 3), knowledge reached for everyone covered
   player: { days: 7, level: 100 },
   club: { days: 14, level: 80 },
   division: { days: 28, level: 50 },
@@ -60,8 +61,9 @@ export function prune(s) {
   for (const id in s.known) if (s.known[id].k - 100 * (now - s.known[id].at) / FADE_DAYS <= 0) delete s.known[id];
 }
 
-export const scoutCount = s => SCOUTS[Math.min(s.clubs[s.me].div, SCOUTS.length - 1)];
-// Keeps the human club's scouts at its division's number (a scout let go loses his task).
+export const scoutCount = s => scoutsFor(s.clubs[s.me]);
+export const taskDays = (s, kind) => Math.round(TASKS[kind].days * scoutSpeed(s.clubs[s.me]));
+// Keeps the human club's scouts at its scouting level's number (a scout let go loses his task).
 export function staffScouts(s) {
   const n = s.me === null ? 0 : scoutCount(s);
   s.scouts = s.scouts.slice(0, n);
@@ -91,7 +93,7 @@ export function assign(s, k, task) {
   }
   if (task.kind === 'club' && (!s.clubs[task.id] || task.id === s.me)) return 'Pick another club.';
   if (task.kind === 'division' && !s.divisions[task.id]) return 'No such division.';
-  scout.task = { ...task }; scout.days = TASKS[task.kind].days;
+  scout.task = { ...task }; scout.days = taskDays(s, task.kind);
   return null;
 }
 export const recall = (s, k) => { if (s.scouts[k]) { s.scouts[k].task = null; s.scouts[k].days = 0; } };

@@ -12,12 +12,14 @@ export const MERIT = [2.5e6, 0.1e6, 0.05e6];  // per place counted from the bott
 export const CUP_PRIZE = [2e6, 1e6];          // winner, runner-up
 const SPONSOR = { at8: 0.8e6, growth: 0.46 }, GATE = { at8: 125e3, growth: 0.32 }; // quality 8 ≈ a League One club (tuned in Phase 6)
 const WAGE = { at50: 2.2e3, growth: 0.112 };  // a week: overall 50 ≈ a League One regular, 93 ≈ €270k (tuned in Phase 6)
+export const STANDARD = [4, 3, 2];                          // the staff level (src/staff.js) a division's books already pay for
+export const STAFF_COST = [2e3, 6e3, 20e3, 60e3, 180e3];     // a week per staff area, by level 1-5
 const START_SHARE = 0.25, TRANSFER_SHARE = 0.5, WAGE_SHARE = 0.7, WAGE_HEADROOM = 1.15; // (raised from 1.05 in Phase 6 review: 5% left no room to renew)
 
 const byDiv = (list, d) => list[Math.min(d, list.length - 1)];
 const round = (x, step) => Math.round(x / step) * step;
 
-export const blankLedger = () => ({ broadcast: 0, sponsor: 0, gate: 0, prize: 0, wages: 0, fees: 0, sales: 0 });
+export const blankLedger = () => ({ broadcast: 0, sponsor: 0, gate: 0, prize: 0, wages: 0, fees: 0, sales: 0, staff: 0 });
 
 // What a player earns a week at his level; under-21s less. Contracts start from it.
 export const wage = p => Math.max(500, round(WAGE.at50 * Math.exp(WAGE.growth * (overall(p) - 50)) * (p.age < 21 ? 0.6 : 1), 500));
@@ -27,6 +29,14 @@ export const gate = c => round(GATE.at8 * Math.exp(GATE.growth * (c.quality - 8)
 // the part it still pays of the players it has lent out (c.lentPay).
 export const lentPart = p => Math.round(p.contract.wage * (1 - p.loan.share)); // the lender's part
 export const wageBill = c => c.players.reduce((t, p) => t + (p.contract?.wage ?? 0) - (p.loan ? lentPart(p) : 0), 0) + (c.lentPay ?? 0);
+
+// What club c pays a week for staff beyond its division's standard (negative: a saving). Only the
+// human club: every club's books were calibrated with standard staff, and AI clubs keep them.
+export function staffBill(s, c) {
+  if (c.id !== s.me || !c.staff) return 0;
+  const std = STAFF_COST[byDiv(STANDARD, c.div) - 1];
+  return Object.values(c.staff).reduce((t, level) => t + STAFF_COST[level - 1] - std, 0);
+}
 
 // A season's income for club c finishing mid-table: broadcast, half the merit pot, sponsorship, a gate per home league match.
 export function projection(s, c) {
@@ -38,13 +48,15 @@ export const newBooks = (s, c) => ({ balance: round(START_SHARE * projection(s, 
 // Positive amount = income, negative = cost; the ledger records its size.
 function book(c, key, amount) { c.fin.balance += amount; c.fin.season[key] += Math.abs(amount); }
 
-// `weeks` weekly instalments for every club: broadcast and sponsorship in, wages out.
+// `weeks` weekly instalments for every club: broadcast and sponsorship in, wages and (the human club's) extra staff out.
 export function payWeeks(s, weeks) {
   if (weeks <= 0) return;
   for (const c of s.clubs) {
     book(c, 'broadcast', weeks * Math.round(byDiv(BROADCAST, c.div) / SEASON_WEEKS));
     book(c, 'sponsor', weeks * Math.round(sponsorship(c) / SEASON_WEEKS));
     book(c, 'wages', -weeks * Math.round(wageBill(c) * 52 / SEASON_WEEKS));
+    const staff = weeks * Math.round(staffBill(s, c) * 52 / SEASON_WEEKS); // net: a saving lowers it
+    c.fin.balance -= staff; c.fin.season.staff += staff;
   }
 }
 export const payGate = c => book(c, 'gate', gate(c));

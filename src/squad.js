@@ -1,4 +1,5 @@
 import { overall } from './player.js';
+import { medicalScale } from './staff.js';
 
 // Squad dynamics: what matches and the days between them leave on players. Every player (club
 // squads and free agents) carries the fields of freshState() in player.js:
@@ -34,11 +35,12 @@ export function readiness(p) {
     - EDGE.sharp * (100 - p.sharp) / (100 - SHARP_MIN);
 }
 
-// Gives player p an injury from INJURIES; a worse one replaces a milder one he already has. Returns p.inj.
-export function injure(rng, p) {
+// Gives player p an injury from INJURIES, its length × scale (his club's medical staff: src/staff.js);
+// a worse one replaces a milder one he already has. Returns p.inj.
+export function injure(rng, p, scale = 1) {
   let r = rng.next() * INJURIES.reduce((t, x) => t + x[3], 0), pick = INJURIES[INJURIES.length - 1];
   for (const x of INJURIES) if ((r -= x[3]) < 0) { pick = x; break; }
-  const days = rng.int(pick[1], pick[2]);
+  const days = Math.max(1, Math.round(rng.int(pick[1], pick[2]) * scale));
   if (!p.inj || days > p.inj.days) p.inj = { name: pick[0], days };
   return p.inj;
 }
@@ -81,7 +83,7 @@ export function afterMatch(s, m, comp, rng) {
         p.sharp = Math.min(100, p.sharp + SHARP_GAIN);
         p.form = [...p.form, rt].slice(-FORM_LEN);
         mood += Math.round((rt - 6.5) * MORALE_RATING);
-        if (x.inj) { injure(rng, p); news.push({ type: 'injury', club: club.id, id: p.id, name: p.name, injury: p.inj.name, days: p.inj.days }); }
+        if (x.inj) { injure(rng, p, medicalScale(club)); news.push({ type: 'injury', club: club.id, id: p.id, name: p.name, injury: p.inj.name, days: p.inj.days }); }
       } else if (!out && regulars.has(p.id)) mood -= MORALE_DROPPED;
       p.morale = clamp(p.morale + mood, 0, 100);
     }
