@@ -41,6 +41,7 @@ test('deserialize returns null for missing, corrupt or wrong-version saves', () 
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), me: 999 })), null); // dangling club index
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), training: { ...defaultTraining(), ind: null } })), null); // null is not an object here
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), wageBudget: undefined })), null); // books missing
+  assert.equal(deserialize(serialize({ ...createWorld(1, MINI), offers: undefined })), null); // market missing
   const noContract = createWorld(1, MINI); noContract.clubs[0].players[0].contract = null;
   assert.equal(deserialize(serialize(noContract)), null); // a squad player without a contract
 });
@@ -172,5 +173,25 @@ test('a version 6 save gets contracts, books and budgets, and plays on', () => {
   }
   assert.ok(b.market.every(p => p.contract === null));
   assert.ok(b.wageBudget > 0 && b.budget >= 0);
+  assert.ok(playDay(b).length);
+});
+
+// A save as Phase 6 (version 7) wrote it: no offers, talks, deals or loans.
+function asV7(s) {
+  const o = JSON.parse(serialize(s));
+  o.version = 7;
+  delete o.offers; delete o.talks; delete o.deals;
+  for (const c of o.clubs) delete c.lentPay;
+  return o;
+}
+
+test('a version 7 save opens the transfer market and plays on', () => {
+  const a = createWorld(25, MINI);
+  takeClub(a, 3);
+  playDay(a);
+  const b = deserialize(JSON.stringify(asV7(a)));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.deepEqual([b.offers, b.talks, b.deals], [[], { win: null, by: {} }, []]);
+  assert.ok(b.clubs.every(c => c.lentPay === 0));
   assert.ok(playDay(b).length);
 });
