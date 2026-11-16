@@ -11,6 +11,7 @@ import { defaultTraining, trainingOf, recoverRate, trainWeek, INTENSITY } from '
 import { payWeeks, payGate, payPrizes, seasonBudgets, blankLedger } from './finance.js';
 import { expireContracts, academy } from './contracts.js';
 import { MIN_SQUAD, inWindow, windowId, marketDay, returnLoans } from './market.js';
+import { scoutDays, staffScouts, prune } from './scouting.js';
 
 const RETIRE_AGE = 35;
 const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
@@ -67,6 +68,7 @@ export function takeClub(s, clubId) {
   s.fam = newFam();
   s.training = defaultTraining();
   s.offers = [];
+  s.scouts = []; staffScouts(s);
   seasonBudgets(s);
 }
 
@@ -137,7 +139,8 @@ function between(s, rng, from, to) {
 // first; whatever is left of it is handed to the assistant manager (AI substitutions for both sides).
 // Each match leaves condition, form, morale, injuries and bans on both squads (src/squad.js); then
 // the days up to the next match day pass. A match day in a transfer window is also a market day
-// (src/market.js). s.news collects the human club's injuries, bans and transfer news.
+// (src/market.js). Scouts work every day that passes (src/scouting.js). s.news collects the human
+// club's injuries, bans, transfer news and scout reports.
 // Returns the day's results: matchResult() plus item (the calendar item it belongs to).
 export function playDay(s) {
   if (s.done) return null;
@@ -159,6 +162,7 @@ export function playDay(s) {
   payWeeks(s, Math.floor(today.day / 7) - Math.floor(s.day / 7)); // weekly instalments, every club
   if (played) learnFam(s.fam, s.formation); // the formation you prepared, not mid-match switches
   s.live = null;
+  scoutDays(s, today.day - s.day); // scouts work every day up to this one
   s.day = today.day;
   if (inWindow(s.day)) marketDay(s, rng); // AI clubs trade; offers for your players
   s.next++;
@@ -233,5 +237,8 @@ export function endSeason(s) {
   s.seed = rng.seed;
   s.season++;
   for (const c of s.clubs) c.fin.season = blankLedger();
-  if (s.me !== null) { seasonBudgets(s); fixLineup(s); }
+  prune(s);
+  const exists = new Set([...s.clubs.flatMap(c => c.players), ...s.market].map(p => p.id));
+  s.shortlist = s.shortlist.filter(id => exists.has(id)); // retired players drop off
+  if (s.me !== null) { seasonBudgets(s); staffScouts(s); fixLineup(s); }
 }

@@ -97,3 +97,27 @@ test('search: filters on what you can tell, best estimate first; your own player
   assert.ok(searchPlayers(s, { name: name.toUpperCase() }).some(x => x.p.name === name));
   assert.equal(searchPlayers(s, {}, 5).length, 5);
 });
+
+test('scouts work as the days pass in the season; a free-agent report covers the list', () => {
+  const s = fresh(5);
+  assert.equal(assign(s, 0, { kind: 'free' }), null);
+  let news = [];
+  while (s.scouts[0].task) { playDay(s); news.push(...s.news.filter(n => n.type === 'scout')); }
+  assert.equal(news.length, 1);
+  assert.ok(s.day >= TASKS.free.days - 1);
+  assert.ok(news[0].n > 0 && Object.keys(s.known).length === news[0].n);
+  assert.ok(Object.values(s.known).every(e => e.k === TASKS.free.level)); // free agents signed or released later that day aside
+});
+
+test('the shortlist: toggled on and off; retired players drop off at the end of the season; scouts follow your division', () => {
+  const s = fresh(7), p = s.clubs[4].players[0], old = s.clubs[5].players[0];
+  toggleShortlist(s, p.id); toggleShortlist(s, old.id);
+  assert.deepEqual(s.shortlist, [p.id, old.id]);
+  toggleShortlist(s, p.id);
+  assert.deepEqual(s.shortlist, [old.id]);
+  old.age = 35;
+  while (!s.done) playDay(s);
+  endSeason(s);
+  assert.deepEqual(s.shortlist, []);
+  assert.equal(s.scouts.length, scoutCount(s));
+});
