@@ -8,7 +8,7 @@ import { yearsFor } from '../src/contracts.js';
 import { takeClub, playDay, endSeason } from '../src/season.js';
 import { MINI } from './fixtures/mini.js';
 import { MIN_SQUAD, MAX_SQUAD, SUMMER_END, JANUARY, LOAN_SHARE, inWindow, windowOpen, windowId, justJoined, loanEnd, bar, regular,
-  asking, signingFee, refusal, move, lend, loanable, returnLoans, marketDay } from '../src/market.js';
+  asking, signingFee, refusal, REP_PULL, REP_DROP, move, lend, loanable, returnLoans, marketDay } from '../src/market.js';
 
 const world = seed => createWorld(seed, MINI);
 const sumBalances = s => s.clubs.reduce((t, c) => t + c.fin.balance, 0);
@@ -57,6 +57,16 @@ test('refusal: nobody drops two divisions; regulars under 31 won\'t drop one or 
     change();
     assert.equal(refusal(top, mid, star), null);
   }
+});
+
+test("refusal: a manager's reputation widens the quality gap a regular accepts, and from REP_DROP he drops a division", () => {
+  const s = world(3), top = s.clubs[0], mid = s.clubs[4], [star] = byOverall(top);
+  star.age = 25; star.morale = 50;
+  const weak = { ...top, id: 99, quality: top.quality - 4 };
+  assert.match(refusal(top, weak, star, REP_PULL - 1), /weaker club/);
+  assert.equal(refusal(top, weak, star, REP_PULL + 1), null); // a gap of 3 + rep / REP_PULL
+  assert.match(refusal(top, mid, star, REP_DROP - 1), /drop a division/);
+  assert.equal(refusal(top, mid, star, REP_DROP), null);
 });
 
 test('a move: the buyer pays, the seller is paid, nothing else changes hands; contracts and the log follow', () => {

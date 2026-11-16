@@ -52,13 +52,16 @@ export const signingFee = p => round10k(SIGNING_FEE * value(p));
 // Why p (at club `from`; null for a free agent) won't join club `to`, or null. Free agents, unhappy
 // players (morale under 40) and listed players go anywhere within a division's drop. Nobody drops two
 // divisions; a regular under 31 won't drop one, nor join a club 3+ quality weaker in his division.
-export function refusal(from, to, p) {
+// A manager's reputation `rep` (0-100; the human's, src/career.js) widens that gap by rep / REP_PULL,
+// and from REP_DROP a regular drops a division to play for that manager.
+export const REP_PULL = 25, REP_DROP = 75;
+export function refusal(from, to, p, rep = 0) {
   if (!from || p.morale < 40) return null;
   const drop = to.div - from.div;
   if (drop >= 2) return `${p.name} won't drop two divisions.`;
   if (p.age >= 31 || p.listed || !regular(from, p)) return null;
-  if (drop === 1) return `${p.name} won't give up a regular place to drop a division.`;
-  if (drop === 0 && to.quality < from.quality - 3) return `${p.name} won't join a weaker club.`;
+  if (drop === 1 && rep < REP_DROP) return `${p.name} won't give up a regular place to drop a division.`;
+  if (drop === 0 && to.quality < from.quality - 3 - rep / REP_PULL) return `${p.name} won't join a weaker club.`;
   return null;
 }
 
