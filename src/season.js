@@ -10,7 +10,7 @@ import { afterMatch, passDays, offseason } from './squad.js';
 import { defaultTraining, trainingOf, recoverRate, trainWeek, INTENSITY } from './training.js';
 import { payWeeks, payGate, payPrizes, seasonBudgets, blankLedger } from './finance.js';
 import { expireContracts, academy } from './contracts.js';
-import { MIN_SQUAD } from './transfers.js';
+import { MIN_SQUAD, inWindow, windowId, marketDay, returnLoans } from './market.js';
 
 const RETIRE_AGE = 35;
 const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
@@ -66,6 +66,7 @@ export function takeClub(s, clubId) {
   s.tactics = defaultTactics(slots(s.formation));
   s.fam = newFam();
   s.training = defaultTraining();
+  s.offers = [];
   seasonBudgets(s);
 }
 
@@ -135,7 +136,8 @@ function between(s, rng, from, to) {
 // Plays the next calendar day: every match of every competition on it. A live match is played out
 // first; whatever is left of it is handed to the assistant manager (AI substitutions for both sides).
 // Each match leaves condition, form, morale, injuries and bans on both squads (src/squad.js); then
-// the days up to the next match day pass. s.news collects the human club's new injuries and bans.
+// the days up to the next match day pass. A match day in a transfer window is also a market day
+// (src/market.js). s.news collects the human club's injuries, bans and transfer news.
 // Returns the day's results: matchResult() plus item (the calendar item it belongs to).
 export function playDay(s) {
   if (s.done) return null;
@@ -158,8 +160,10 @@ export function playDay(s) {
   if (played) learnFam(s.fam, s.formation); // the formation you prepared, not mid-match switches
   s.live = null;
   s.day = today.day;
+  if (inWindow(s.day)) marketDay(s, rng); // AI clubs trade; offers for your players
   s.next++;
   s.done = s.next === s.days.length;
+  s.offers = s.offers.filter(o => o.win === windowId(s)); // offers lapse when the window shuts
   if (!s.done) between(s, rng, today.day, s.days[s.next].day);
   s.seed = rng.seed; // after the training draws too, so the next day does not reuse them
   return s.last;
@@ -206,7 +210,10 @@ export function endSeason(s) {
   }
   h.divs.forEach((x, d) => { for (const id of x.up) s.clubs[id].div = d - 1; for (const id of x.down) s.clubs[id].div = d + 1; });
   s.divisions.forEach((dv, d) => { dv.clubIds = s.clubs.filter(c => c.div === d).map(c => c.id); });
+  returnLoans(s);
   h.left = expireContracts(s, rng, MIN_SQUAD);
+  h.deals = s.deals.filter(d => d.from === s.me || d.to === s.me);
+  s.deals = [];
   s.history.push(h);
   for (const c of s.clubs) {
     c.st = blankStats();

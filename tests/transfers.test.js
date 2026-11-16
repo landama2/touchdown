@@ -118,6 +118,18 @@ test('offers: a listed player draws bids; accept, reject or counter', () => {
   assert.ok(!s.offers.some(o => o.id === o3.id));
 });
 
+test('offers lapse when the window shuts; a player listed for loan goes out on loan', () => {
+  const s = fresh(), me = myClub(s), kid = me.players.find(p => p.age <= 23);
+  kid.contract.until = 3;
+  assert.equal(setListing(s, kid.id, 'loan'), null);
+  for (const p of me.players) if (p !== kid) setListing(s, p.id, 'sale');
+  while (s.day < SUMMER_END) playDay(s);
+  assert.equal(s.offers.length, 0);
+  assert.ok(kid.loan?.from === 14 && !me.players.includes(kid), 'kid not loaned out');
+  const old = me.players.find(p => p.age > 23);
+  assert.match(setListing(s, old.id, 'loan'), /23 or under/);
+});
+
 test('a signing after the last match day counts from next season and survives the rollover', () => {
   const s = fresh();
   while (!s.done) playDay(s);
