@@ -42,6 +42,7 @@ test('deserialize returns null for missing, corrupt or wrong-version saves', () 
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), training: { ...defaultTraining(), ind: null } })), null); // null is not an object here
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), wageBudget: undefined })), null); // books missing
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), offers: undefined })), null); // market missing
+  assert.equal(deserialize(serialize({ ...createWorld(1, MINI), known: undefined })), null); // scouting missing
   const noContract = createWorld(1, MINI); noContract.clubs[0].players[0].contract = null;
   assert.equal(deserialize(serialize(noContract)), null); // a squad player without a contract
 });
@@ -194,4 +195,23 @@ test('a version 7 save opens the transfer market and plays on', () => {
   assert.deepEqual([b.offers, b.talks, b.deals], [[], { win: null, by: {} }, []]);
   assert.ok(b.clubs.every(c => c.lentPay === 0));
   assert.ok(playDay(b).length);
+});
+
+// A save as Phase 7 (version 8) wrote it: no scouting.
+function asV8(s) {
+  const o = JSON.parse(serialize(s));
+  o.version = 8;
+  delete o.known; delete o.scouts; delete o.shortlist;
+  return o;
+}
+
+test('a version 8 save gets scouts and an empty notebook, and plays on', () => {
+  const a = createWorld(26, MINI);
+  takeClub(a, 14);
+  playDay(a);
+  const b = deserialize(JSON.stringify(asV8(a)));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.deepEqual([b.known, b.shortlist], [{}, []]);
+  assert.deepEqual(b.scouts, a.scouts.map(() => ({ task: null, days: 0 })));
+  assert.ok(b.scouts.length > 0 && playDay(b).length);
 });

@@ -7,8 +7,9 @@ import { freshState } from './player.js';
 import { defaultTraining } from './training.js';
 import { startContract } from './contracts.js';
 import { newBooks, seasonBudgets } from './finance.js';
+import { staffScouts } from './scouting.js';
 
-export const SAVE_VERSION = 8; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans
+export const SAVE_VERSION = 9; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist
 export const KEY = 'touchline.save';
 
 export const serialize = state => JSON.stringify(state);
@@ -21,7 +22,8 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
   && Array.isArray(s.days) && Number.isInteger(s.next) && Array.isArray(s.playoffs) && Array.isArray(s.records) && (s.cup === null || typeof s.cup === 'object')
   && !!s.training && !!s.training.ind && typeof s.training.ind === 'object' && Array.isArray(s.news)
   && Number.isFinite(s.wageBudget) && s.clubs.every(c => c.fin && Number.isFinite(c.fin.balance) && !!c.fin.season)
-  && Array.isArray(s.offers) && !!s.talks && Array.isArray(s.deals) && s.clubs.every(c => Number.isFinite(c.lentPay));
+  && Array.isArray(s.offers) && !!s.talks && Array.isArray(s.deals) && s.clubs.every(c => Number.isFinite(c.lentPay))
+  && !!s.known && typeof s.known === 'object' && Array.isArray(s.scouts) && Array.isArray(s.shortlist);
 
 // MIGRATIONS[v] upgrades a save from version v to v + 1.
 const MIGRATIONS = {
@@ -56,6 +58,7 @@ const MIGRATIONS = {
     if (s.me !== null) seasonBudgets(s);
   },
   7: s => { s.offers = []; s.talks = { win: null, by: {} }; s.deals = []; for (const c of s.clubs) c.lentPay = 0; }, // the market opens
+  8: s => { s.known = {}; s.shortlist = []; s.scouts = []; staffScouts(s); }, // scouts start with nothing known
 };
 
 export function deserialize(text) {
