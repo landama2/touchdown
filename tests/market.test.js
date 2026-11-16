@@ -104,3 +104,20 @@ test('a market day: an AI club short of keepers signs one, and nobody else spend
   assert.equal(c.fin.balance, bal - signingFee(signed));
   assert.ok(s.clubs.every(x => x === c || x.fin.season.fees === 0));
 });
+
+test('a season of market days: AI clubs trade, squads stay between the limits, money only leaves as signing-on fees', () => {
+  const s = world(7);
+  takeClub(s, 6);
+  const total = sumBalances(s), income = () => s.clubs.reduce((t, c) => t + c.fin.season.broadcast + c.fin.season.sponsor + c.fin.season.gate - c.fin.season.wages, 0);
+  while (!s.done) playDay(s);
+  const deals = s.deals.filter(d => d.from !== null && d.to !== null && !d.loan);
+  assert.ok(deals.length > 0, 'no club-to-club deals');
+  assert.ok(deals.every(d => d.day < SUMMER_END || (d.day >= JANUARY[0] && d.day <= JANUARY[1])));
+  const fees = s.deals.filter(d => d.from === null).reduce((t, d) => t + d.fee, 0);
+  assert.equal(sumBalances(s), total + income() - fees);
+  assert.ok(s.clubs.every(c => c.id === 6 || (c.players.length >= MIN_SQUAD && c.players.length <= MAX_SQUAD)), s.clubs.map(c => c.players.length).join());
+  endSeason(s);
+  assert.ok(s.clubs.every(c => c.players.every(p => !p.loan || p.loan.until >= s.season)));
+  const lent = c => s.clubs.flatMap(x => x.players).filter(p => p.loan?.from === c.id).reduce((t, p) => t + Math.round(p.contract.wage * (1 - p.loan.share)), 0);
+  assert.ok(s.clubs.every(c => c.lentPay === lent(c)));
+});

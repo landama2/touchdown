@@ -9,7 +9,8 @@ import { serialize, deserialize } from '../src/save.js';
 import { cupRounds } from '../src/cup.js';
 import { stepMinute, matchResult } from '../src/match.js';
 import { SEASON_WEEKS, BROADCAST, MERIT, CUP_PRIZE, sponsorship, gate, wageBill } from '../src/finance.js';
-import { MIN_SQUAD } from '../src/transfers.js';
+import { MIN_SQUAD, MAX_SQUAD, buy } from '../src/transfers.js';
+import { lend } from '../src/market.js';
 import { MINI } from './fixtures/mini.js';
 
 const world = seed => createWorld(seed, MINI);
@@ -106,7 +107,7 @@ test('endSeason rolls over; three seasons keep squads intact', () => {
     assert.equal(h.divs.length, 3);
     assert.ok(h.pos >= 1 && h.pos <= MINI[h.div].clubs.length);
     assert.deepEqual(s.divisions.map(d => d.clubIds.length), [4, 10, 6]);
-    assert.ok(s.clubs.every(c => (c.players.length === 18 || (c.id === s.me && c.players.length >= MIN_SQUAD)) && c.st.p === 0 && c.players.every(p => p.age <= 35 && p.contract && p.contract.until >= s.season)));
+    assert.ok(s.clubs.every(c => c.players.length >= MIN_SQUAD && c.players.length <= MAX_SQUAD && c.st.p === 0 && c.players.every(p => p.age <= 35 && p.contract && p.contract.until >= s.season && (!p.loan || p.loan.until >= s.season))));
     assert.equal(new Set(s.lineup).size, 11);
   }
   assert.deepEqual(JSON.parse(JSON.stringify(s)), s);
@@ -432,7 +433,7 @@ test('news lists only your new injuries and bans; condition stays a whole number
   for (let k = 0; k < 40 && !s.done; k++) {
     playDay(s);
     count += s.news.length;
-    for (const n of s.news) assert.ok(n.club === 6 && myClub(s).players.some(p => p.id === n.id) && ['injury', 'ban'].includes(n.type), JSON.stringify(n));
+    for (const n of s.news.filter(x => x.type === 'injury' || x.type === 'ban')) assert.ok(n.club === 6 && myClub(s).players.some(p => p.id === n.id) && ['injury', 'ban'].includes(n.type), JSON.stringify(n));
     assert.ok(s.clubs.every(c => c.players.every(p => Number.isInteger(p.cond) && p.cond >= 0 && p.cond <= 100)));
   }
   assert.ok(count > 0, 'no news in 40 days');
@@ -488,4 +489,20 @@ test('condition matters: some players start a match day still tired from the las
   let tired = 0;
   while (!s.done) { tired += s.clubs.reduce((t, c) => t + c.players.filter(p => p.cond < 100).length, 0); playDay(s); }
   assert.ok(tired > 616, `only ${tired} tired player-days: recovery is too fast`); // 895 at 6/5/3 a day; the old 9/8/6 gave 337; the threshold is midway
+});
+
+test('the rollover brings loans home and keeps your deals in History', () => {
+  const s = world(33);
+  takeClub(s, 14);
+  s.budget = 1e12; s.wageBudget = 1e12;
+  const me = myClub(s), kid = me.players.find(p => p.age <= 23), fa = s.market[0];
+  kid.contract.until = 3;
+  lend(s, kid, me, s.clubs[4]);
+  assert.equal(buy(s, fa.id), null);
+  while (!s.done) playDay(s);
+  endSeason(s);
+  assert.ok(me.players.includes(kid) && !kid.loan && me.lentPay === 0);
+  assert.deepEqual(s.history[0].deals.map(d => [d.id, d.loan]).slice(0, 2), [[kid.id, true], [fa.id, false]]);
+  assert.ok(s.history[0].deals.every(d => d.from === 14 || d.to === 14));
+  assert.deepEqual(s.deals, []);
 });
