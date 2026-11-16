@@ -17,6 +17,7 @@ import { AREAS, COACHING, MEDICAL, SCOUTS, SCOUT_SPEED, setStaff } from '../staf
 import { YOUTH_MAX, LEAVE_AGE, ceilingRange, promote, release } from '../youth.js';
 import { wage, wageBill, projection, staffBill, STAFF_COST, STANDARD } from '../finance.js';
 import { terms, canRenew, renew as renewContract } from '../contracts.js';
+import { SACK, MIN_GAMES, ASK, REP, bands, leagueTarget, cupTarget, level, startCareer, acceptJob, declineJob, openOffer, askBoard } from '../career.js';
 import { crestSvg, kitSvg } from './art.js';
 
 // The UI is the only place allowed to touch Date, localStorage and the DOM.
@@ -56,6 +57,13 @@ const NEWS = {
   clause: n => `💶 ${clubName(n.to)} paid ${esc(n.name)}'s ${money(n.fee)} release clause: he has gone.`,
   loan: n => `🔁 ${esc(n.name)} joins ${clubName(n.to)} on loan.`,
   scout: n => `🔎 Scout report on ${taskText(n.task)}: ${n.n} player${n.n === 1 ? '' : 's'} (see Scouting).`,
+  vacancy: n => `📰 ${clubName(n.club)} have sacked their manager.`,
+  job: n => `📨 ${clubName(n.club)} offer you their job (see Inbox).`,
+  warning: n => `⚠️ The ${clubName(n.club)} board is losing patience (confidence ${n.conf}).`,
+  sacked: n => `❌ ${clubName(n.club)} have sacked you.`,
+  target: n => `🎯 The ${clubName(n.club)} board wants you to ${n.league} and reach the ${CUP_NAME} ${cupRoundName(n.cup, s.clubs.length).toLowerCase()}.`,
+  review: n => `📋 Season review: you finished ${n.pos}; the board wanted you to ${n.target}${n.met ? ' — target met' : ' — target missed'}. Reputation ${n.was} → ${n.rep}.`,
+  request: n => `🏦 You asked the board for more ${n.kind} budget: ${n.yes ? 'agreed' : 'refused'}.`,
 };
 const newsText = () => s.news.map(n => NEWS[n.type](n)).join('<br>');
 
@@ -327,7 +335,7 @@ const views = {
       <p>Balance <b>${money(c.fin.balance)}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(c))} of ${perWeek(s.wageBudget)}</p>
       <div class="wrap"><table><tr><th>Income this season</th><th></th></tr>${line('Broadcasting', L.broadcast)}${line('Sponsorship', L.sponsor)}${line('Gate receipts', L.gate)}${line('Prize money', L.prize)}${line('Player sales', L.sales)}
       <tr><th>Costs this season</th><th></th></tr>${line('Wages', L.wages)}${line('Transfer fees', L.fees)}${line('Staff beyond the standard', L.staff)}</table></div>
-      <p class="dim">Expected income for a mid-table season: ${money(projection(s, c))}. Each season starts with a transfer budget of half the balance (none in debt) and a wage budget of 70% of the expected income, never below the wage bill + 15%. Renewing a player at the same wage always fits.</p>`;
+      <p class="dim">Expected income for a mid-table season: ${money(projection(s, c))}. The board sets each season's budgets: half the balance for transfers (none in debt); for wages and staff, 70% of the expected income or what you pay now, whichever is more, plus what your savings can carry over two years. In debt there is no extra, so wages are frozen. Renewing a player at the same wage always fits. You may ask the board for more once a season (Board).</p>`;
   },
 };
 
@@ -368,9 +376,49 @@ views.Youth = () => {
     ${rows ? `<div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Ceiling</th><th></th></tr>${rows}</table></div>` : '<p class="dim">Empty until the summer intake.</p>'}`;
 };
 
+// When a news item happened: 'Season 2, Sat 8 Aug', or 'Season 2, pre-season'.
+const when = n => `Season ${n.season}, ${n.day < 0 ? 'pre-season' : dateLabel(n.day)}`;
+const unread = () => s.inbox.filter(n => !n.read).length;
+const confText = c => `<meter min="0" max="100" low="35" high="60" optimum="100" value="${c.conf}"></meter> ${Math.round(c.conf)}`;
+
+views.Board = () => {
+  const c = myClub(s), b = bands(s, c.div), k = leagueTarget(s, c.id), pos = table(s, c.div).indexOf(c.id) + 1, line = Math.max(0, SACK - s.career.rep / REP.patience);
+  const spell = x => `<tr><td>${clubName(x.club)}</td><td>season ${x.from}${x.to === null ? ' – now' : x.to === x.from ? '' : ` – ${x.to}`}</td><td class="dim">${x.how === 'sacked' ? 'sacked' : x.how === 'left' ? 'left for another job' : ''}</td></tr>`;
+  const asked = s.career.asked === s.season;
+  return `<h2>The board</h2><p>Confidence ${confText(c)} <span class="dim">· below ${Math.round(line)} you are sacked (after ${MIN_GAMES} league games)</span></p>
+    <div class="wrap"><table><tr><th>Target</th><th>Now</th></tr>
+    <tr><td>League: ${esc(b[k][0])} (${b[k][1] === 1 ? '1st' : `top ${b[k][1]}`})</td><td>${pos ? `${pos}${pos === 1 ? 'st' : pos === 2 ? 'nd' : pos === 3 ? 'rd' : 'th'}` : '–'}</td></tr>
+    <tr><td>${CUP_NAME}: reach the ${cupRoundName(cupTarget(s, c.id), s.clubs.length).toLowerCase()}</td><td></td></tr></table></div>
+    <p class="dim">Every league result is weighed against what a squad like yours should get; the board also watches the table each week and does not like debt or a wage bill over budget. Going out of the cup early costs, cup wins from the target round on help. At the end of the season the target is judged, and promotion and relegation count.</p>
+    <h2>Budgets</h2><p>Transfer budget ${money(s.budget)} · wage budget ${perWeek(s.wageBudget)} (wages and staff ${perWeek(wageBill(c) + staffBill(s, c))})</p>
+    <p class="dim">Once a season you may ask for more. The board agrees while its confidence is ${ASK.conf} or more and the club is out of debt; otherwise it says no and thinks less of you for asking.</p>
+    <div class="bar">${asked ? '<span class="dim">You have asked this season.</span>' : `<button data-act="ask" data-field="transfer">Ask for ${Math.round((ASK.transfer - 1) * 100)}% more transfer budget</button> <button data-act="ask" data-field="wage">Ask for ${Math.round((ASK.wage - 1) * 100)}% more wage budget</button>`}</div>
+    <h2>Your reputation: ${s.career.rep}</h2><p class="dim">Your club's size is ${level(s, c.id)} on the same scale. Reputation follows where you finish and the trophies you win, and drops when you are sacked. Clubs up to ${REP.gate} above it may offer you their job when they sack their manager; it buys a little patience from the board and persuades players to join.</p>
+    <h2>Career</h2><div class="wrap"><table>${s.career.spells.map(spell).join('')}</table></div>`;
+};
+
+views.Inbox = () => {
+  const item = n => `<tr class="${n.read ? '' : 'me'}"><td class="dim">${when(n)}</td><td>${NEWS[n.type](n)}${n.type === 'job' && openOffer(s, n.club)
+    ? ` <button class="primary" data-act="acceptJob" data-id="${n.club}">Accept</button> <button data-act="declineJob" data-id="${n.club}">Decline</button> <span class="dim">open until ${dateLabel(s.jobs.find(j => j.club === n.club && j.offered).until)}</span>` : ''}</td></tr>`;
+  const html = `<h2>Inbox</h2>${s.inbox.length ? `<div class="wrap"><table>${[...s.inbox].reverse().map(item).join('')}</table></div>` : '<p class="dim">Nothing yet.</p>'}`;
+  for (const n of s.inbox) n.read = true; // read once shown
+  return html;
+};
+
+// Out of work: the season goes on; job offers arrive in the inbox.
+function outOfWork() {
+  return `<h2>Out of work</h2><p>Reputation ${s.career.rep}. Clubs that sack their manager may offer you the job: watch the inbox.</p>
+    <div class="bar">${s.done ? '<button class="primary" data-act="end">Start next season</button>' : `<button class="primary" data-act="play">Continue</button> <span class="dim">${dateLabel(s.days[s.next].day)}</span>`}</div>`;
+}
+const UNEMPLOYED = ['Inbox', 'Table', 'Cup'];
+const navButton = t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}">${t === 'Inbox' && unread() ? `Inbox (${unread()})` : t}</button>`;
+
 const actions = {
-  start(id) { takeClub(s, id); tab = 'Squad'; tableDiv = s.clubs[id].div; },
-  reset() { if (s.me === null || confirm('Abandon this career and start a new game?')) { stopClock(); s = newWorld(); sel = viewing = null; tableDiv = 0; } },
+  start(id) { startCareer(s, id); tab = 'Squad'; tableDiv = s.clubs[id].div; },
+  acceptJob(id) { msg = acceptJob(s, id) || `Welcome to ${clubName(id)}.`; if (s.me === id) { tab = 'Board'; tableDiv = s.clubs[id].div; sel = viewing = null; } },
+  declineJob(id) { declineJob(s, id); msg = 'Offer declined.'; },
+  ask(_, el) { msg = askBoard(s, el.dataset.field); },
+  reset() { if ((s.me === null && !s.career) || confirm('Abandon this career and start a new game?')) { stopClock(); s = newWorld(); sel = viewing = null; tableDiv = 0; } },
   tab(_, el) { tab = el.dataset.tab; sel = viewing = null; },
   div(id) { tableDiv = id; },
   view(id) { viewing = id; },
@@ -400,7 +448,7 @@ const actions = {
     msg = substitute(s.live, mySide(), subOut, id) || 'Substitution made.';
     subOut = null;
   },
-  end() { endSeason(s); tab = 'History'; tableDiv = myClub(s).div; },
+  end() { endSeason(s); tab = s.me === null ? 'Inbox' : 'History'; if (s.me !== null) tableDiv = myClub(s).div; },
   buy(id) { msg = buy(s, id) || 'Signed.'; },
   browse(id) { filters = { club: String(id) }; tab = 'Transfers'; },
   search() {
@@ -431,6 +479,15 @@ const actions = {
 };
 
 function render() {
+  if (s.me === null && s.career) {
+    if (!UNEMPLOYED.includes(tab)) tab = 'Inbox';
+    $('info').textContent = `Out of work · reputation ${s.career.rep} · Season ${s.season}`;
+    const main = `<div class="msg" role="status">${msg}</div>` + outOfWork() + views[tab](); // first: the inbox marks what it shows as read
+    $('nav').innerHTML = UNEMPLOYED.map(navButton).join('') + '<button data-act="reset">New game</button>';
+    $('main').innerHTML = main;
+    msg = '';
+    return;
+  }
   if (s.me === null) {
     $('info').textContent = 'Pick a club to manage';
     $('nav').innerHTML = '';
@@ -439,8 +496,9 @@ function render() {
   }
   $('info').innerHTML = `${badge(s.me, 22)}${clubName(s.me)} · ${esc(s.divisions[myClub(s).div].name)} · Season ${s.season} · ${s.done ? 'season over' : dateLabel(s.days[s.next].day)} · Transfers ${money(s.budget)} · Wages ${perWeek(wageBill(myClub(s)))} of ${perWeek(s.wageBudget)}`;
   if (s.live) tab = 'Match'; // the other screens wait for the final whistle
-  $('nav').innerHTML = (s.live ? ['Match'] : Object.keys(views)).map(t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}">${t}</button>`).join('') + '<button data-act="reset">New game</button>';
-  $('main').innerHTML = `<div class="msg" role="status">${msg}</div>` + profile() + views[tab]();
+  const main = `<div class="msg" role="status">${msg}</div>` + profile() + views[tab](); // first: the inbox marks what it shows as read
+  $('nav').innerHTML = (s.live ? ['Match'] : Object.keys(views)).map(navButton).join('') + '<button data-act="reset">New game</button>';
+  $('main').innerHTML = main;
   msg = '';
 }
 
