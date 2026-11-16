@@ -7,7 +7,7 @@ import { PLAYOFF_DAYS } from './calendar.js';
 // quality), cup prize money. Costs: wages (staff costs arrive in Phase 9). Broadcast, sponsorship and
 // wages are paid in SEASON_WEEKS equal weekly instalments. A club may go into debt (Phase 10's board acts on it).
 export const SEASON_WEEKS = Math.floor(PLAYOFF_DAYS[2] / 7) + 1; // weekly payments from day 0 to the play-off finals
-export const BROADCAST = [93e6, 7.5e6, 2.5e6];  // per season, by division (top first); lower divisions use the last (tuned in Phase 6)
+export const BROADCAST = [93e6, 12e6, 4e6];   // per season, by division (top first); lower divisions use the last (EFL raised in Phase 7)
 export const MERIT = [2.5e6, 0.1e6, 0.05e6];  // per place counted from the bottom: the last club gets 1×, the champion n×
 export const CUP_PRIZE = [2e6, 1e6];          // winner, runner-up
 const SPONSOR = { at8: 0.8e6, growth: 0.46 }, GATE = { at8: 125e3, growth: 0.32 }; // quality 8 ≈ a League One club (tuned in Phase 6)

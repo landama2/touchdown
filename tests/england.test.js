@@ -7,6 +7,7 @@ import STATS, { CALIBRATION } from '../src/data/england-stats.js';
 import { createWorld } from '../src/world.js';
 import { available } from '../src/squad.js';
 import { takeClub, playDay, endSeason } from '../src/season.js';
+import { MIN_SQUAD, MAX_SQUAD } from '../src/market.js';
 
 test('the three English data files are valid together', () => {
   assert.deepEqual(validateLeagues(LEAGUES), []);
@@ -113,5 +114,22 @@ test('a season of real club books: the Premier League is rich, the EFL spends mo
   assert.ok(pl.ratio >= 0.4 && pl.ratio <= 0.8, info);
   assert.ok(ch.ratio >= 0.75 && ch.ratio <= 1.3, info);
   assert.ok(l1.ratio >= 0.6 && l1.ratio <= 1.2, info);
-  assert.ok(pl.income >= 5 * ch.income, info);
+  assert.ok(pl.income >= 4 * ch.income, info); // 5× before Phase 7 raised EFL broadcast money
+});
+
+test('a season of the real transfer market: every division trades, squads keep their shape, the EFL stays solvent', () => {
+  const s = createWorld(1);
+  while (!s.done) playDay(s);
+  const buys = s.deals.filter(d => d.from !== null && d.to !== null && !d.loan);
+  const v = {
+    buys: buys.length, byDiv: [0, 1, 2].map(d => buys.filter(x => s.clubs[x.to].div === d).length), top: Math.max(...buys.map(d => d.fee)),
+    loans: s.deals.filter(d => d.loan).length, eflDebt: s.clubs.filter(c => c.div > 0 && c.fin.balance < 0).length,
+    sizes: [Math.min(...s.clubs.map(c => c.players.length)), Math.max(...s.clubs.map(c => c.players.length))],
+  }, info = JSON.stringify(v);
+  assert.ok(v.buys >= 50 && v.buys <= 200, info);
+  assert.ok(v.byDiv.every(n => n >= 10), info);
+  assert.ok(v.top >= 20e6 && v.top <= 150e6, info);
+  assert.ok(v.loans >= 3 && v.loans <= 40, info);
+  assert.ok(v.eflDebt <= 3, info);
+  assert.ok(v.sizes[0] >= MIN_SQUAD && v.sizes[1] <= MAX_SQUAD, info);
 });
