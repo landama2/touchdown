@@ -64,7 +64,7 @@ export function bid(s, id, fee) {
   if (!at) return 'Player not available.';
   const { p, c } = at, me = s.clubs[s.me];
   fee = round10k(fee);
-  const no = cannotTake(s, p) ?? refusal(c, me, p);
+  const no = cannotTake(s, p) ?? refusal(c, me, p, s.career?.rep);
   if (no) return no;
   if (c.players.length <= MIN_SQUAD) return `${c.name} won't sell: they need every player.`;
   if (fee > s.budget) return 'Not enough transfer budget.';
@@ -92,7 +92,7 @@ export function loanIn(s, id) {
   const at = atClub(s, id);
   if (!at) return 'Player not available.';
   const { p, c } = at, me = s.clubs[s.me];
-  const no = cannotTake(s, p) ?? (loanable(s, c, p) ? refusal(c, me, p) : `${c.name} won't lend ${p.name}.`);
+  const no = cannotTake(s, p) ?? (loanable(s, c, p) ? refusal(c, me, p, s.career?.rep) : `${c.name} won't lend ${p.name}.`);
   if (no) return no;
   if (me.players.filter(x => x.loan).length >= MAX_LOANS) return `You can have at most ${MAX_LOANS} players on loan.`;
   if (overWages(s, loanPay(p.contract.wage))) return 'Over the wage budget.';
