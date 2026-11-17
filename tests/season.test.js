@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, MARKET_SIZE } from '../src/world.js';
-import { FORMATIONS, BENCH, slots, bestXI, autoBench, fixLineup, strength, swap, newFam, learnFam } from '../src/lineup.js';
+import { FORMATIONS, BENCH, slots, bestXI, autoBench, autoPick, fixLineup, strength, swap, newFam, learnFam } from '../src/lineup.js';
 import { available } from '../src/squad.js';
 import { setTraining } from '../src/training.js';
 import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason } from '../src/season.js';
@@ -41,6 +41,53 @@ test('fixLineup repairs a lineup that references a missing player', () => {
   fixLineup(s);
   assert.equal(new Set(s.lineup).size, 11);
   assert.ok(!s.lineup.includes(gone));
+});
+
+test('fixLineup puts an injured or banned player back in his place once he is available', () => {
+  const s = world(2);
+  takeClub(s, 5);
+  const p = myClub(s).players.find(x => x.id === s.lineup[3]), q = myClub(s).players.find(x => x.id === s.bench[2]);
+  p.inj = { name: 'knock', days: 3 }; q.ban = 1;
+  fixLineup(s);
+  assert.ok(!s.lineup.includes(p.id) && !s.bench.includes(q.id));
+  delete p.inj; q.ban = 0;
+  fixLineup(s);
+  assert.equal(s.lineup[3], p.id);
+  assert.equal(s.bench[2], q.id);
+  assert.equal(new Set([...s.lineup, ...s.bench]).size, 11 + s.bench.length);
+  p.inj = { name: 'knock', days: 3 };
+  fixLineup(s);
+  swap(s, s.lineup[3], s.lineup[4]); // the manager moves the stand-in: the place stays covered
+  delete p.inj;
+  fixLineup(s);
+  assert.ok(s.lineup.includes(p.id));
+});
+
+test('autoPick picks as if everyone were fit: an injured star gets his place back', () => {
+  const s = world(2);
+  takeClub(s, 5);
+  autoPick(s);
+  const star = myClub(s).players.find(x => x.id === s.lineup[5]), at = s.lineup.indexOf(star.id);
+  star.inj = { name: 'knock', days: 3 };
+  autoPick(s);
+  assert.ok(!s.lineup.includes(star.id));
+  delete star.inj;
+  fixLineup(s);
+  assert.equal(s.lineup[at], star.id);
+});
+
+test('the bench has one keeper and every position when the squad allows', () => {
+  const s = world(2);
+  takeClub(s, 5);
+  const club = myClub(s), pos = id => club.players.find(p => p.id === id).pos;
+  const keepers = () => s.bench.filter(id => pos(id) === 'GK').length;
+  s.bench = s.bench.filter(id => pos(id) === 'GK'); // a bench missing its outfielders
+  fixLineup(s);
+  assert.equal(s.bench.length, BENCH);
+  assert.equal(keepers(), 1);
+  for (const x of ['DF', 'MF', 'FW']) assert.ok(s.bench.some(id => pos(id) === x), x);
+  autoPick(s);
+  assert.equal(keepers(), 1);
 });
 
 test('a full season: every club plays everyone home and away, stats are consistent', () => {

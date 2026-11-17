@@ -66,6 +66,7 @@ export function upcoming(s, n) {
 export function takeClub(s, clubId) {
   s.me = clubId;
   s.lineup = bestXI(s.clubs[clubId], s.formation);
+  s.cover = {};
   s.bench = autoBench(s.clubs[clubId], s.lineup);
   s.tactics = defaultTactics(slots(s.formation));
   s.fam = newFam();
