@@ -10,6 +10,7 @@ import { blankRecords } from './awards.js';
 import { defaultTraining } from './training.js';
 import { newBooks } from './finance.js';
 import { startContract } from './contracts.js';
+import { aiStaff } from './staff.js';
 import { LEAGUES } from './data/england.js';
 import STATS, { CALIBRATION } from './data/england-stats.js';
 
@@ -18,6 +19,9 @@ const STRENGTH_BONUS = 2;
 
 export const FREE_AGENT_QUALITY = [7, 14]; // each new free agent: random quality in this range
 export const newFreeAgent = (rng, id) => createPlayer(rng, id, rng.pick(POS), rng.int(...FREE_AGENT_QUALITY));
+
+// A board's confidence in a new manager and a new manager's reputation, 0-100 (src/career.js).
+export const BOARD_START = 60, REP_START = 30;
 
 export const blankStats = () => ({ p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 });
 
@@ -45,7 +49,7 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
   const rng = makeRng(seed);
   const s = {
     version: SAVE_VERSION, seed, nid: 1,
-    me: null, formation: '4-4-2', lineup: [], bench: [], tactics: defaultTactics(slots('4-4-2')), fam: newFam(), budget: 0, wageBudget: 0, training: defaultTraining(), news: [],
+    me: null, formation: '4-4-2', lineup: [], bench: [], tactics: defaultTactics(slots('4-4-2')), fam: newFam(), budget: 0, wageBudget: 0, training: defaultTraining(), news: [], offers: [], talks: { win: null, by: {} }, deals: [], known: {}, scouts: [], shortlist: [], youth: [], career: null, jobs: [], inbox: [],
     season: 1, day: -1, next: 0, days: [], done: false, cup: null, playoffs: [],
     clubs: [], divisions: [], market: [], history: [], records: [], last: null, live: null,
   };
@@ -58,14 +62,15 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
         id, name: c.name, short: c.short, colours: [...c.colours], kit: { ...c.kit }, div,
         quality: rows.reduce((t, row) => t + row[3], 0) / rows.length,
         players: rows.map(row => playerFromData(rng, s.nid++, row, stats[c.name]?.[row[0]])),
-        st: blankStats(), rec: { win: null, goals: null },
+        st: blankStats(), rec: { win: null, goals: null }, conf: BOARD_START, games: 0,
       });
       return id;
     });
     s.divisions.push({ name: league.name, clubIds, fixtures: [] });
     s.records.push(blankRecords());
   });
-  for (const c of s.clubs) { for (const p of c.players) p.contract = startContract(p, s.season); c.fin = newBooks(s, c); }
+  for (const c of s.clubs) { for (const p of c.players) p.contract = startContract(p, s.season); c.fin = newBooks(s, c); c.lentPay = 0; }
+  aiStaff(s);
   for (let i = 0; i < MARKET_SIZE; i++) s.market.push(newFreeAgent(rng, s.nid++));
   scheduleSeason(s, rng);
   s.seed = rng.seed;
@@ -73,7 +78,7 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
 }
 
 // Cup seeding: top division first, then by squad quality. The weakest clubs play the preliminary round.
-const seeding = clubs => [...clubs].sort((a, b) => a.div - b.div || b.quality - a.quality || a.id - b.id).map(c => c.id);
+export const seeding = clubs => [...clubs].sort((a, b) => a.div - b.div || b.quality - a.quality || a.id - b.id).map(c => c.id);
 
 // A new season's schedule: league fixtures, the calendar, the cup's first round, no play-offs yet.
 export function scheduleSeason(s, rng) {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorld } from '../src/world.js';
+import { createWorld, BOARD_START, REP_START } from '../src/world.js';
 import { MINI } from './fixtures/mini.js';
 import { takeClub, kickOff, playDay, endSeason, table } from '../src/season.js';
 // A save as Phase 3 (version 4) wrote it: league rounds instead of a calendar; no cup, play-offs or records.
@@ -41,6 +41,10 @@ test('deserialize returns null for missing, corrupt or wrong-version saves', () 
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), me: 999 })), null); // dangling club index
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), training: { ...defaultTraining(), ind: null } })), null); // null is not an object here
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), wageBudget: undefined })), null); // books missing
+  assert.equal(deserialize(serialize({ ...createWorld(1, MINI), offers: undefined })), null); // market missing
+  assert.equal(deserialize(serialize({ ...createWorld(1, MINI), known: undefined })), null); // scouting missing
+  assert.equal(deserialize(serialize({ ...createWorld(1, MINI), youth: undefined })), null); // staff and youth missing
+  assert.equal(deserialize(serialize({ ...createWorld(1, MINI), inbox: undefined })), null); // career missing
   const noContract = createWorld(1, MINI); noContract.clubs[0].players[0].contract = null;
   assert.equal(deserialize(serialize(noContract)), null); // a squad player without a contract
 });
@@ -173,4 +177,87 @@ test('a version 6 save gets contracts, books and budgets, and plays on', () => {
   assert.ok(b.market.every(p => p.contract === null));
   assert.ok(b.wageBudget > 0 && b.budget >= 0);
   assert.ok(playDay(b).length);
+});
+
+// A save as Phase 6 (version 7) wrote it: no offers, talks, deals or loans.
+function asV7(s) {
+  const o = JSON.parse(serialize(s));
+  o.version = 7;
+  delete o.offers; delete o.talks; delete o.deals;
+  for (const c of o.clubs) delete c.lentPay;
+  return o;
+}
+
+test('a version 7 save opens the transfer market and plays on', () => {
+  const a = createWorld(25, MINI);
+  takeClub(a, 3);
+  playDay(a);
+  const b = deserialize(JSON.stringify(asV7(a)));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.deepEqual([b.offers, b.talks, b.deals], [[], { win: null, by: {} }, []]);
+  assert.ok(b.clubs.every(c => c.lentPay === 0));
+  assert.ok(playDay(b).length);
+});
+
+// A save as Phase 7 (version 8) wrote it: no scouting.
+function asV8(s) {
+  const o = JSON.parse(serialize(s));
+  o.version = 8;
+  delete o.known; delete o.scouts; delete o.shortlist;
+  return o;
+}
+
+test('a version 8 save gets scouts and an empty notebook, and plays on', () => {
+  const a = createWorld(26, MINI);
+  takeClub(a, 14);
+  playDay(a);
+  const b = deserialize(JSON.stringify(asV8(a)));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.deepEqual([b.known, b.shortlist], [{}, []]);
+  assert.deepEqual(b.scouts, a.scouts.map(() => ({ task: null, days: 0 })));
+  assert.ok(b.scouts.length > 0 && playDay(b).length);
+});
+
+// A save as Phase 8 (version 9) wrote it: no staff, no youth squad, no staff line in the ledger.
+function asV9(s) {
+  const o = JSON.parse(serialize(s));
+  o.version = 9;
+  delete o.youth;
+  for (const c of o.clubs) { delete c.staff; delete c.fin.season.staff; }
+  return o;
+}
+
+test('a version 9 save gets standard staff and an empty youth squad, and plays on', () => {
+  const a = createWorld(27, MINI);
+  takeClub(a, 14);
+  playDay(a);
+  const b = deserialize(JSON.stringify(asV9(a)));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.deepEqual(b.youth, []);
+  assert.deepEqual(b.clubs.map(c => c.staff), a.clubs.map(c => c.staff));
+  assert.ok(b.clubs.every(c => c.fin.season.staff === 0));
+  assert.ok(playDay(b).length);
+});
+
+// A save as Phase 9 (version 10) wrote it: no boards, no career, no vacancies, no inbox.
+function asV10(s) {
+  const o = JSON.parse(serialize(s));
+  o.version = 10;
+  for (const k of ['career', 'jobs', 'inbox']) delete o[k];
+  for (const c of o.clubs) { delete c.conf; delete c.games; }
+  return o;
+}
+
+test('a version 10 save gets boards, a career at its club and an empty inbox, and plays on', () => {
+  const a = createWorld(28, MINI);
+  takeClub(a, 9);
+  playDay(a);
+  const b = deserialize(JSON.stringify(asV10(a)));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.ok(b.clubs.every(c => c.conf === BOARD_START && c.games === c.st.p));
+  assert.deepEqual(b.career, { rep: REP_START, asked: null, warned: null, spells: [{ club: 9, from: a.season, to: null, how: null }] });
+  assert.deepEqual([b.jobs, b.inbox], [[], []]);
+  assert.ok(playDay(b).length);
+  const picker = deserialize(JSON.stringify(asV10(createWorld(28, MINI))));
+  assert.equal(picker.career, null); // no club picked yet: the club picker, not a career
 });

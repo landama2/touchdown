@@ -10,7 +10,11 @@ import { afterMatch, passDays, offseason } from './squad.js';
 import { defaultTraining, trainingOf, recoverRate, trainWeek, INTENSITY } from './training.js';
 import { payWeeks, payGate, payPrizes, seasonBudgets, blankLedger } from './finance.js';
 import { expireContracts, academy } from './contracts.js';
-import { MIN_SQUAD } from './transfers.js';
+import { MIN_SQUAD, inWindow, windowId, marketDay, returnLoans } from './market.js';
+import { scoutDays, staffScouts, prune } from './scouting.js';
+import { aiStaff, standardStaff } from './staff.js';
+import { intake, trainYouth, ageYouth } from './youth.js';
+import { afterLeague, afterCup, boardWeeks, boardDay, seasonReview, seasonStart, file } from './career.js';
 
 const RETIRE_AGE = 35;
 const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
@@ -62,10 +66,15 @@ export function upcoming(s, n) {
 export function takeClub(s, clubId) {
   s.me = clubId;
   s.lineup = bestXI(s.clubs[clubId], s.formation);
+  s.cover = {};
   s.bench = autoBench(s.clubs[clubId], s.lineup);
   s.tactics = defaultTactics(slots(s.formation));
   s.fam = newFam();
   s.training = defaultTraining();
+  s.offers = [];
+  s.clubs[clubId].staff = standardStaff(s.clubs[clubId].div);
+  s.scouts = []; staffScouts(s);
+  s.youth = []; intake(s, makeRng(s.seed ^ 0x9e3779b9)); // a first intake, without touching the career's random sequence
   seasonBudgets(s);
 }
 
@@ -130,12 +139,16 @@ function between(s, rng, from, to) {
       s.news.push({ type: 'injury', club: c.id, id: p.id, name: p.name, injury: p.inj.name, days: p.inj.days, training: true });
   }
   passDays(s.market, to - from, INTENSITY.Normal.recover);
+  trainYouth(s, rng, weeks);
 }
 
 // Plays the next calendar day: every match of every competition on it. A live match is played out
 // first; whatever is left of it is handed to the assistant manager (AI substitutions for both sides).
 // Each match leaves condition, form, morale, injuries and bans on both squads (src/squad.js); then
-// the days up to the next match day pass. s.news collects the human club's new injuries and bans.
+// the days up to the next match day pass. A match day in a transfer window is also a market day
+// (src/market.js). Scouts work every day that passes (src/scouting.js). s.news collects the human
+// club's injuries, bans, transfer news and scout reports, and the career's news (src/career.js); the inbox keeps them.
+// Boards weigh every league result and cup tie, and look at the table and the books each week.
 // Returns the day's results: matchResult() plus item (the calendar item it belongs to).
 export function playDay(s) {
   if (s.done) return null;
@@ -148,19 +161,27 @@ export function playDay(s) {
     const m = live && live.sides[0].club === f.h && live.sides[1].club === f.a ? live : play(rng, s, f);
     if (f.tie) settle(f, m);
     const r = { ...matchResult(m), item: { ...it } };
-    if (it.comp === 'league') { record(s.clubs[f.h].st, r.hg, r.ag); record(s.clubs[f.a].st, r.ag, r.hg); addMatch(s, it.div, r); }
+    if (it.comp === 'league') { record(s.clubs[f.h].st, r.hg, r.ag); record(s.clubs[f.a].st, r.ag, r.hg); addMatch(s, it.div, r); afterLeague(s, r); }
+    if (it.comp === 'cup' && f.tie.w !== null) afterCup(s, f.tie, it.round);
     if (!f.neutral) payGate(s.clubs[f.h]); // gate receipts, every club
     s.news.push(...afterMatch(s, m, it.comp, rng).filter(n => n.club === s.me));
     s.last.push(r);
   }
   for (const it of today.items) advance(s, rng, it);
-  payWeeks(s, Math.floor(today.day / 7) - Math.floor(s.day / 7)); // weekly instalments, every club
+  const weeks = Math.floor(today.day / 7) - Math.floor(s.day / 7);
+  payWeeks(s, weeks); // weekly instalments, every club
+  boardWeeks(s, weeks); // boards look at the table and the books
   if (played) learnFam(s.fam, s.formation); // the formation you prepared, not mid-match switches
   s.live = null;
+  scoutDays(s, today.day - s.day); // scouts work every day up to this one
   s.day = today.day;
+  if (inWindow(s.day)) marketDay(s, rng); // AI clubs trade; offers for your players
   s.next++;
   s.done = s.next === s.days.length;
+  s.offers = s.offers.filter(o => o.win === windowId(s)); // offers lapse when the window shuts
   if (!s.done) between(s, rng, today.day, s.days[s.next].day);
+  boardDay(s); // sackings, vacancies, job offers, warnings
+  file(s);
   s.seed = rng.seed; // after the training draws too, so the next day does not reuse them
   return s.last;
 }
@@ -188,6 +209,7 @@ const winnerOf = p => p?.rounds[1]?.ties[0].w ?? null;
 export function endSeason(s) {
   if (!s.done) return;
   const rng = makeRng(s.seed);
+  s.news = [];
   const tables = s.divisions.map((_, d) => table(s, d)), awards = s.divisions.map((_, d) => seasonAwards(s, d));
   const final = s.cup?.rounds[cupRounds(s.clubs.length) - 1]?.ties[0];
   const h = {
@@ -204,9 +226,14 @@ export function endSeason(s) {
     h.divs[d + 1].up = [...below.slice(0, PROMOTED), h.divs[d + 1].playoff ?? below[PROMOTED]]; // no play-offs (old save): 3rd goes up
     h.divs[d].down = tables[d].slice(-RELEGATED);
   }
+  seasonReview(s, tables, h); // boards and the manager's reputation, before the clubs move
   h.divs.forEach((x, d) => { for (const id of x.up) s.clubs[id].div = d - 1; for (const id of x.down) s.clubs[id].div = d + 1; });
   s.divisions.forEach((dv, d) => { dv.clubIds = s.clubs.filter(c => c.div === d).map(c => c.id); });
+  returnLoans(s);
   h.left = expireContracts(s, rng, MIN_SQUAD);
+  h.youthLeft = s.me === null ? [] : ageYouth(s);
+  h.deals = s.deals.filter(d => d.from === s.me || d.to === s.me);
+  s.deals = [];
   s.history.push(h);
   for (const c of s.clubs) {
     c.st = blankStats();
@@ -226,5 +253,13 @@ export function endSeason(s) {
   s.seed = rng.seed;
   s.season++;
   for (const c of s.clubs) c.fin.season = blankLedger();
-  if (s.me !== null) { seasonBudgets(s); fixLineup(s); }
+  aiStaff(s); // AI clubs' staff follow their new division
+  if (s.me !== null) intake(s, rng);
+  prune(s);
+  const exists = new Set([...s.clubs.flatMap(c => c.players), ...s.market].map(p => p.id));
+  s.shortlist = s.shortlist.filter(id => exists.has(id)); // retired players drop off
+  if (s.me !== null) { seasonBudgets(s); staffScouts(s); fixLineup(s); }
+  boardDay(s); // summer sackings
+  seasonStart(s);
+  file(s);
 }

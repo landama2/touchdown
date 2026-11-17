@@ -1,5 +1,6 @@
 import { createPlayer, overall, value } from './player.js';
-import { wage, wageBill } from './finance.js';
+import { wage, wageBill, staffBill } from './finance.js';
+import { fromYouth } from './youth.js';
 
 // Contracts. p.contract = { wage (euros a week), until (the last season it covers), clause (release
 // clause in euros, or null) }; free agents have none. A contract ends after season `until`.
@@ -24,16 +25,17 @@ export function terms(s, p) {
   return { wage: Math.max(p.contract?.wage ?? 0, ask), years: yearsFor(p.age), clause: star ? Math.round(CLAUSE.times * value(p) / 1e5) * 1e5 : null };
 }
 
-export const canRenew = (s, p) => !!p.contract && p.contract.until <= s.season + 1 && s.season + yearsFor(p.age) > p.contract.until;
+export const canRenew = (s, p) => !!p.contract && !p.loan && p.contract.until <= s.season + 1 && s.season + yearsFor(p.age) > p.contract.until;
 
 // Accepts the terms of the human club's player `id`: the new terms apply now and the contract runs to
 // `season + years`. A raise must fit the wage budget; the same wage always does. Error message or null.
 export function renew(s, id) {
   const club = s.clubs[s.me], p = club.players.find(x => x.id === id);
   if (!p) return 'Not your player.';
+  if (p.loan) return `${p.name} is on loan here.`;
   if (!canRenew(s, p)) return 'He has more than a season left on his contract.';
   const t = terms(s, p);
-  if (t.wage > p.contract.wage && wageBill(club) - p.contract.wage + t.wage > s.wageBudget) return 'Over the wage budget.';
+  if (t.wage > p.contract.wage && wageBill(club) + staffBill(s, club) - p.contract.wage + t.wage > s.wageBudget) return 'Over the wage budget.';
   p.contract = { wage: t.wage, until: s.season + t.years, clause: t.clause };
   return null;
 }
@@ -47,7 +49,8 @@ export function academy(s, rng, c, pos) {
 
 // End of season s.season (before the season number moves on): contracts ending now. AI clubs renew
 // them; the human club's players leave for the free-agent list. If that leaves the squad below
-// minSquad, academy players in the leavers' positions fill the gap. Returns the leavers' names.
+// minSquad, academy players in the leavers' positions fill the gap: the best of the youth squad
+// there, else a new one. Returns the leavers' names.
 export function expireContracts(s, rng, minSquad) {
   const left = [];
   for (const c of s.clubs) for (const p of [...c.players]) {
@@ -58,6 +61,6 @@ export function expireContracts(s, rng, minSquad) {
     s.market.push(p);
     left.push(p);
   }
-  if (s.me !== null) for (const p of left) if (s.clubs[s.me].players.length < minSquad) s.clubs[s.me].players.push(academy(s, rng, s.clubs[s.me], p.pos));
+  if (s.me !== null) for (const p of left) if (s.clubs[s.me].players.length < minSquad) s.clubs[s.me].players.push(fromYouth(s, p.pos) ?? academy(s, rng, s.clubs[s.me], p.pos));
   return left.map(p => p.name);
 }

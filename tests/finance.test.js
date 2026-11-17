@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRng } from '../src/rng.js';
 import { createPlayer, value } from '../src/player.js';
-import { wage, sponsorship, gate, wageBill, blankLedger, newBooks, projection, payWeeks, payGate, payPrizes, seasonBudgets, SEASON_WEEKS, BROADCAST, MERIT, CUP_PRIZE } from '../src/finance.js';
+import { wage, sponsorship, gate, wageBill, blankLedger, newBooks, projection, payWeeks, payGate, payPrizes, seasonBudgets, SAVINGS_WEEKS, DEBT_CUT, SEASON_WEEKS, BROADCAST, MERIT, CUP_PRIZE } from '../src/finance.js';
 
 // A midfielder whose overall is exactly `ovr` (a multiple of 5): every attribute is ovr / 5.
 const at = (ovr, age = 25) => { const p = createPlayer(makeRng(1), 1, 'MF', 10, age); for (const k in p.attrs) p.attrs[k] = ovr / 5; return p; };
@@ -43,7 +43,7 @@ test('sponsorship and gate grow with club quality', () => {
 test('books open at a quarter of a season, and weekly instalments are the same every week', () => {
   const s = books(), c = s.clubs[0];
   assert.equal(wageBill(c), 15e3);
-  assert.deepEqual(blankLedger(), { broadcast: 0, sponsor: 0, gate: 0, prize: 0, wages: 0, fees: 0, sales: 0 });
+  assert.deepEqual(blankLedger(), { broadcast: 0, sponsor: 0, gate: 0, prize: 0, wages: 0, fees: 0, sales: 0, staff: 0 });
   assert.equal(c.fin.balance, Math.round(0.25 * projection(s, c) / 1e5) * 1e5);
   assert.equal(projection(s, c), BROADCAST[0] + MERIT[0] * 2 / 2 + sponsorship(c) + gate(c) * 1);
   const start = c.fin.balance, per = x => Math.round(x / SEASON_WEEKS);
@@ -68,14 +68,14 @@ test('prizes: merit by final position for every club, the cup winner and runner-
   assert.equal(payPrizes(books(), [[0, 1], [2]], null, null), 0);
 });
 
-test('season budgets: half the balance to spend on fees (none in debt), wages up to 70% of income', () => {
+test('season budgets: half the balance for fees; wages up to 70% of income or the current bill, plus savings over two years', () => {
   const s = books(), c = s.clubs[0];
   c.fin.balance = 10e6; seasonBudgets(s);
   assert.equal(s.budget, 5e6);
-  assert.ok(s.wageBudget >= 1.15 * wageBill(c) && s.wageBudget % 1e3 === 0);
-  assert.ok(Math.abs(s.wageBudget - 0.7 * projection(s, c) / 52) <= 500);
+  assert.equal(s.wageBudget, Math.round((0.7 * projection(s, c) / 52 + 10e6 / SAVINGS_WEEKS) / 1e3) * 1e3);
   c.fin.balance = -1e6; seasonBudgets(s);
   assert.equal(s.budget, 0);
-  const rich = books(12, [5e6]); seasonBudgets(rich);
-  assert.equal(rich.wageBudget, Math.round(1.15 * 5e6 / 1e3) * 1e3);
+  assert.equal(s.wageBudget, Math.round(DEBT_CUT * 0.7 * projection(s, c) / 52 / 1e3) * 1e3); // in debt: no savings, less income
+  const rich = books(12, [5e6]); rich.clubs[0].fin.balance = 0; seasonBudgets(rich);
+  assert.equal(rich.wageBudget, 5e6); // never below what the club pays now: wages are frozen, not cut
 });

@@ -19,10 +19,10 @@
 | 4 | Competitions & calendar | Day-based calendar, promotion/relegation with play-offs, a knockout cup across all divisions, season awards, club and league records | 1 | `2026-11-15-touchline-phase-4-competitions.md` (done 2026-11-15) |
 | 5 | Squad dynamics | Match fitness and condition, injuries with recovery times, suspensions, morale, form, training schedules that drive attribute development | 2, 4 | `2026-11-15-touchline-phase-5-squad-dynamics.md` (done 2026-11-15) |
 | 6 | Contracts & finances | Wages, contract lengths, renewals, release clauses, negotiations; club income (gate, sponsorship, prize, broadcast) and costs; separate transfer and wage budgets | 4 | `2026-11-16-touchline-phase-6-contracts-finances.md` (done 2026-11-16) |
-| 7 | Transfer market | Transfer windows, AI clubs buying and selling, bids and counter-offers, loans, free agents, player willingness to move | 6 | to write |
-| 8 | Scouting & knowledge | Attributes of unknown players shown as ranges, scouts with assignments and reports, shortlists, player search and filters | 7 | to write |
-| 9 | Youth & staff | Annual academy intake, youth squad, staff (coaches, scouts, physios) with their own attributes that affect training, scouting accuracy and recovery; hiring and firing | 5, 8 | to write |
-| 10 | Manager career | Board expectations and confidence, job security, sackings, job offers at other clubs, manager reputation, inbox with news and decisions | 6, 7 | to write |
+| 7 | Transfer market | Transfer windows, AI clubs buying and selling, bids and counter-offers, loans, free agents, player willingness to move | 6 | `2026-11-16-touchline-phase-7-transfer-market.md` (done 2026-11-16) |
+| 8 | Scouting & knowledge | Attributes of unknown players shown as ranges, scouts with assignments and reports, shortlists, player search and filters | 7 | `2026-11-16-touchline-phase-8-scouting.md` (done 2026-11-16) |
+| 9 | Youth & staff | Annual academy intake, youth squad, staff (coaches, scouts, physios) with their own attributes that affect training, scouting accuracy and recovery; hiring and firing | 5, 8 | `2026-11-16-touchline-phase-9-youth-staff.md` (done 2026-11-16) |
+| 10 | Manager career | Board expectations and confidence, job security, sackings, job offers at other clubs, manager reputation, inbox with news and decisions | 6, 7 | `2026-11-16-touchline-phase-10-manager-career.md` (done 2026-11-16) |
 | 11 | Interface | Touchline's own visual identity, player and club profile screens, 2D pitch match view, sortable/filterable tables, save slots with export/import, keyboard and screen-reader support | 2–10 | to write |
 | 12 | Balance & soak | 20-season automated runs checked against statistical targets (goals per match 2.5–2.9, home wins 43–47%, plausible wage/value curves), performance budget, save-size budget | all | to write |
 
@@ -34,13 +34,32 @@ Phase 3 note: the formation edge listed in `docs/fun-surprises.md` must survive 
 
 Phase 5 note (decided 2026-11-15): suspensions price "Tackle harder"; it stays as it is (fun surprise #6).
 
-Phase 9 note: staff scale squad dynamics. Coaches scale `GROWTH` and `INTENSITY` in `src/training.js`; physios scale recovery (`passDays`) and injury length (`INJURIES`) in `src/squad.js`.
+Phase 9 note (done 2026-11-16): staff are levels 1-5 per area (owner's choice), not individual people. Coaching scales growth and the youth intake, Scouting the number and speed of scouts, Medical injury length; level 3 is the calibrated game. Training intensity and recovery rates were left as calibrated.
 
 Phase 6 notes (decided 2026-11-16):
 - Phase 7 uses each club's `fin.balance` for bids, pays release clauses (`p.contract.clause`), and replaces the rule that a free agent costs his value as a fee.
 - Phase 10's board acts on debt and sets the season budgets that `seasonBudgets()` in `src/finance.js` now sets with fixed shares.
 - AI clubs in the EFL run at a loss (Championship wages are about 1.2× income) and drift into debt; Phase 7 must re-tune club money before AI bids use `fin.balance`.
 - The wage budget floor (wage bill × 1.15) lets a manager raise wages every season; Phase 10's board should tie the wage budget to income and debt.
+
+Phase 7 notes (decided 2026-11-16):
+- EFL broadcast money was raised (Championship €12M, League One €4M) so AI clubs can trade without drifting into debt; the Phase 6 target "PL income ≥ 5× Championship" became 4×.
+- Premier League clubs still bank about €60M a season each (median balance about €250M by season 3), and the biggest fees reach about €130M by then. Phase 10's board and Phase 12's soak should rein this in.
+- Phase 8 replaces the browse-one-club list on the Transfers screen with player search, filters and shortlists; asking prices and refusals stay in `src/market.js`.
+
+Phase 8 notes (decided 2026-11-16):
+- Phase 9's scouts get attributes and wages: their judging can scale `TASKS` (days and knowledge reached) and `MAX_WIDTH` / `OVR_WIDTH` in `src/scouting.js`, and hiring replaces the fixed `SCOUTS` numbers.
+- AI clubs see true values; only the human club is fogged.
+
+Phase 9 notes (decided 2026-11-16):
+- Only the human club pays for staff, and only beyond its division's standard (`STANDARD` in `src/finance.js`); staff costs count against the wage budget. Phase 10's board should set that budget from income and debt.
+- AI clubs have no youth squads; their gaps are still filled by generated academy players.
+
+Phase 10 notes (decided 2026-11-16):
+- AI clubs have no manager people: a board's sacking only opens a vacancy (`s.jobs`), so the world's random sequence and every calibration target are unchanged. About 13 AI sackings a season.
+- Vacancies still open when a season ends stay open for the new season's first 14 days (an owner-approved fix during implementation).
+- The wage budget is max(current wages and staff, 70% of projected income) + savings over two years, frozen in debt; the Phase 6 floor of wage bill + 15% is gone. The Premier League money piles are left for Phase 12.
+- Phase 12's soak should check the sacking rate (10–20 a season) and that a managed career survives 20 seasons.
 
 ## Architecture decisions that hold for every phase
 

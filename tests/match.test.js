@@ -4,7 +4,7 @@ import { makeRng } from '../src/rng.js';
 import { createWorld } from '../src/world.js';
 import { FORMATIONS, BENCH, slots, bestXI, strength } from '../src/lineup.js';
 import { ROLES, defaultTactics } from '../src/tactics.js';
-import { startMatch, stepMinute, matchResult, simMatch, power, preview, substitute, setFormation, setLiveTactic, shootout, MAX_SUBS } from '../src/match.js';
+import { startMatch, stepMinute, matchResult, simMatch, power, preview, substitute, swapPositions, setFormation, setLiveTactic, shootout, MAX_SUBS } from '../src/match.js';
 import { MINI } from './fixtures/mini.js';
 
 const s = createWorld(3, MINI);
@@ -71,6 +71,13 @@ test('over many matches: sensible scores, a home edge, and the stronger side usu
   assert.ok(strongWins > weakWins * 5, `${strongWins} vs ${weakWins}`);
 });
 
+test('swapPositions swaps two players on the pitch, keeping the slots', () => {
+  const m = startMatch(1, side(4), side(5)), S = m.sides[0], [x, y] = [S.on[1], S.on[9]], [a, b] = [x.id, y.id];
+  assert.equal(swapPositions(m, 0, a, 99999), 'Pick two players on the pitch.');
+  assert.equal(swapPositions(m, 0, a, b), null);
+  assert.deepEqual([x.id, y.id, x.pos, y.pos], [b, a, 'DF', 'FW']);
+});
+
 test('cards: a second yellow or a straight red sends a player off for good', () => {
   let reds = 0, yellows = 0;
   for (let seed = 1; seed <= 300; seed++) {
@@ -78,6 +85,7 @@ test('cards: a second yellow or a straight red sends a player off for good', () 
     for (const e of m.ev.filter(x => x.type === 'red')) {
       reds++;
       assert.ok(!m.sides[e.side].on.some(o => o.id === e.id), 'sent-off player is still on');
+      assert.ok(m.sides[e.side].sent.includes(e.id), 'sent-off player is not remembered');
       const y = m.ev.filter(x => x.type === 'yellow' && x.id === e.id).length;
       assert.ok(e.second ? y === 2 : y <= 1, `${y} yellows before a ${e.second ? 'second-yellow' : 'straight'} red`);
     }

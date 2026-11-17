@@ -2,7 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#17261d">
+<meta name="description" content="Football management in the English leagues.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Touchline">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <title>Touchline</title>
 <style>
   :root { --bg:#0f1a14; --panel:#17261d; --line:#2a4033; --text:#e6efe9; --dim:#8fa698; --accent:#5fd38d; --warn:#f0b35a; }
@@ -38,6 +48,7 @@
   td select { padding:3px 6px; }
   .attrs { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:4px 16px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; margin:12px 0; }
   .attrs h3 { grid-column:1/-1; margin:8px 0 2px; font-size:13px; color:var(--dim); font-weight:500; }
+  .attrs p { grid-column:1/-1; margin:4px 0 8px; }
   .attrs div { display:flex; justify-content:space-between; }
   .attrs b.hi { color:var(--accent); }
   #info { display:flex; align-items:center; gap:8px; }
@@ -49,15 +60,23 @@
   .fixture { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .live { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
   .feed { max-height:460px; overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
-  .feed .goal { color:var(--accent); font-weight:600; }
+  .feed .goal { color:var(--accent); font-weight:700; font-size:1.1em; padding:4px 0; }
+  .feed .big { font-weight:600; }
+  .feed .sent { color:var(--warn); }
+  .feed .mine { border-left:3px solid var(--accent); padding-left:6px; }
+  tr.out td { opacity:.55; text-decoration:line-through; }
+  tr.out td .oop { text-decoration:none; display:inline-block; }
   table.stats { width:auto; min-width:280px; }
   table.stats td:nth-child(2) { text-align:center; color:var(--dim); }
   @media (max-width:700px) { .live { grid-template-columns:1fr; } }
+  header { padding-top:max(12px, env(safe-area-inset-top)); }
+  #update { position:fixed; right:16px; bottom:max(16px, env(safe-area-inset-bottom)); z-index:10; box-shadow:0 4px 16px #0008; }
 </style>
 </head>
 <body>
 <header><h1>Touchline</h1><span id="info"></span><nav id="nav" class="bar" style="margin:0"></nav></header>
 <main id="main"></main>
 <script type="module" src="src/ui/app.js"></script>
+<script type="module" src="src/ui/pwa.js"></script>
 </body>
 </html>

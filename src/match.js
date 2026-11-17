@@ -162,6 +162,7 @@ function penalty(m, rng, i) {
 function sendOff(m, i, o, second) {
   const S = m.sides[i], p = m.pl[o.id];
   S.on = S.on.filter(x => x !== o);
+  (S.sent ??= []).push(o.id); // kept for the match screen: shown, never subbed
   S.st.rc++; p.rt -= 1.5;
   m.ev.push({ min: m.min, side: i, type: 'red', id: o.id, name: p.name, second });
 }
@@ -216,6 +217,16 @@ export function substitute(m, i, outId, inId, pos) {
   if (!pos && m.pl[inId].pos === 'GK' && !S.on.some(o => o.pos === 'GK')) pos = 'GK'; // keeper back in goal after a red card
   if (pos && pos !== slot.pos) Object.assign(slot, defaultSlot(pos), { pos });
   m.ev.push({ min: m.min, side: i, type: 'sub', id: outId, name: m.pl[outId].name, in: inId, inName: m.pl[inId].name });
+  return null;
+}
+
+// Swaps the positions of two of side i's players on the pitch; each takes the other's slot with
+// its role and instructions. Returns an error message or null.
+export function swapPositions(m, i, a, b) {
+  const on = m.sides[i].on, x = on.find(o => o.id === a), y = on.find(o => o.id === b);
+  if (m.done) return 'The match is over.';
+  if (!x || !y || a === b) return 'Pick two players on the pitch.';
+  [x.id, y.id] = [b, a];
   return null;
 }
 

@@ -1,6 +1,7 @@
 import { ATTRS, ALL_ATTRS, WEIGHTS } from './player.js';
 import { injure } from './squad.js';
 import { has } from './tactics.js';
+import { coachScale, medicalScale } from './staff.js';
 
 // Training. Every club has a weekly schedule, a focus and an intensity; AI clubs keep the default.
 // The human club can also give any player an individual focus: one attribute.
@@ -8,7 +9,8 @@ import { has } from './tactics.js';
 // intensity's grow factor (about 4 a season at Normal), never above his hidden potential `pot`:
 // half the time his individual focus, otherwise one from the team focus (keepers: always their
 // position's key attributes). Players aged 31 and over lose a physical point now and then,
-// whatever the schedule. Training can injure, Hard more often, Light less.
+// whatever the schedule. Training can injure, Hard more often, Light less. The club's coaching staff
+// scale growth, its medical staff the length of injuries (src/staff.js).
 export const FOCUS = {
   Balanced: null, // the position's key attributes (WEIGHTS in player.js)
   Attacking: ['finishing', 'dribbling', 'firstTouch', 'crossing', 'composure'],
@@ -35,11 +37,11 @@ function raise(rng, p, t) {
 
 // One week of training for `club` under schedule t. Injured players sit it out. Returns the players injured in training.
 export function trainWeek(rng, club, t) {
-  const I = INTENSITY[t.intensity], hurt = [];
+  const I = INTENSITY[t.intensity], hurt = [], grow = GROWTH * I.grow * coachScale(club), heal = medicalScale(club);
   for (const p of club.players) {
     if (p.inj) continue;
-    if (rng.next() < INJURY * I.injury) { injure(rng, p); hurt.push(p); continue; }
-    if (p.age <= 23 && t.focus !== 'Rest' && rng.next() < GROWTH * I.grow) raise(rng, p, t);
+    if (rng.next() < INJURY * I.injury) { injure(rng, p, heal); hurt.push(p); continue; }
+    if (p.age <= 23 && t.focus !== 'Rest' && rng.next() < grow) raise(rng, p, t);
     if (p.age >= 31 && rng.next() < DECLINE) { const k = rng.pick(ATTRS.physical); p.attrs[k] = Math.max(1, p.attrs[k] - 1); }
   }
   return hurt;
