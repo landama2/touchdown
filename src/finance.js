@@ -14,7 +14,7 @@ const SPONSOR = { at8: 0.8e6, growth: 0.46 }, GATE = { at8: 125e3, growth: 0.32 
 const WAGE = { at50: 2.2e3, growth: 0.112 };  // a week: overall 50 ≈ a League One regular, 93 ≈ €270k (tuned in Phase 6)
 export const STANDARD = [4, 3, 2];                          // the staff level (src/staff.js) a division's books already pay for
 export const STAFF_COST = [2e3, 6e3, 20e3, 60e3, 180e3];     // a week per staff area, by level 1-5
-const START_SHARE = 0.25, TRANSFER_SHARE = 0.5, WAGE_SHARE = 0.7;
+export const START_SHARE = 0.25, TRANSFER_SHARE = 0.75, WAGE_SHARE = 0.55; // in favour of transfers (2026-11-17): real clubs spend most on wages, but that is no fun
 export const SAVINGS_WEEKS = 104, DEBT_CUT = 0.8; // savings fund extra wages over two years; Phase 10 replaced the Phase 6 floor of wage bill + 15%
 
 const byDiv = (list, d) => list[Math.min(d, list.length - 1)];
@@ -72,13 +72,13 @@ export function payPrizes(s, tables, cup, me) {
   return mine;
 }
 
-// The board's limits for the human club's season, from its books: a transfer budget of half its
-// balance (none in debt); a weekly wage budget of 70% of its projected income or what it pays now in
-// wages and staff, whichever is more, plus what its savings can carry over SAVINGS_WEEKS. In debt
+// The board's limits for the human club's season, from its books: a transfer budget of TRANSFER_SHARE of its
+// balance (none in debt); a weekly wage budget of WAGE_SHARE of its projected income or what it pays now in
+// wages and staff, whichever is more, plus what the rest of its savings can carry over SAVINGS_WEEKS. In debt
 // there are no savings and the income part shrinks by DEBT_CUT, so wages are frozen.
 // The manager may ask for more once a season (askBoard in src/career.js).
 export function seasonBudgets(s) {
   const c = s.clubs[s.me], debt = c.fin.balance < 0;
   s.budget = Math.max(0, round(TRANSFER_SHARE * c.fin.balance, 1e5));
-  s.wageBudget = round(Math.max(wageBill(c) + staffBill(s, c), WAGE_SHARE * (debt ? DEBT_CUT : 1) * projection(s, c) / 52) + Math.max(0, c.fin.balance) / SAVINGS_WEEKS, 1e3);
+  s.wageBudget = round(Math.max(wageBill(c) + staffBill(s, c), WAGE_SHARE * (debt ? DEBT_CUT : 1) * projection(s, c) / 52) + (1 - TRANSFER_SHARE) * Math.max(0, c.fin.balance) / SAVINGS_WEEKS, 1e3);
 }

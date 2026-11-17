@@ -363,11 +363,11 @@ test('weekly books: every club gets broadcast and sponsorship money and pays wag
 test('budgets: set when you take a club and again each season from the books', () => {
   const s = world(20);
   takeClub(s, 6);
-  assert.equal(s.budget, Math.max(0, Math.round(myClub(s).fin.balance / 2 / 1e5) * 1e5));
+  assert.equal(s.budget, Math.max(0, Math.round(0.75 * myClub(s).fin.balance / 1e5) * 1e5));
   assert.ok(s.wageBudget >= wageBill(myClub(s)));
   while (!s.done) playDay(s);
   endSeason(s);
-  assert.equal(s.budget, Math.max(0, Math.round(myClub(s).fin.balance / 2 / 1e5) * 1e5));
+  assert.equal(s.budget, Math.max(0, Math.round(0.75 * myClub(s).fin.balance / 1e5) * 1e5));
 });
 
 test('upcoming lists the next matches of the human club in date order, cup ties once drawn', () => {

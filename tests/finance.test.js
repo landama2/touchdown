@@ -68,14 +68,14 @@ test('prizes: merit by final position for every club, the cup winner and runner-
   assert.equal(payPrizes(books(), [[0, 1], [2]], null, null), 0);
 });
 
-test('season budgets: half the balance for fees; wages up to 70% of income or the current bill, plus savings over two years', () => {
+test('season budgets: three quarters of the balance for fees; wages up to 55% of income or the current bill, plus the other quarter over two years', () => {
   const s = books(), c = s.clubs[0];
   c.fin.balance = 10e6; seasonBudgets(s);
-  assert.equal(s.budget, 5e6);
-  assert.equal(s.wageBudget, Math.round((0.7 * projection(s, c) / 52 + 10e6 / SAVINGS_WEEKS) / 1e3) * 1e3);
+  assert.equal(s.budget, 7.5e6);
+  assert.equal(s.wageBudget, Math.round((0.55 * projection(s, c) / 52 + 2.5e6 / SAVINGS_WEEKS) / 1e3) * 1e3);
   c.fin.balance = -1e6; seasonBudgets(s);
   assert.equal(s.budget, 0);
-  assert.equal(s.wageBudget, Math.round(DEBT_CUT * 0.7 * projection(s, c) / 52 / 1e3) * 1e3); // in debt: no savings, less income
+  assert.equal(s.wageBudget, Math.round(DEBT_CUT * 0.55 * projection(s, c) / 52 / 1e3) * 1e3); // in debt: no savings, less income
   const rich = books(12, [5e6]); rich.clubs[0].fin.balance = 0; seasonBudgets(rich);
   assert.equal(rich.wageBudget, 5e6); // never below what the club pays now: wages are frozen, not cut
 });

@@ -133,7 +133,7 @@ function between(s, rng, from, to) {
     const t = trainingOf(s, c);
     const hurt = [];
     for (let w = 0; w < weeks; w++) hurt.push(...trainWeek(rng, c, t));
-    passDays(c.players, to - from, recoverRate(t));
+    passDays(c.players, to - from, p => recoverRate(t, p));
     if (c.id === s.me) for (const p of hurt) if (p.inj) // only those still hurt when the next match day comes
       s.news.push({ type: 'injury', club: c.id, id: p.id, name: p.name, injury: p.inj.name, days: p.inj.days, training: true });
   }

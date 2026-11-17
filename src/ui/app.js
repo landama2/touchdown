@@ -1,6 +1,6 @@
 import { POS, ATTRS, ALL_ATTRS, overall, value } from '../player.js';
 import { available, formAvg, moraleLabel, YELLOW_LIMIT } from '../squad.js';
-import { FOCUS, INTENSITY, setTraining, setFocus } from '../training.js';
+import { FOCUS, INTENSITY, LOADS, setTraining, setFocus, setLoad } from '../training.js';
 import { createWorld } from '../world.js';
 import { FORMATIONS, BENCH, slots, bestXI, fixLineup, swap } from '../lineup.js';
 import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason } from '../season.js';
@@ -205,13 +205,15 @@ const views = {
   Training() {
     const t = s.training, pairs = o => Object.keys(o).map(k => [k, k]);
     const focus = p => fieldSelect('focus', 'attr', [['', 'With the team'], ...ALL_ATTRS.map(k => [k, label(k)])], t.ind[p.id] ?? '', p.id);
+    const load = p => fieldSelect('load', 'load', [['', 'With the team'], ...LOADS.map(k => [k, k])], t.load[p.id] ?? '', p.id);
     return `<h2>Weekly schedule</h2><div class="bar"><label>Focus ${fieldSelect('trainField', 'focus', pairs(FOCUS), t.focus)}</label>
       <label>Intensity ${fieldSelect('trainField', 'intensity', pairs(INTENSITY), t.intensity)}</label></div>
-      <p class="dim">Each week, players aged 23 or under may improve one attribute, never beyond their hidden potential: about four a season at Normal.
+      <p class="dim">Each week a player may improve one attribute, never beyond his hidden potential: about four a season at Normal for players aged 23 or under, less with every year after that (about two at 26, one at 29, almost nothing from 31).
       Hard trains faster, but players recover less between matches and get hurt more often; Light is the reverse. Rest stops improvement and speeds recovery.
+      Each player can train at his own intensity; a personal Rest means no improvement and no training injuries.
       Keepers always work on goalkeeping. An individual focus takes half of a player's improvement. Players aged 31 and over slowly lose pace, stamina, strength and agility whatever you do.</p>
-      <div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Gained</th><th>Individual focus</th></tr>
-      ${byPos(myClub(s).players).map(p => `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${p.gain ? '+' + p.gain : ''}</td><td>${focus(p)}</td></tr>`).join('')}</table></div>`;
+      <div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Gained</th><th>Individual focus</th><th>Intensity</th></tr>
+      ${byPos(myClub(s).players).map(p => `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${p.gain ? '+' + p.gain : ''}</td><td>${focus(p)}</td><td>${load(p)}</td></tr>`).join('')}</table></div>`;
   },
   Match() {
     if (s.live) return liveView();
@@ -337,7 +339,7 @@ const views = {
       <p>Balance <b>${money(c.fin.balance)}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(c))} of ${perWeek(s.wageBudget)}</p>
       <div class="wrap"><table><tr><th>Income this season</th><th></th></tr>${line('Broadcasting', L.broadcast)}${line('Sponsorship', L.sponsor)}${line('Gate receipts', L.gate)}${line('Prize money', L.prize)}${line('Player sales', L.sales)}
       <tr><th>Costs this season</th><th></th></tr>${line('Wages', L.wages)}${line('Transfer fees', L.fees)}${line('Staff beyond the standard', L.staff)}</table></div>
-      <p class="dim">Expected income for a mid-table season: ${money(projection(s, c))}. The board sets each season's budgets: half the balance for transfers (none in debt); for wages and staff, 70% of the expected income or what you pay now, whichever is more, plus what your savings can carry over two years. In debt there is no extra, so wages are frozen. Renewing a player at the same wage always fits. You may ask the board for more once a season (Board).</p>`;
+      <p class="dim">Expected income for a mid-table season: ${money(projection(s, c))}. The board sets each season's budgets: three quarters of the balance for transfers (none in debt); for wages and staff, 55% of the expected income or what you pay now, whichever is more, plus what the other quarter of your savings can carry over two years. In debt there is no extra, so wages are frozen. Renewing a player at the same wage always fits. You may ask the board for more once a season (Board).</p>`;
   },
 };
 
@@ -439,6 +441,7 @@ const actions = {
   play() { stopClock(); playDay(s); subOut = null; msg = newsText(); },
   trainField(_, el) { msg = setTraining(s, el.dataset.field, el.value) || ''; },
   focus(id, el) { msg = setFocus(s, id, el.value || null) || ''; },
+  load(id, el) { msg = setLoad(s, id, el.value || null) || ''; },
   live() { kickOff(s); subOut = null; },
   go() { startClock(); },
   pause() { stopClock(); },
