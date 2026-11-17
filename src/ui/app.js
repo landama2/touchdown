@@ -445,6 +445,7 @@ function outOfWork() {
     <div class="bar">${s.done ? '<button class="primary" data-act="end">Start next season</button>' : `<button class="primary" data-act="play">Continue</button> <span class="dim">${dateLabel(s.days[s.next].day)}</span>`}</div>`;
 }
 const UNEMPLOYED = ['Inbox', 'Money', 'Table', 'Cup'];
+const SAVE_BUTTONS = '<button data-act="exportSave">Export save</button><button data-act="importSave">Import save</button>';
 const navButton = t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}">${t === 'Inbox' && unread() ? `Inbox (${unread()})` : t}</button>`;
 
 const actions = {
@@ -453,6 +454,25 @@ const actions = {
   declineJob(id) { declineJob(s, id); msg = 'Offer declined.'; },
   ask(_, el) { msg = askBoard(s, el.dataset.field); },
   reset() { if ((s.me === null && !s.career) || confirm('Abandon this career and start a new game?')) { stopClock(); s = newWorld(); sel = viewing = null; tableDiv = 0; } },
+  exportSave() {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([serialize(s)], { type: 'application/json' }));
+    a.download = `touchline-${s.me === null ? 'career' : s.clubs[s.me].short}-season-${s.season}.json`.replace(/[^\w.-]+/g, '_');
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  },
+  importSave() {
+    const f = document.createElement('input');
+    f.type = 'file'; f.accept = '.json,application/json';
+    f.onchange = async () => {
+      const next = deserialize(await f.files[0]?.text());
+      if (!next) msg = 'That file is not a Touchline save.';
+      else if ((s.me !== null || s.career) && !confirm('Replace the current game with this save?')) return;
+      else { stopClock(); s = next; tab = s.live ? 'Match' : s.me === null ? 'Inbox' : 'Squad'; sel = viewing = null; tableDiv = s.me === null ? 0 : s.clubs[s.me].div; msg = 'Save imported.'; }
+      render(); save();
+    };
+    f.click();
+  },
   tab(_, el) { tab = el.dataset.tab; sel = viewing = null; },
   div(id) { tableDiv = id; },
   view(id) { viewing = id; },
@@ -526,21 +546,21 @@ function render() {
     if (!UNEMPLOYED.includes(tab)) tab = 'Inbox';
     $('info').textContent = `Out of work · reputation ${s.career.rep} · Season ${s.season}`;
     const main = `<div class="msg" role="status">${msg}</div>` + outOfWork() + views[tab](); // first: the inbox marks what it shows as read
-    $('nav').innerHTML = UNEMPLOYED.map(navButton).join('') + '<button data-act="reset">New game</button>';
+    $('nav').innerHTML = UNEMPLOYED.map(navButton).join('') + '<button data-act="reset">New game</button>' + SAVE_BUTTONS;
     $('main').innerHTML = main;
     msg = '';
     return;
   }
   if (s.me === null) {
     $('info').textContent = 'Pick a club to manage';
-    $('nav').innerHTML = '';
+    $('nav').innerHTML = '<button data-act="importSave">Import save</button>';
     $('main').innerHTML = s.divisions.map(d => `<h2>${esc(d.name)}</h2><div class="grid">${d.clubIds.map(id => `<button data-act="start" data-id="${id}">${badge(id, 24)}${clubName(id)}</button>`).join('')}</div>`).join('');
     return;
   }
   $('info').innerHTML = `${badge(s.me, 22)}${clubName(s.me)} · ${esc(s.divisions[myClub(s).div].name)} · Season ${s.season} · ${s.done ? 'season over' : dateLabel(s.days[s.next].day)} · Transfers ${money(s.budget)} · Wages ${perWeek(wageBill(myClub(s)))} of ${perWeek(s.wageBudget)}`;
   if (s.live) tab = 'Match'; // the other screens wait for the final whistle
   const main = `<div class="msg" role="status">${msg}</div>` + profile() + views[tab](); // first: the inbox marks what it shows as read
-  $('nav').innerHTML = (s.live ? ['Match'] : Object.keys(views)).map(navButton).join('') + '<button data-act="reset">New game</button>';
+  $('nav').innerHTML = (s.live ? ['Match'] : Object.keys(views)).map(navButton).join('') + '<button data-act="reset">New game</button>' + SAVE_BUTTONS;
   $('main').innerHTML = main;
   msg = '';
 }
