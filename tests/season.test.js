@@ -402,7 +402,7 @@ test('weekly books: every club gets broadcast and sponsorship money and pays wag
   while (!s.done) for (const r of playDay(s)) if (r.h === 0 && !(r.item.comp === 'cup' && r.item.round === cupRounds(s.clubs.length) - 1)) gates++;
   assert.equal(Math.floor(s.days.at(-1).day / 7) + 1, SEASON_WEEKS);
   const w = SEASON_WEEKS;
-  assert.deepEqual(c.fin.season, { broadcast: w * per(BROADCAST[0]), sponsor: w * per(sponsorship(c)), gate: gates * gate(c), prize: 0, wages: w * per(wageBill(c) * 52), fees: 0, sales: 0, staff: 0 });
+  assert.deepEqual(c.fin.season, { broadcast: w * per(BROADCAST[0]), sponsor: w * per(sponsorship(c)), gate: gates * gate(c), prize: 0, wages: w * per(wageBill(c) * 52), fees: 0, sales: 0, staff: 0, dividends: 0 });
   assert.equal(c.fin.balance - start, c.fin.season.broadcast + c.fin.season.sponsor + c.fin.season.gate - c.fin.season.wages);
   assert.ok(s.clubs.every(x => x.fin.season.broadcast > 0 && x.fin.season.wages > 0)); // AI clubs keep books too
 });
@@ -410,11 +410,11 @@ test('weekly books: every club gets broadcast and sponsorship money and pays wag
 test('budgets: set when you take a club and again each season from the books', () => {
   const s = world(20);
   takeClub(s, 6);
-  assert.equal(s.budget, Math.max(0, Math.round(myClub(s).fin.balance / 2 / 1e5) * 1e5));
+  assert.equal(s.budget, Math.max(0, Math.round(0.75 * myClub(s).fin.balance / 1e5) * 1e5));
   assert.ok(s.wageBudget >= wageBill(myClub(s)));
   while (!s.done) playDay(s);
   endSeason(s);
-  assert.equal(s.budget, Math.max(0, Math.round(myClub(s).fin.balance / 2 / 1e5) * 1e5));
+  assert.equal(s.budget, Math.max(0, Math.round(0.75 * myClub(s).fin.balance / 1e5) * 1e5));
 });
 
 test('upcoming lists the next matches of the human club in date order, cup ties once drawn', () => {

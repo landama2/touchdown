@@ -80,10 +80,15 @@ function leave(s, p, list) {
 // Moves p from club `from` (null: the free-agent list) to club `to` (null: released to the list) for
 // `fee` (from null: his signing-on fee). The buyer pays, the seller is paid; the human club's transfer
 // budget moves with its books. He signs his terms at the human club, his going rate at an AI club.
-export function move(s, p, from, to, fee) {
+// own: the manager pays from his own money and owns the player (p.mine). Selling a player the manager owns
+// pays the fee to the manager, not the club, and ends his ownership; so does a release.
+export function move(s, p, from, to, fee, own = false) {
   leave(s, p, from ? from.players : s.market);
-  if (to) { to.fin.balance -= fee; to.fin.season.fees += fee; if (to.id === s.me) s.budget -= fee; }
-  if (from) { from.fin.balance += fee; from.fin.season.sales += fee; if (from.id === s.me) s.budget += fee; }
+  if (own) s.career.money -= fee;
+  else if (to) { to.fin.balance -= fee; to.fin.season.fees += fee; if (to.id === s.me) s.budget -= fee; }
+  if (p.mine && s.career) s.career.money += fee;
+  else if (from) { from.fin.balance += fee; from.fin.season.sales += fee; if (from.id === s.me) s.budget += fee; }
+  if (own) p.mine = true; else delete p.mine;
   if (!to) { p.contract = null; s.market.push(p); }
   else {
     const start = s.season - (s.done ? 0 : 1); // a contract agreed after the last match day counts from next season

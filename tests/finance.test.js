@@ -43,7 +43,7 @@ test('sponsorship and gate grow with club quality', () => {
 test('books open at a quarter of a season, and weekly instalments are the same every week', () => {
   const s = books(), c = s.clubs[0];
   assert.equal(wageBill(c), 15e3);
-  assert.deepEqual(blankLedger(), { broadcast: 0, sponsor: 0, gate: 0, prize: 0, wages: 0, fees: 0, sales: 0, staff: 0 });
+  assert.deepEqual(blankLedger(), { broadcast: 0, sponsor: 0, gate: 0, prize: 0, wages: 0, fees: 0, sales: 0, staff: 0, dividends: 0 });
   assert.equal(c.fin.balance, Math.round(0.25 * projection(s, c) / 1e5) * 1e5);
   assert.equal(projection(s, c), BROADCAST[0] + MERIT[0] * 2 / 2 + sponsorship(c) + gate(c) * 1);
   const start = c.fin.balance, per = x => Math.round(x / SEASON_WEEKS);
@@ -68,14 +68,14 @@ test('prizes: merit by final position for every club, the cup winner and runner-
   assert.equal(payPrizes(books(), [[0, 1], [2]], null, null), 0);
 });
 
-test('season budgets: half the balance for fees; wages up to 70% of income or the current bill, plus savings over two years', () => {
+test('season budgets: three quarters of the balance for fees; wages up to 55% of income or the current bill, plus the other quarter over two years', () => {
   const s = books(), c = s.clubs[0];
   c.fin.balance = 10e6; seasonBudgets(s);
-  assert.equal(s.budget, 5e6);
-  assert.equal(s.wageBudget, Math.round((0.7 * projection(s, c) / 52 + 10e6 / SAVINGS_WEEKS) / 1e3) * 1e3);
+  assert.equal(s.budget, 7.5e6);
+  assert.equal(s.wageBudget, Math.round((0.55 * projection(s, c) / 52 + 2.5e6 / SAVINGS_WEEKS) / 1e3) * 1e3);
   c.fin.balance = -1e6; seasonBudgets(s);
   assert.equal(s.budget, 0);
-  assert.equal(s.wageBudget, Math.round(DEBT_CUT * 0.7 * projection(s, c) / 52 / 1e3) * 1e3); // in debt: no savings, less income
+  assert.equal(s.wageBudget, Math.round(DEBT_CUT * 0.55 * projection(s, c) / 52 / 1e3) * 1e3); // in debt: no savings, less income
   const rich = books(12, [5e6]); rich.clubs[0].fin.balance = 0; seasonBudgets(rich);
   assert.equal(rich.wageBudget, 5e6); // never below what the club pays now: wages are frozen, not cut
 });

@@ -11,7 +11,7 @@ import { staffScouts } from './scouting.js';
 import { aiStaff, standardStaff } from './staff.js';
 import { BOARD_START, REP_START } from './world.js';
 
-export const SAVE_VERSION = 11; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad. 11: boards, the manager's career, the inbox
+export const SAVE_VERSION = 12; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad. 11: boards, the manager's career, the inbox. 12: per-player training intensity, the manager's money
 export const KEY = 'touchline.save';
 
 export const serialize = state => JSON.stringify(state);
@@ -22,12 +22,12 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
   && (s.live === null || (typeof s.live === 'object' && Array.isArray(s.live.sides)))
   && Array.isArray(s.bench) && !!s.tactics && Array.isArray(s.tactics.slots) && !!s.fam && typeof s.fam === 'object'
   && Array.isArray(s.days) && Number.isInteger(s.next) && Array.isArray(s.playoffs) && Array.isArray(s.records) && (s.cup === null || typeof s.cup === 'object')
-  && !!s.training && !!s.training.ind && typeof s.training.ind === 'object' && Array.isArray(s.news)
+  && !!s.training && !!s.training.ind && typeof s.training.ind === 'object' && !!s.training.load && typeof s.training.load === 'object' && Array.isArray(s.news)
   && Number.isFinite(s.wageBudget) && s.clubs.every(c => c.fin && Number.isFinite(c.fin.balance) && !!c.fin.season)
   && Array.isArray(s.offers) && !!s.talks && Array.isArray(s.deals) && s.clubs.every(c => Number.isFinite(c.lentPay))
   && !!s.known && typeof s.known === 'object' && Array.isArray(s.scouts) && Array.isArray(s.shortlist)
   && Array.isArray(s.youth) && s.clubs.every(c => c.staff && Number.isInteger(c.staff.coaching))
-  && Array.isArray(s.jobs) && Array.isArray(s.inbox) && (s.career === null || Number.isFinite(s.career.rep)) && s.clubs.every(c => Number.isFinite(c.conf) && Number.isInteger(c.games));
+  && Array.isArray(s.jobs) && Array.isArray(s.inbox) && (s.career === null || (Number.isFinite(s.career.rep) && Number.isFinite(s.career.money) && !!s.career.shares)) && s.clubs.every(c => Number.isFinite(c.conf) && Number.isInteger(c.games));
 
 // MIGRATIONS[v] upgrades a save from version v to v + 1.
 const MIGRATIONS = {
@@ -71,6 +71,11 @@ const MIGRATIONS = {
     for (const c of s.clubs) { c.conf = BOARD_START; c.games = c.st.p; }
     s.career = s.me === null ? null : { rep: REP_START, asked: null, warned: null, spells: [{ club: s.me, from: s.season, to: null, how: null }] };
     s.jobs = []; s.inbox = [];
+  },
+  11: s => { // everyone trains at the team's intensity; the manager starts with no money, on his club's salary from now
+    s.training.load = {};
+    for (const c of s.clubs) c.fin.season.dividends = 0;
+    if (s.career) Object.assign(s.career, { money: 0, shares: {} }); // the current spell's salary is set when first paid (career.js)
   },
 };
 
