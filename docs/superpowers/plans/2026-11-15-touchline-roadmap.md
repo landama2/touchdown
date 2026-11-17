@@ -23,6 +23,7 @@
 | 8 | Scouting & knowledge | Attributes of unknown players shown as ranges, scouts with assignments and reports, shortlists, player search and filters | 7 | `2026-11-16-touchline-phase-8-scouting.md` (done 2026-11-16) |
 | 9 | Youth & staff | Annual academy intake, youth squad, staff (coaches, scouts, physios) with their own attributes that affect training, scouting accuracy and recovery; hiring and firing | 5, 8 | `2026-11-16-touchline-phase-9-youth-staff.md` (done 2026-11-16) |
 | 10 | Manager career | Board expectations and confidence, job security, sackings, job offers at other clubs, manager reputation, inbox with news and decisions | 6, 7 | `2026-11-16-touchline-phase-10-manager-career.md` (done 2026-11-16) |
+$L
 | 11 | Interface | Touchline's own visual identity, player and club profile screens, 2D pitch match view, sortable/filterable tables, save slots with export/import, keyboard and screen-reader support | 2–10 | to write |
 | 12 | Balance & soak | 20-season automated runs checked against statistical targets (goals per match 2.5–2.9, home wins 43–47%, plausible wage/value curves), performance budget, save-size budget | all | to write |
 
@@ -60,6 +61,11 @@ Phase 10 notes (decided 2026-11-16):
 - Vacancies still open when a season ends stay open for the new season's first 14 days (an owner-approved fix during implementation).
 - The wage budget is max(current wages and staff, 70% of projected income) + savings over two years, frozen in debt; the Phase 6 floor of wage bill + 15% is gone. The Premier League money piles are left for Phase 12.
 - Phase 12's soak should check the sacking rate (10–20 a season) and that a managed career survives 20 seasons.
+
+Phase 10b notes (decided 2026-11-17, plan `2026-11-17-touchline-phase-10b-training-money.md`):
+- Training now develops players of every age, tapering from 1× at 23 to 0.1× from 31 (`ageGrow()` in `src/training.js`); still capped by the hidden potential. Over 3 seasons of the real data the average overall rises by about 3.2 instead of 1.75 before. Phase 12's soak should check that this levels off.
+- Budgets favour transfers: 75% of the balance for fees, wages from 55% of projected income (was 50% / 70%).
+- The manager has money of his own: a salary, bonuses and severance; players of his own (`p.mine`); shares in clubs up to 49%. Buying a whole club (majority ownership) and Star points (young versions of past legends, earned when your own star players retire) are later phases. Star points decisions: only stars retiring from your club count; current stars can be legends too; real names; potential always high; AI clubs get legends at a much smaller chance.
 
 ## Architecture decisions that hold for every phase
 

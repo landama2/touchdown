@@ -14,7 +14,7 @@ import { MIN_SQUAD, inWindow, windowId, marketDay, returnLoans } from './market.
 import { scoutDays, staffScouts, prune } from './scouting.js';
 import { aiStaff, standardStaff } from './staff.js';
 import { intake, trainYouth, ageYouth } from './youth.js';
-import { afterLeague, afterCup, boardWeeks, boardDay, seasonReview, seasonStart, file } from './career.js';
+import { afterLeague, afterCup, boardWeeks, boardDay, seasonReview, seasonStart, file, payManager } from './career.js';
 
 const RETIRE_AGE = 35;
 const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
@@ -169,6 +169,7 @@ export function playDay(s) {
   for (const it of today.items) advance(s, rng, it);
   const weeks = Math.floor(today.day / 7) - Math.floor(s.day / 7);
   payWeeks(s, weeks); // weekly instalments, every club
+  payManager(s, weeks); // and the manager's salary
   boardWeeks(s, weeks); // boards look at the table and the books
   if (played) learnFam(s.fam, s.formation); // the formation you prepared, not mid-match switches
   s.live = null;

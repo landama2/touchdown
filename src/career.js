@@ -1,5 +1,5 @@
 import { table, takeClub, PROMOTED, PLAYOFF, RELEGATED } from './season.js';
-import { wageBill, staffBill } from './finance.js';
+import { wageBill, staffBill, SEASON_WEEKS, SHARE, clubValue, profit, stake } from './finance.js';
 import { cupRounds } from './cup.js';
 import { seeding, BOARD_START as START, REP_START } from './world.js';
 
@@ -10,6 +10,10 @@ import { seeding, BOARD_START as START, REP_START } from './world.js';
 // plays exactly as before. The human manager (s.career, null before a club is picked) has a reputation
 // that the season's finish moves; it gates job offers, steadies the board and helps persuade players.
 // News goes into s.news during a day and into the kept, dated inbox (s.inbox).
+// The manager has money of his own (s.career.money, euros): a salary fixed at hiring by the club's size,
+// season bonuses, and severance when sacked. He can spend it on players of his own (p.mine: transfers.js
+// with `own`; they follow him to every new job and their fees come back to him) and on shares in clubs
+// (s.career.shares: club id -> percent; dividends each summer, a say over his own club's board).
 // ponytail: imports season.js, which imports this file back; only functions cross, so the cycle is safe.
 export { START, REP_START };
 export const SACK = 20, MIN_GAMES = 6, WARN = [35, 25], CALM = 45;
@@ -18,6 +22,8 @@ export const MOVE = { match: 1.5, below: 0.5, onTarget: 0.25, debt: 1, overBudge
 export const REP = { pull: 0.3, trophy: 5, sacked: 10, gate: 15, patience: 10 };
 export const ASK = { conf: 60, cost: 3, transfer: 1.25, wage: 1.1 };
 export const VACANCY_DAYS = 14, INBOX_MAX = 150;
+export const SALARY = { base: 150e3, growth: 0.045 };          // a year: size 0 €150k, 50 €1.4M, 100 €13.5M
+export const BONUS = { target: 0.1, up: 0.25, trophy: 0.25 }, SEVERANCE = 0.25; // × a year's salary
 
 const clamp = x => Math.max(0, Math.min(100, x));
 const round = (x, step) => Math.round(x / step) * step;
@@ -99,12 +105,23 @@ export function seasonReview(s, tables, h) {
       const trophies = [h.divs[d].champion === id, h.divs[d].playoff === id, h.cup?.winner === id].filter(Boolean).length;
       s.career.rep = Math.round(clamp(was + REP.pull * (standing - was) + REP.trophy * trophies));
       post(s, { type: 'review', club: id, target: b[target][0], met: missed <= 0, pos: k + 1, rep: s.career.rep, was });
+      const bonus = round(salary(s) * ((missed <= 0 ? BONUS.target : 0) + (h.divs[d].up.includes(id) ? BONUS.up : 0) + BONUS.trophy * trophies), 1e3);
+      if (bonus) { s.career.money += bonus; post(s, { type: 'bonus', club: id, amount: bonus }); }
     });
     above += t.length;
   });
+  if (s.career) payDividends(s);
 }
 
 // --- the human manager ---
+
+// A year's salary at club id, set when hired.
+export const salaryFor = (s, id) => round(SALARY.base * Math.exp(SALARY.growth * level(s, id)), 10e3);
+const salary = s => s.career.spells.at(-1).salary ??= salaryFor(s, s.me); // ??=: a spell from a version 11 save
+// The salary in SEASON_WEEKS instalments, like the clubs' wages (payWeeks in src/finance.js).
+export function payManager(s, weeks) {
+  if (weeks > 0 && s.me !== null && s.career) s.career.money += weeks * Math.round(salary(s) / SEASON_WEEKS);
+}
 
 export function post(s, n) {
   s.inbox.push({ ...n, season: s.season, day: s.day, read: false });
@@ -114,17 +131,30 @@ const targets = (s, id) => ({ type: 'target', club: id, league: bands(s, s.clubs
 
 // A new career at club id (the club picker).
 export function startCareer(s, id) {
-  s.career = { rep: REP_START, asked: null, warned: null, spells: [] };
+  s.career = { rep: REP_START, asked: null, warned: null, spells: [], money: 0, shares: {} };
   hire(s, id);
 }
 function hire(s, id) {
+  bringOwn(s, id);
   takeClub(s, id);
   const c = s.clubs[id];
   c.conf = START; c.games = 0;
-  s.career.spells.push({ club: id, from: s.season, to: null, how: null });
+  s.career.spells.push({ club: id, from: s.season, to: null, how: null, salary: salaryFor(s, id) });
   s.career.asked = null; s.career.warned = null;
   s.jobs = s.jobs.filter(j => j.club !== id);
   post(s, targets(s, id));
+}
+// The manager's own players come with him to club id on their contracts, whatever its wage budget.
+// ponytail: one out on loan stays where he is; he goes home at the season's end and comes along at the next hire.
+function bringOwn(s, id) {
+  for (const c of s.clubs) {
+    if (c.id === id) continue;
+    for (const p of c.players.filter(x => x.mine && !x.loan)) {
+      c.players.splice(c.players.indexOf(p), 1);
+      delete p.listed;
+      s.clubs[id].players.push(p);
+    }
+  }
 }
 // The human manager leaves the club ('sacked' or 'left'): it gets a new manager after a vacancy.
 const ended = s => s.day < 0 ? s.season - 1 : s.season; // the season being left: the end-of-season board check runs after the rollover
@@ -154,10 +184,12 @@ export function boardDay(s) {
   for (const c of s.clubs) {
     const human = c.id === s.me && !!s.career;
     if (c.id === s.me && !human) continue; // a club taken without a career (tests) is never sacked
-    const line = human ? SACK - s.career.rep / REP.patience : SACK;
+    const line = human ? sackLine(s) : SACK;
     if (c.games < MIN_GAMES || c.conf >= line) continue;
     if (human) {
-      s.news.push({ type: 'sacked', club: c.id });
+      const pay = round(SEVERANCE * salary(s), 1e4);
+      s.career.money += pay;
+      s.news.push({ type: 'sacked', club: c.id, pay });
       s.career.rep = Math.round(clamp(s.career.rep - REP.sacked));
       leave(s, 'sacked');
       for (const j of s.jobs) offer(s, j);
@@ -202,15 +234,44 @@ export const openOffer = (s, id) => s.jobs.some(x => x.club === id && x.offered)
 // Once a season the manager may ask for more money: more transfer budget or more wage budget. The
 // board agrees while its confidence is at least ASK.conf and the club is not in debt; a refusal costs
 // ASK.cost confidence. Returns the answer.
+// The human manager's sacking line: lower with reputation, and with a stake of SHARE.patient or more in his club.
+export const sackLine = s => SACK - s.career.rep / REP.patience - (stake(s, s.me) >= SHARE.patient ? SHARE.patience : 0);
+
+// With a stake of SHARE.say or more in his club, the board always agrees.
 export function askBoard(s, kind) {
   if (s.me === null || !s.career) return 'You have no club.';
   if (kind !== 'transfer' && kind !== 'wage') return 'Unknown request.';
   if (s.career.asked === s.season) return 'The board has already heard you this season.';
   s.career.asked = s.season;
-  const c = s.clubs[s.me], yes = c.conf >= ASK.conf && c.fin.balance > 0;
+  const c = s.clubs[s.me], yes = (c.conf >= ASK.conf && c.fin.balance > 0) || stake(s, s.me) >= SHARE.say;
   if (yes && kind === 'transfer') s.budget = round(s.budget * ASK.transfer, 1e5);
   if (yes && kind === 'wage') s.wageBudget = round(s.wageBudget * ASK.wage, 1e3);
   if (!yes) c.conf = clamp(c.conf - ASK.cost);
   post(s, { type: 'request', club: c.id, kind, yes });
   return yes ? `The board agrees: more ${kind === 'transfer' ? 'transfer' : 'wage'} budget this season.` : 'The board says no, and is not pleased you asked.';
+}
+
+// --- shares ---
+
+// Buys (pct > 0) or sells (pct < 0) whole percents of club id at today's value; a sale loses SHARE.sellCut.
+// The money goes to or comes from the other owners, not the club. Error message or null.
+export function trade(s, id, pct) {
+  if (!s.career) return 'You have no career.';
+  if (!s.clubs[id] || !Number.isInteger(pct) || !pct) return 'Unknown deal.';
+  const have = stake(s, id), price = round(Math.abs(pct) * clubValue(s, s.clubs[id]) / 100, 1e3);
+  if (pct > 0 && have + pct > SHARE.max) return `You can own at most ${SHARE.max}% of a club.`;
+  if (pct > 0 && price > s.career.money) return 'You cannot afford that.';
+  if (pct < 0 && -pct > have) return 'You do not own that many shares.';
+  s.career.money += pct > 0 ? -price : round(price * (1 - SHARE.sellCut), 1e3);
+  if (have + pct) s.career.shares[id] = have + pct; else delete s.career.shares[id];
+  return null;
+}
+// End of the season: each club he has a stake in pays him stake × SHARE.payout of its season's profit, from its balance.
+function payDividends(s) {
+  for (const [id, pct] of Object.entries(s.career.shares)) {
+    const c = s.clubs[id], x = round(pct / 100 * SHARE.payout * Math.max(0, profit(c)), 1e3);
+    if (!x) continue;
+    c.fin.balance -= x; c.fin.season.dividends += x; s.career.money += x;
+    post(s, { type: 'dividend', club: c.id, amount: x, pct });
+  }
 }

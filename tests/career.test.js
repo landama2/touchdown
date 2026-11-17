@@ -6,7 +6,11 @@ import {
   START, SACK, MIN_GAMES, MOVE, REP_START, REP, ASK, VACANCY_DAYS, INBOX_MAX,
   expectedPoints, expectedPos, bands, leagueTarget, cupTarget, level, afterLeague, afterCup, boardDay, boardWeeks, seasonReview,
   post, startCareer, acceptJob, declineJob, openOffer, askBoard,
+  SALARY, BONUS, SEVERANCE, salaryFor, payManager, trade, sackLine,
 } from '../src/career.js';
+import { SEASON_WEEKS, SHARE, clubValue, seasonBudgets } from '../src/finance.js';
+import { regular } from '../src/market.js';
+import { bid, buy, sell } from '../src/transfers.js';
 import { MINI } from './fixtures/mini.js';
 import { serialize, deserialize } from '../src/save.js';
 
@@ -169,8 +173,8 @@ test('the season review rewards a met target and moves the reputation toward the
   seasonReview(s, tables, h);
   assert.equal(s.clubs[0].conf, START + MOVE.met);
   assert.equal(s.career.rep, Math.round(REP_START + REP.pull * (100 - REP_START) + REP.trophy));
-  assert.equal(s.inbox.at(-1).type, 'review');
-  assert.ok(s.inbox.at(-1).met);
+  const review = s.inbox.find(n => n.type === 'review');
+  assert.ok(review.met);
 });
 
 test('the inbox keeps the newest INBOX_MAX items', () => {
@@ -230,4 +234,105 @@ test('a vacancy opened on the last day of the season carries into the next throu
   endSeason(s);
   assert.equal(s.season, season + 1);
   assert.deepEqual(s.jobs.filter(j => j.club === 12).map(j => [j.season, j.until]), [[s.season, VACANCY_DAYS - 1]]);
+});
+
+// --- the manager's money ---
+
+test('the salary grows with the club size and is paid week by week; a met target and trophies pay a bonus', () => {
+  const s = world(1);
+  assert.ok(salaryFor(s, 0) > salaryFor(s, 10) && salaryFor(s, 10) > salaryFor(s, 19));
+  assert.equal(salaryFor(s, 19), SALARY.base); // the smallest club: size 0
+  startCareer(s, 0);
+  const pay = salaryFor(s, 0);
+  assert.equal(s.career.spells[0].salary, pay);
+  payManager(s, SEASON_WEEKS);
+  assert.equal(s.career.money, SEASON_WEEKS * Math.round(pay / SEASON_WEEKS));
+  s.career.money = 0;
+  const tables = s.divisions.map(d => d.clubIds), h = { cup: { winner: 0 }, divs: s.divisions.map((_, d) => ({ champion: tables[d][0], playoff: null, up: [], down: [] })) };
+  seasonReview(s, tables, h); // champion (target met) and cup winner
+  assert.equal(s.career.money, Math.round(pay * (BONUS.target + 2 * BONUS.trophy) / 1e3) * 1e3);
+  assert.equal(s.inbox.at(-1).type, 'bonus');
+});
+
+test('a sacked manager gets severance; one who leaves for a job does not', () => {
+  const s = world(1);
+  startCareer(s, 5);
+  const c = s.clubs[5];
+  c.games = MIN_GAMES; c.conf = 0;
+  boardDay(s);
+  assert.equal(s.me, null);
+  assert.equal(s.career.money, Math.round(SEVERANCE * salaryFor(s, 5) / 1e4) * 1e4);
+  assert.equal(s.news.find(n => n.type === 'sacked').pay, s.career.money);
+});
+
+test('shares: bought and sold at the club value, at most 49%, dividends from profit only', () => {
+  const s = world(1);
+  startCareer(s, 15);
+  const v = clubValue(s, s.clubs[4]);
+  s.career.money = v; // enough for anything allowed
+  assert.equal(trade(s, 4, 50), `You can own at most ${SHARE.max}% of a club.`);
+  assert.equal(trade(s, 4, 10), null);
+  assert.equal(s.career.money, v - Math.round(v / 10 / 1e3) * 1e3);
+  assert.equal(trade(s, 4, -11), 'You do not own that many shares.');
+  const before = s.career.money;
+  assert.equal(trade(s, 4, -5), null);
+  assert.equal(s.career.money - before, Math.round(Math.round(v / 20 / 1e3) * 1e3 * (1 - SHARE.sellCut) / 1e3) * 1e3);
+  assert.deepEqual(s.career.shares, { 4: 5 });
+  s.career.money = 0;
+  assert.equal(trade(s, 6, 1), 'You cannot afford that.');
+  assert.equal(trade(s, 6, 1.5), 'Unknown deal.');
+  // dividends: club 4 makes a profit of 10M, club 15 (also 5%) a loss
+  s.career.shares[15] = 5;
+  Object.assign(s.clubs[4].fin.season, { broadcast: 10e6 });
+  Object.assign(s.clubs[15].fin.season, { wages: 10e6 });
+  const bal = s.clubs[4].fin.balance, tables = s.divisions.map(d => d.clubIds);
+  seasonReview(s, tables, { cup: null, divs: s.divisions.map(() => ({ champion: null, playoff: null, up: [], down: [] })) });
+  const div = 0.05 * SHARE.payout * 10e6;
+  assert.equal(s.clubs[4].fin.balance, bal - div);
+  assert.equal(s.inbox.filter(n => n.type === 'dividend').length, 1);
+  assert.ok(s.career.money >= div);
+});
+
+test('a stake in your own club: patience at 10%, every request granted and a bigger transfer share at 25%', () => {
+  const s = world(1);
+  startCareer(s, 5);
+  const line = sackLine(s);
+  s.career.shares[5] = SHARE.patient;
+  assert.equal(sackLine(s), line - SHARE.patience);
+  s.clubs[5].conf = 0; s.clubs[5].fin.balance = 10e6;
+  assert.match(askBoard(s, 'transfer'), /says no/);
+  s.career.asked = null; s.career.shares[5] = SHARE.say;
+  assert.match(askBoard(s, 'transfer'), /agrees/);
+  seasonBudgets(s);
+  assert.equal(s.budget, Math.round((0.75 + SHARE.sayTransfer) * 10e6 / 1e5) * 1e5);
+});
+
+test('a player bought with your own money is yours: you pay, he follows you, his sale pays you', () => {
+  const s = world(11);
+  startCareer(s, 14);
+  s.wageBudget = 1e12; s.budget = 0;
+  const p = s.market[0];
+  s.career.money = 0;
+  assert.equal(buy(s, p.id, true), 'You cannot afford that yourself.');
+  s.career.money = 1e9;
+  const bal = s.clubs[14].fin.balance;
+  assert.equal(buy(s, p.id, true), null);
+  assert.ok(p.mine && s.clubs[14].players.includes(p));
+  assert.equal(s.clubs[14].fin.balance, bal); // the club paid nothing
+  assert.ok(s.career.money < 1e9);
+  // an AI player bought with your own money
+  const c = s.clubs[13], q = c.players.find(x => !regular(c, x));
+  assert.equal(bid(s, q.id, 1e8, true), null);
+  assert.ok(q.mine && s.clubs[14].players.includes(q));
+  // a new job: both come along
+  s.clubs[12].conf = 0; s.clubs[12].games = MIN_GAMES;
+  boardDay(s);
+  assert.equal(acceptJob(s, 12), null);
+  assert.ok(s.clubs[12].players.includes(p) && s.clubs[12].players.includes(q) && !s.clubs[14].players.includes(p));
+  // sold: the fee is the manager's, and he is no longer yours
+  const money = s.career.money, cbal = s.clubs[12].fin.balance;
+  p.joined = null; // as if he joined in an earlier window
+  assert.equal(sell(s, p.id), null);
+  assert.ok(s.career.money > money && !p.mine);
+  assert.equal(s.clubs[12].fin.balance, cbal);
 });

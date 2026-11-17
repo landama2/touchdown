@@ -20,7 +20,18 @@ export const SAVINGS_WEEKS = 104, DEBT_CUT = 0.8; // savings fund extra wages ov
 const byDiv = (list, d) => list[Math.min(d, list.length - 1)];
 const round = (x, step) => Math.round(x / step) * step;
 
-export const blankLedger = () => ({ broadcast: 0, sponsor: 0, gate: 0, prize: 0, wages: 0, fees: 0, sales: 0, staff: 0 });
+export const blankLedger = () => ({ broadcast: 0, sponsor: 0, gate: 0, prize: 0, wages: 0, fees: 0, sales: 0, staff: 0, dividends: 0 });
+// The season's profit so far, before dividends.
+export const profit = c => { const L = c.fin.season; return L.broadcast + L.sponsor + L.gate + L.prize + L.sales - L.wages - L.fees - L.staff; };
+
+// Shares the manager can own in clubs (trade() in src/career.js): a club is worth SHARE.value × its projected
+// income; at most SHARE.max percent of each (a majority would be buying the club: a later phase); a sale loses
+// sellCut. Dividends: stake × payout × the season's profit. In his own club a stake of `patient` lowers his
+// sacking line by `patience`; one of `say` makes the board grant every budget request and adds sayTransfer
+// to the transfer share of the balance.
+export const SHARE = { value: 2, max: 49, sellCut: 0.05, payout: 0.5, patient: 10, patience: 5, say: 25, sayTransfer: 0.1 };
+export const clubValue = (s, c) => round(SHARE.value * projection(s, c), 1e5);
+export const stake = (s, id) => s.career?.shares?.[id] ?? 0;
 
 // What a player earns a week at his level; under-21s less. Contracts start from it.
 export const wage = p => Math.max(500, round(WAGE.at50 * Math.exp(WAGE.growth * (overall(p) - 50)) * (p.age < 21 ? 0.6 : 1), 500));
@@ -79,6 +90,6 @@ export function payPrizes(s, tables, cup, me) {
 // The manager may ask for more once a season (askBoard in src/career.js).
 export function seasonBudgets(s) {
   const c = s.clubs[s.me], debt = c.fin.balance < 0;
-  s.budget = Math.max(0, round(TRANSFER_SHARE * c.fin.balance, 1e5));
+  s.budget = Math.max(0, round((TRANSFER_SHARE + (stake(s, s.me) >= SHARE.say ? SHARE.sayTransfer : 0)) * c.fin.balance, 1e5));
   s.wageBudget = round(Math.max(wageBill(c) + staffBill(s, c), WAGE_SHARE * (debt ? DEBT_CUT : 1) * projection(s, c) / 52) + (1 - TRANSFER_SHARE) * Math.max(0, c.fin.balance) / SAVINGS_WEEKS, 1e3);
 }

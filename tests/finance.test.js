@@ -43,7 +43,7 @@ test('sponsorship and gate grow with club quality', () => {
 test('books open at a quarter of a season, and weekly instalments are the same every week', () => {
   const s = books(), c = s.clubs[0];
   assert.equal(wageBill(c), 15e3);
-  assert.deepEqual(blankLedger(), { broadcast: 0, sponsor: 0, gate: 0, prize: 0, wages: 0, fees: 0, sales: 0, staff: 0 });
+  assert.deepEqual(blankLedger(), { broadcast: 0, sponsor: 0, gate: 0, prize: 0, wages: 0, fees: 0, sales: 0, staff: 0, dividends: 0 });
   assert.equal(c.fin.balance, Math.round(0.25 * projection(s, c) / 1e5) * 1e5);
   assert.equal(projection(s, c), BROADCAST[0] + MERIT[0] * 2 / 2 + sponsorship(c) + gate(c) * 1);
   const start = c.fin.balance, per = x => Math.round(x / SEASON_WEEKS);

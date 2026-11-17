@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRng } from '../src/rng.js';
-import { createPlayer, WEIGHTS, ATTRS } from '../src/player.js';
+import { createPlayer, WEIGHTS, ATTRS, overall } from '../src/player.js';
+import { playDay } from '../src/season.js';
 import { createWorld } from '../src/world.js';
 import { FOCUS, defaultTraining, trainWeek, recoverRate, setTraining, setFocus, setLoad } from '../src/training.js';
 import { MINI } from './fixtures/mini.js';
@@ -116,4 +117,13 @@ test('setLoad checks the player and the value', () => {
   assert.equal(s.training.load[id], undefined);
   assert.ok(setLoad(s, id, 'Extreme'));
   assert.ok(setLoad(s, s.clubs[1].players[0].id, 'Hard'));
+});
+
+test('a season in a whole world raises players aged 24-30 by a little, not a lot', () => {
+  const s = createWorld(3, MINI), prime = () => s.clubs.flatMap(c => c.players).filter(p => p.age >= 24 && p.age <= 30);
+  const avg = ps => ps.reduce((t, p) => t + overall(p), 0) / ps.length, ids = new Set(prime().map(p => p.id));
+  const before = avg(prime());
+  while (!s.done) playDay(s);
+  const after = avg(s.clubs.flatMap(c => c.players).filter(p => ids.has(p.id)));
+  assert.ok(after - before > 0 && after - before < 3, `${before} -> ${after}`);
 });

@@ -27,7 +27,7 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
   && Array.isArray(s.offers) && !!s.talks && Array.isArray(s.deals) && s.clubs.every(c => Number.isFinite(c.lentPay))
   && !!s.known && typeof s.known === 'object' && Array.isArray(s.scouts) && Array.isArray(s.shortlist)
   && Array.isArray(s.youth) && s.clubs.every(c => c.staff && Number.isInteger(c.staff.coaching))
-  && Array.isArray(s.jobs) && Array.isArray(s.inbox) && (s.career === null || Number.isFinite(s.career.rep)) && s.clubs.every(c => Number.isFinite(c.conf) && Number.isInteger(c.games));
+  && Array.isArray(s.jobs) && Array.isArray(s.inbox) && (s.career === null || (Number.isFinite(s.career.rep) && Number.isFinite(s.career.money) && !!s.career.shares)) && s.clubs.every(c => Number.isFinite(c.conf) && Number.isInteger(c.games));
 
 // MIGRATIONS[v] upgrades a save from version v to v + 1.
 const MIGRATIONS = {
@@ -72,8 +72,10 @@ const MIGRATIONS = {
     s.career = s.me === null ? null : { rep: REP_START, asked: null, warned: null, spells: [{ club: s.me, from: s.season, to: null, how: null }] };
     s.jobs = []; s.inbox = [];
   },
-  11: s => { // everyone trains at the team's intensity
+  11: s => { // everyone trains at the team's intensity; the manager starts with no money, on his club's salary from now
     s.training.load = {};
+    for (const c of s.clubs) c.fin.season.dividends = 0;
+    if (s.career) Object.assign(s.career, { money: 0, shares: {} }); // the current spell's salary is set when first paid (career.js)
   },
 };
 
