@@ -27,7 +27,7 @@ const save = () => { try { localStorage.setItem(KEY, serialize(s)); } catch {} }
 
 let s = load() || newWorld();
 let tab = 'Squad', sel = null, viewing = null, tableDiv = s.me === null ? 0 : s.clubs[s.me].div, msg = '', filters = {}; // filters: the player search on Transfers
-let timer = null, speed = 400, subOut = null; // live match: clock, ms per match minute, player picked to come off
+let timer = null, speed = 400, subOut = null, subIn = null; // live match: clock, ms per match minute, player picked to come off / to come on
 const SPEEDS = [['Slow', 1000], ['Normal', 400], ['Fast', 100], ['Very fast', 25]];
 
 const $ = id => document.getElementById(id);
@@ -105,10 +105,13 @@ function liveView() {
     return `<div class="${cls}${mine}">${icon} ${esc(line(e, s.clubs[m.sides[e.side].club].short))}</div>`; }).join('');
   const btn = (act, id, text) => m.done ? '' : `<button data-act="${act}" data-id="${id}">${text}</button>`;
   const name = id => m.done ? esc(m.pl[id].name) : `<button class="link" data-act="pickOn" data-id="${id}">${esc(m.pl[id].name)}</button>`;
-  const onRow = o => { const p = m.pl[o.id]; return `<tr class="${subOut === o.id ? 'sel' : ''}"><td class="${o.pos !== p.pos ? 'oop' : ''}">${o.pos}</td><td>${name(o.id)}${p.yc ? ' 🟨' : ''}${p.inj ? ' <span class="oop">🚑 injured</span>' : ''}</td><td class="n">${overall(p)}</td><td class="n">${Math.round(p.fit)}%</td><td class="n">${p.rt.toFixed(1)}</td><td>${btn('off', o.id, 'Off')}</td></tr>`; };
+  // A picked player lights up the other side's players for his position: the bench's for a player on the pitch, the slots for a sub.
+  const want = subOut !== null ? S.on.find(o => o.id === subOut)?.pos : subIn !== null ? m.pl[subIn].pos : null;
+  const onRow = o => { const p = m.pl[o.id]; return `<tr class="${subOut === o.id ? 'sel' : subIn !== null && o.pos === want ? 'fits' : ''}"><td class="${o.pos !== p.pos ? 'oop' : ''}">${o.pos}</td><td>${name(o.id)}${p.yc ? ' 🟨' : ''}${p.inj ? ' <span class="oop">🚑 injured</span>' : ''}</td><td class="n">${overall(p)}</td><td class="n">${Math.round(p.fit)}%</td><td class="n">${p.rt.toFixed(1)}</td><td>${btn('off', o.id, 'Off')}</td></tr>`; };
   const sentRow = id => { const p = m.pl[id]; return `<tr class="out"><td>–</td><td>${esc(p.name)} <span class="oop">🟥 sent off</span></td><td class="n">${overall(p)}</td><td></td><td class="n">${p.rt.toFixed(1)}</td><td></td></tr>`; };
-  const benchRow = id => { const p = m.pl[id]; return `<tr><td class="dim">${p.pos}</td><td>${esc(p.name)}</td><td class="n">${overall(p)}</td><td class="n">${Math.round(p.fit)}%</td><td></td><td>${btn('on', id, 'On')}</td></tr>`; };
-  const hint = subOut === null ? 'click a name, then another name to swap positions or On to bring a sub on' : `${esc(m.pl[subOut].name)} picked: click another player to swap positions, or On to replace him`;
+  const benchRow = id => { const p = m.pl[id]; return `<tr class="${subIn === id ? 'sel' : subOut !== null && p.pos === want ? 'fits' : ''}"><td class="dim">${p.pos}</td><td>${m.done ? esc(p.name) : `<button class="link" data-act="on" data-id="${id}">${esc(p.name)}</button>`}</td><td class="n">${overall(p)}</td><td class="n">${Math.round(p.fit)}%</td><td></td><td>${btn('on', id, 'On')}</td></tr>`; };
+  const hint = subIn !== null ? `${esc(m.pl[subIn].name)} picked: click the player he replaces.`
+    : subOut === null ? 'Click a player, then another to swap positions, or a sub to bring on.' : `${esc(m.pl[subOut].name)} picked: click another player to swap positions, or a sub to replace him.`;
   const controls = m.done ? '<button class="primary" data-act="play">Continue</button>'
     : `<button class="primary" data-act="${timer ? 'pause' : 'go'}">${timer ? 'Pause' : m.min ? 'Resume' : 'Kick off'}</button>
       <label>Speed <select data-act="speed">${SPEEDS.map(([t, ms]) => `<option value="${ms}"${ms === speed ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -117,8 +120,8 @@ function liveView() {
   return `<p class="fixture score">${badge(H.club, 28)} ${clubName(H.club)} ${H.st.goals} – ${A.st.goals} ${clubName(A.club)} ${badge(A.club, 28)}</p>
     <h2>${m.done ? 'Full time' : m.min ? `${m.min}'` : 'Kick-off'}</h2><div class="bar">${controls}</div>
     <div class="live"><div class="feed" aria-live="polite">${feed || '<div class="dim">The teams are walking out.</div>'}</div>
-    <div class="wrap"><table><tr><th>Pos</th><th>On the pitch${m.done ? '' : ` <span class="dim">· ${hint}</span>`}</th><th class="n">Ovr</th><th class="n">Fit</th><th class="n">Rating</th><th></th></tr>${S.on.map(onRow).join('')}${(S.sent ?? []).map(sentRow).join('')}
-    <tr><th colspan="6">Bench · substitutions ${S.subs}/${MAX_SUBS}</th></tr>${S.bench.map(benchRow).join('')}</table></div></div>`;
+    <div>${m.done ? '' : `<p class="dim">${hint}</p>`}<div class="wrap"><table><tr><th>Pos</th><th>On the pitch</th><th class="n">Ovr</th><th class="n">Fit</th><th class="n">Rating</th><th></th></tr>${S.on.map(onRow).join('')}${(S.sent ?? []).map(sentRow).join('')}
+    <tr><th colspan="6">Bench · substitutions ${S.subs}/${MAX_SUBS}</th></tr>${S.bench.map(benchRow).join('')}</table></div></div></div>`;
 }
 
 // 'Premier League, round 5', 'FA Cup Quarter-finals', 'Championship play-off semi-final, 2nd leg'.
@@ -156,6 +159,7 @@ function tick() {
   const seen = m.ev.length, i = mySide();
   stepMinute(m);
   if (subOut !== null && !m.sides[i].on.some(o => o.id === subOut)) subOut = null;
+  if (subIn !== null && !m.sides[i].bench.includes(subIn)) subIn = null;
   if (m.done) stopClock();
   if (m.ev.slice(seen).some(e => e.side === i && (e.type === 'injury' || e.type === 'red'))) { stopClock(); msg = 'Play paused: make a change if you need one.'; }
   if (!timer || m.min % 5 === 0) save();
@@ -442,25 +446,26 @@ const actions = {
   slot(k, el) { const f = el.dataset.field; msg = setSlot(s.tactics.slots[k], slots(s.formation)[k], f, f === 'role' || f === 'duty' ? el.value : +el.value) || ''; },
   taker(_, el) { msg = setTaker(s.tactics, el.dataset.field, el.value === '' ? null : +el.value, myClub(s).players) || ''; },
   liveTeam(_, el) { msg = setLiveTactic(s.live, mySide(), el.dataset.field, +el.value) || ''; },
-  play() { stopClock(); playDay(s); subOut = null; msg = newsText(); },
+  play() { stopClock(); playDay(s); subOut = subIn = null; msg = newsText(); },
   trainField(_, el) { msg = setTraining(s, el.dataset.field, el.value) || ''; },
   focus(id, el) { msg = setFocus(s, id, el.value || null) || ''; },
-  live() { kickOff(s); subOut = null; },
+  live() { kickOff(s); subOut = subIn = null; },
   go() { startClock(); },
   pause() { stopClock(); },
   speed(_, el) { speed = +el.value; if (timer) startClock(); },
-  liveFormation(_, el) { msg = setFormation(s.live, mySide(), el.value) || ''; subOut = null; },
-  off(id) { subOut = subOut === id ? null : id; },
+  liveFormation(_, el) { msg = setFormation(s.live, mySide(), el.value) || ''; subOut = subIn = null; },
+  off(id) { if (subIn !== null) return actions.on(subIn, null, id); subOut = subOut === id ? null : id; },
   pickOn(id) {
+    if (subIn !== null) return actions.on(subIn, null, id);
     if (subOut === null || subOut === id) { subOut = subOut === id ? null : id; return; }
     const a = s.live.pl[subOut].name, b = s.live.pl[id].name;
     msg = swapPositions(s.live, mySide(), subOut, id) || `${esc(a)} and ${esc(b)} swap positions.`;
     subOut = null;
   },
-  on(id) {
-    if (subOut === null) { msg = 'Click Off next to the player who is coming off first.'; return; }
-    msg = substitute(s.live, mySide(), subOut, id) || 'Substitution made.';
-    subOut = null;
+  on(id, _, out = subOut) { // a sub, picked first or after the player he replaces
+    if (out === null) { subIn = subIn === id ? null : id; return; }
+    msg = substitute(s.live, mySide(), out, id) || 'Substitution made.';
+    subOut = subIn = null;
   },
   end() { endSeason(s); tab = s.me === null ? 'Inbox' : 'History'; if (s.me !== null) tableDiv = myClub(s).div; },
   buy(id) { msg = buy(s, id) || 'Signed.'; },
