@@ -1,5 +1,5 @@
 import { table, takeClub, PROMOTED, PLAYOFF, RELEGATED } from './season.js';
-import { wageBill, staffBill, SEASON_WEEKS, SHARE, clubValue, profit, stake } from './finance.js';
+import { SEASON_WEEKS, SHARE, clubValue, profit, stake } from './finance.js';
 import { cupRounds } from './cup.js';
 import { seeding, BOARD_START as START, REP_START } from './world.js';
 
@@ -18,9 +18,9 @@ import { seeding, BOARD_START as START, REP_START } from './world.js';
 export { START, REP_START };
 export const SACK = 20, MIN_GAMES = 6, WARN = [35, 25], CALM = 45;
 export const EXPECT = { base: 1.38, perQuality: 0.26, home: 0.2 }; // league points a match, fitted on the real leagues (seeds 1-3, 2 seasons)
-export const MOVE = { match: 1.5, below: 0.5, onTarget: 0.25, debt: 1, overBudget: 1, cupOut: 5, cupWin: 3, met: 10, band: 8, up: 20, down: 30 }; // about 13 sackings a season in 68 clubs (seeds 1-3, 3 seasons)
+export const MOVE = { match: 1.5, below: 0.5, onTarget: 0.25, debt: 1, cupOut: 5, cupWin: 3, met: 10, band: 8, up: 20, down: 30 }; // about 13 sackings a season in 68 clubs (seeds 1-3, 3 seasons)
 export const REP = { pull: 0.3, trophy: 5, sacked: 10, gate: 15, patience: 10 };
-export const ASK = { conf: 60, cost: 3, transfer: 1.25, wage: 1.1 };
+export const ASK = { conf: 60, cost: 3, transfer: 1.25 };
 export const VACANCY_DAYS = 14, INBOX_MAX = 150;
 export const SALARY = { base: 150e3, growth: 0.045 };          // a year: size 0 €150k, 50 €1.4M, 100 €13.5M
 export const BONUS = { target: 0.1, up: 0.25, trophy: 0.25 }, SEVERANCE = 0.25; // × a year's salary
@@ -76,14 +76,13 @@ export function afterCup(s, t, k) {
   }
 }
 // Each week: 3 or more places below the target costs, on target gains (once a club has played
-// MIN_GAMES league matches); debt costs; so does the human club going over its wage budget.
+// MIN_GAMES league matches); debt costs.
 export function boardWeeks(s, weeks) {
   if (weeks <= 0) return;
   s.divisions.forEach((_, d) => table(s, d).forEach((id, k) => {
     const c = s.clubs[id], lim = bands(s, d)[leagueTarget(s, id)][1];
     let m = c.st.p < MIN_GAMES ? 0 : k + 1 > lim + 2 ? -MOVE.below : k + 1 <= lim ? MOVE.onTarget : 0;
     if (c.fin.balance < 0) m -= MOVE.debt;
-    if (id === s.me && wageBill(c) + staffBill(s, c) > s.wageBudget) m -= MOVE.overBudget;
     c.conf = clamp(c.conf + weeks * m);
   }));
 }
@@ -144,7 +143,7 @@ function hire(s, id) {
   s.jobs = s.jobs.filter(j => j.club !== id);
   post(s, targets(s, id));
 }
-// The manager's own players come with him to club id on their contracts, whatever its wage budget.
+// The manager's own players come with him to club id on their contracts.
 // ponytail: one out on loan stays where he is; he goes home at the season's end and comes along at the next hire.
 function bringOwn(s, id) {
   for (const c of s.clubs) {
@@ -163,7 +162,7 @@ function leave(s, how) {
   c.conf = START; c.games = 0;
   Object.assign(s.career.spells.at(-1), { to: ended(s), how });
   s.jobs.push({ club: c.id, season: s.season, until: s.day + VACANCY_DAYS, offered: false });
-  s.me = null; s.live = null; s.youth = []; s.scouts = []; s.offers = []; s.talks = { win: null, by: {} }; s.budget = 0; s.wageBudget = 0;
+  s.me = null; s.live = null; s.youth = []; s.scouts = []; s.offers = []; s.talks = { win: null, by: {} }; s.budget = 0;
 }
 // Whether club id would offer the human manager its job: the manager's reputation reaches its size less REP.gate
 // and, while the manager has a club, it is bigger than that club.
@@ -231,7 +230,7 @@ export function declineJob(s, id) {
 }
 export const openOffer = (s, id) => s.jobs.some(x => x.club === id && x.offered);
 
-// Once a season the manager may ask for more money: more transfer budget or more wage budget. The
+// Once a season the manager may ask for more transfer budget. The
 // board agrees while its confidence is at least ASK.conf and the club is not in debt; a refusal costs
 // ASK.cost confidence. Returns the answer.
 // The human manager's sacking line: lower with reputation, and with a stake of SHARE.patient or more in his club.
@@ -240,15 +239,14 @@ export const sackLine = s => SACK - s.career.rep / REP.patience - (stake(s, s.me
 // With a stake of SHARE.say or more in his club, the board always agrees.
 export function askBoard(s, kind) {
   if (s.me === null || !s.career) return 'You have no club.';
-  if (kind !== 'transfer' && kind !== 'wage') return 'Unknown request.';
+  if (kind !== 'transfer') return 'Unknown request.';
   if (s.career.asked === s.season) return 'The board has already heard you this season.';
   s.career.asked = s.season;
   const c = s.clubs[s.me], yes = (c.conf >= ASK.conf && c.fin.balance > 0) || stake(s, s.me) >= SHARE.say;
   if (yes && kind === 'transfer') s.budget = round(s.budget * ASK.transfer, 1e5);
-  if (yes && kind === 'wage') s.wageBudget = round(s.wageBudget * ASK.wage, 1e3);
   if (!yes) c.conf = clamp(c.conf - ASK.cost);
   post(s, { type: 'request', club: c.id, kind, yes });
-  return yes ? `The board agrees: more ${kind === 'transfer' ? 'transfer' : 'wage'} budget this season.` : 'The board says no, and is not pleased you asked.';
+  return yes ? 'The board agrees: more transfer budget this season.' : 'The board says no, and is not pleased you asked.';
 }
 
 // --- shares ---

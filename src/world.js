@@ -49,7 +49,7 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
   const rng = makeRng(seed);
   const s = {
     version: SAVE_VERSION, seed, nid: 1,
-    me: null, formation: '4-4-2', lineup: [], bench: [], tactics: defaultTactics(slots('4-4-2')), fam: newFam(), budget: 0, wageBudget: 0, training: defaultTraining(), news: [], offers: [], talks: { win: null, by: {} }, deals: [], known: {}, scouts: [], shortlist: [], youth: [], career: null, jobs: [], inbox: [],
+    me: null, formation: '4-4-2', lineup: [], bench: [], tactics: defaultTactics(slots('4-4-2')), fam: newFam(), budget: 0, training: defaultTraining(), news: [], offers: [], talks: { win: null, by: {} }, deals: [], known: {}, scouts: [], shortlist: [], youth: [], career: null, jobs: [], inbox: [],
     season: 1, day: -1, next: 0, days: [], done: false, cup: null, playoffs: [],
     clubs: [], divisions: [], market: [], history: [], records: [], last: null, live: null,
   };

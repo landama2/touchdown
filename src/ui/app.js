@@ -28,7 +28,7 @@ const save = () => { try { localStorage.setItem(KEY, serialize(s)); } catch {} }
 let s = load() || newWorld();
 let tab = 'Squad', sel = null, viewing = null, tableDiv = s.me === null ? 0 : s.clubs[s.me].div, msg = '', filters = {}; // filters: the player search on Transfers
 let ownPay = false; // Transfers: pay fees from the manager's own money
-let timer = null, speed = 400, subOut = null; // live match: clock, ms per match minute, player picked to come off
+let timer = null, speed = 400, subOut = null, subIn = null; // live match: clock, ms per match minute, player picked to come off / to come on
 const SPEEDS = [['Slow', 1000], ['Normal', 400], ['Fast', 100], ['Very fast', 25]];
 
 const $ = id => document.getElementById(id);
@@ -113,11 +113,14 @@ function liveView() {
     return `<div class="${cls}${mine}">${icon} ${esc(line(e, s.clubs[m.sides[e.side].club].short))}</div>`; }).join('');
   const btn = (act, id, text) => m.done ? '' : `<button data-act="${act}" data-id="${id}">${text}</button>`;
   const name = id => m.done ? esc(m.pl[id].name) : `<button class="link" data-act="pickOn" data-id="${id}">${esc(m.pl[id].name)}</button>`;
-  const onRow = o => { const p = m.pl[o.id]; return `<tr class="${subOut === o.id ? 'sel' : ''}"><td class="${o.pos !== p.pos ? 'oop' : ''}">${o.pos}</td><td>${name(o.id)}${p.yc ? ' 🟨' : ''}${p.inj ? ' <span class="oop">🚑 injured</span>' : ''}</td><td class="n">${overall(p)}</td><td class="n">${Math.round(p.fit)}%</td><td class="n">${p.rt.toFixed(1)}</td><td>${btn('off', o.id, 'Off')}</td></tr>`; };
+  // A picked player lights up the other side's players for his position: the bench's for a player on the pitch, the slots for a sub.
+  const want = subOut !== null ? S.on.find(o => o.id === subOut)?.pos : subIn !== null ? m.pl[subIn].pos : null;
+  const onRow = o => { const p = m.pl[o.id]; return `<tr class="${subOut === o.id ? 'sel' : subIn !== null && o.pos === want ? 'fits' : ''}"><td class="${o.pos !== p.pos ? 'oop' : ''}">${o.pos}</td><td>${name(o.id)}${p.yc ? ' 🟨' : ''}${p.inj ? ' <span class="oop">🚑 injured</span>' : ''}</td><td class="n">${overall(p)}</td><td class="n">${Math.round(p.fit)}%</td><td class="n">${p.rt.toFixed(1)}</td><td>${btn('off', o.id, 'Off')}</td></tr>`; };
   const sentRow = id => { const p = m.pl[id]; return `<tr class="out"><td>–</td><td>${esc(p.name)} <span class="oop">🟥 sent off</span></td><td class="n">${overall(p)}</td><td></td><td class="n">${p.rt.toFixed(1)}</td><td></td></tr>`; };
   const emptyRow = pos => `<tr class="out"><td>${pos}</td><td class="dim">empty</td><td></td><td></td><td></td><td>${m.done ? '' : `<button data-act="moveTo" data-field="${pos}">Move here</button>`}</td></tr>`;
-  const benchRow = id => { const p = m.pl[id]; return `<tr><td class="dim">${p.pos}</td><td>${esc(p.name)}</td><td class="n">${overall(p)}</td><td class="n">${Math.round(p.fit)}%</td><td></td><td>${btn('on', id, 'On')}</td></tr>`; };
-  const hint = subOut === null ? 'click a name, then another name to swap positions or On to bring a sub on' : `${esc(m.pl[subOut].name)} picked: click another player to swap positions, Move here to fill an empty slot, or On to replace him`;
+  const benchRow = id => { const p = m.pl[id]; return `<tr class="${subIn === id ? 'sel' : subOut !== null && p.pos === want ? 'fits' : ''}"><td class="dim">${p.pos}</td><td>${m.done ? esc(p.name) : `<button class="link" data-act="on" data-id="${id}">${esc(p.name)}</button>`}</td><td class="n">${overall(p)}</td><td class="n">${Math.round(p.fit)}%</td><td></td><td>${btn('on', id, 'On')}</td></tr>`; };
+  const hint = subIn !== null ? `${esc(m.pl[subIn].name)} picked: click the player he replaces.`
+    : subOut === null ? 'Click a player, then another to swap positions, or a sub to bring on.' : `${esc(m.pl[subOut].name)} picked: click another player to swap positions, Move here to fill an empty slot, or a sub to replace him.`;
   const controls = m.done ? '<button class="primary" data-act="play">Continue</button>'
     : `<button class="primary" data-act="${timer ? 'pause' : 'go'}">${timer ? 'Pause' : m.min ? 'Resume' : 'Kick off'}</button>
       <label>Speed <select data-act="speed">${SPEEDS.map(([t, ms]) => `<option value="${ms}"${ms === speed ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -125,7 +128,7 @@ function liveView() {
       <button data-act="play">Skip to result</button></div><div class="bar">${teamSelects('liveTeam', S.tac)}`;
   return `${scoreboard(H.club, A.club, `${H.st.goals} – ${A.st.goals}`, m.done ? 'Full time' : m.min ? `${m.min}'` : 'Kick-off')}<div class="bar">${controls}</div>
     <div class="live"><div class="feed" aria-live="polite">${feed || '<div class="dim">The teams are walking out.</div>'}</div>
-    <div>${m.done ? '' : `<p class="dim" style="margin:0 0 6px">${hint}</p>`}<div class="wrap"><table><tr><th>Pos</th><th>On the pitch</th><th class="n">Ovr</th><th class="n">Fit</th><th class="n">Rating</th><th></th></tr>${S.on.map(onRow).join('')}${emptySlots(m, i).map(emptyRow).join('')}${(S.sent ?? []).map(sentRow).join('')}
+    <div>${m.done ? '' : `<p class="dim">${hint}</p>`}<div class="wrap"><table><tr><th>Pos</th><th>On the pitch</th><th class="n">Ovr</th><th class="n">Fit</th><th class="n">Rating</th><th></th></tr>${S.on.map(onRow).join('')}${emptySlots(m, i).map(emptyRow).join('')}${(S.sent ?? []).map(sentRow).join('')}
     <tr><th colspan="6">Bench · substitutions ${S.subs}/${MAX_SUBS}</th></tr>${S.bench.map(benchRow).join('')}</table></div></div></div>`;
 }
 
@@ -164,6 +167,7 @@ function tick() {
   const seen = m.ev.length, i = mySide();
   stepMinute(m);
   if (subOut !== null && !m.sides[i].on.some(o => o.id === subOut)) subOut = null;
+  if (subIn !== null && !m.sides[i].bench.includes(subIn)) subIn = null;
   if (m.done) stopClock();
   if (m.ev.slice(seen).some(e => e.side === i && (e.type === 'injury' || e.type === 'red'))) { stopClock(); msg = 'Play paused: make a change if you need one.'; }
   if (!timer || m.min % 5 === 0) save();
@@ -325,7 +329,7 @@ const views = {
       ${num('f-age', f.maxAge, 'Age ≤')}${num('f-ovr', f.minOvr, 'Ovr ≥')}${num('f-val', f.maxValue ? f.maxValue / 1e6 : '', 'Value ≤ €M')}
       <label><input type="checkbox" id="f-listed"${f.listed ? ' checked' : ''}> listed</label><label><input type="checkbox" id="f-loan"${f.loan ? ' checked' : ''}> loan</label>
       <input type="text" id="f-name" placeholder="name" value="${esc(f.name ?? '')}" style="width:9em"><button class="primary" data-act="search">Search</button> <button data-act="clearSearch">Clear</button></div>`;
-    return `<p><b>${windowText()}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(me))} of ${perWeek(s.wageBudget)}</p>
+    return `<p><b>${windowText()}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(me))}</p>
       <p><label><input type="checkbox" data-act="ownPay"${ownPay ? ' checked' : ''}> Pay fees from your own money (${money(s.career?.money ?? 0)})</label> <span class="dim">A player you pay for is yours 💼: the club pays his wages, he follows you to every new job, and when he is sold the fee is yours.</span></p>
       ${help(`Bid for players at other clubs while a window is open: a club takes ${Math.round(0.9 * 100)}% of its asking price or counters, and talks stop after three rounds. Players under 24 who are not regulars can come on loan for half their wage. Free agents sign at any time for a signing-on fee of half their value.`)}
       <h2>Offers for your players</h2>${table(`${HEAD}<th>From</th><th class="n">Fee</th><th></th>`, offers)}
@@ -344,17 +348,17 @@ const views = {
       return `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${overall(p)}</td><td class="n">${perWeek(p.contract.wage)}</td><td>${untilText(p)}</td>
         <td class="n">${p.contract.clause ? money(p.contract.clause) : ''}</td><td>${t ? `<span class="dim">asks ${termsText(t)}</span> <button data-act="renew" data-id="${p.id}">Accept</button>` : ''}</td></tr>`;
     };
-    return `<h2>Contracts</h2><p>Wage bill ${perWeek(wageBill(club))} of a wage budget of ${perWeek(s.wageBudget)}.</p>
+    return `<h2>Contracts</h2><p>Wage bill ${perWeek(wageBill(club))}.</p>
       ${help(`A player whose contract ends this season or next names his terms for a new one: accept them, or he leaves when his contract ends. If too many leave, academy players fill the squad.`)}
       <div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Wage</th><th>Until</th><th class="n">Clause</th><th>New contract</th></tr>${byPos(club.players).map(row).join('')}</table></div>`;
   },
   Finances() {
     const c = myClub(s), L = c.fin.season, line = (name, v) => `<tr><td>${name}</td><td class="n">${money(v)}</td></tr>`;
     return `<h2>Finances · season ${s.season}</h2>
-      <p>Balance <b>${money(c.fin.balance)}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(c))} of ${perWeek(s.wageBudget)}</p>
+      <p>Balance <b>${money(c.fin.balance)}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(c))}</p>
       <div class="wrap"><table><tr><th>Income this season</th><th></th></tr>${line('Broadcasting', L.broadcast)}${line('Sponsorship', L.sponsor)}${line('Gate receipts', L.gate)}${line('Prize money', L.prize)}${line('Player sales', L.sales)}
       <tr><th>Costs this season</th><th></th></tr>${line('Wages', L.wages)}${line('Transfer fees', L.fees)}${line('Staff beyond the standard', L.staff)}</table></div>
-      ${help(`Expected income for a mid-table season: ${money(projection(s, c))}. The board sets each season's budgets: three quarters of the balance for transfers (none in debt); for wages and staff, 55% of the expected income or what you pay now, whichever is more, plus what the other quarter of your savings can carry over two years. In debt there is no extra, so wages are frozen. Renewing a player at the same wage always fits. You may ask the board for more once a season (Board).`)}`;
+      ${help(`Expected income for a mid-table season: ${money(projection(s, c))}. The board sets each season's transfer budget: three quarters of the balance (none in debt). Wages are small and have no limit: they come out of the balance every week, so keep an eye on debt, which the board does not like. You may ask the board for more transfer budget once a season (Board).`)}`;
   },
 };
 
@@ -383,9 +387,9 @@ views.Staff = () => {
   };
   const row = a => `<tr><td>${a[0].toUpperCase() + a.slice(1)}</td><td><select data-act="staff" data-field="${a}">${options([1, 2, 3, 4, 5].map(l => [String(l), `Level ${l} · ${perWeek(STAFF_COST[l - 1])}`]), String(c.staff[a]))}</select></td><td class="dim">${effect[a](c.staff[a])}</td></tr>`;
   const extra = staffBill(s, c);
-  return `<h2>Staff</h2>${help(`Your club's budget already pays for level ${std} staff in every area (the ${esc(s.divisions[c.div].name)} standard). Each area above it costs the difference every week, and below it saves it; the difference counts against your wage budget.`)}
+  return `<h2>Staff</h2>${help(`Your club's budget already pays for level ${std} staff in every area (the ${esc(s.divisions[c.div].name)} standard). Each area above it costs the difference every week, and below it saves it; the difference is paid every week.`)}
     <div class="wrap"><table>${AREAS.map(row).join('')}</table></div>
-    <p>Beyond the standard: <b>${extra < 0 ? 'saving ' + perWeek(-extra) : perWeek(extra)}</b> · wage bill ${perWeek(wageBill(c))} · wage budget ${perWeek(s.wageBudget)}</p>`;
+    <p>Beyond the standard: <b>${extra < 0 ? 'saving ' + perWeek(-extra) : perWeek(extra)}</b> · wage bill ${perWeek(wageBill(c))}</p>`;
 };
 
 views.Youth = () => {
@@ -408,10 +412,10 @@ views.Board = () => {
     <div class="wrap"><table><tr><th>Target</th><th>Now</th></tr>
     <tr><td>League: ${esc(b[k][0])} (${b[k][1] === 1 ? '1st' : `top ${b[k][1]}`})</td><td>${c.st.p ? ordinal(pos) : '–'}</td></tr>
     <tr><td>Cup: reach ${cupGoal(cupTarget(s, c.id))}</td><td></td></tr></table></div>
-    ${help(`Every league result is weighed against what a squad like yours should get; the board also watches the table each week and does not like debt or a wage bill over budget. Going out of the cup early costs, cup wins from the target round on help. At the end of the season the target is judged, and promotion and relegation count.`)}
-    <h2>Budgets</h2><p>Transfer budget ${money(s.budget)} · wage budget ${perWeek(s.wageBudget)} (wages and staff ${perWeek(wageBill(c) + staffBill(s, c))})</p>
+    ${help(`Every league result is weighed against what a squad like yours should get; the board also watches the table each week and does not like debt. Going out of the cup early costs, cup wins from the target round on help. At the end of the season the target is judged, and promotion and relegation count.`)}
+    <h2>Budget</h2><p>Transfer budget ${money(s.budget)} · wages and staff ${perWeek(wageBill(c) + staffBill(s, c))}</p>
     ${help(`Once a season you may ask for more. The board agrees while its confidence is ${ASK.conf} or more and the club is out of debt (always, if you own ${SHARE.say}% of the club); otherwise it says no and thinks less of you for asking.`)}
-    <div class="bar">${asked ? '<span class="dim">You have asked this season.</span>' : `<button data-act="ask" data-field="transfer">Ask for ${Math.round((ASK.transfer - 1) * 100)}% more transfer budget</button> <button data-act="ask" data-field="wage">Ask for ${Math.round((ASK.wage - 1) * 100)}% more wage budget</button>`}</div>
+    <div class="bar">${asked ? '<span class="dim">You have asked this season.</span>' : `<button data-act="ask" data-field="transfer">Ask for ${Math.round((ASK.transfer - 1) * 100)}% more transfer budget</button>`}</div>
     <h2>Your reputation: ${s.career.rep}</h2>${help(`Your club's size is ${level(s, c.id)} on the same scale. Reputation follows where you finish and the trophies you win, and drops when you are sacked. Clubs up to ${REP.gate} above it may offer you their job when they sack their manager; it buys a little patience from the board and persuades players to join.`)}
     <h2>Career</h2><div class="wrap"><table>${s.career.spells.map(spell).join('')}</table></div>`;
 };
@@ -494,17 +498,18 @@ const actions = {
   slot(k, el) { const f = el.dataset.field; msg = setSlot(s.tactics.slots[k], slots(s.formation)[k], f, f === 'role' || f === 'duty' ? el.value : +el.value) || ''; },
   taker(_, el) { msg = setTaker(s.tactics, el.dataset.field, el.value === '' ? null : +el.value, myClub(s).players) || ''; },
   liveTeam(_, el) { msg = setLiveTactic(s.live, mySide(), el.dataset.field, +el.value) || ''; },
-  play() { stopClock(); playDay(s); subOut = null; msg = newsText(); },
+  play() { stopClock(); playDay(s); subOut = subIn = null; msg = newsText(); },
   trainField(_, el) { msg = setTraining(s, el.dataset.field, el.value) || ''; },
   focus(id, el) { msg = setFocus(s, id, el.value || null) || ''; },
   load(id, el) { msg = setLoad(s, id, el.value || null) || ''; },
-  live() { kickOff(s); subOut = null; },
+  live() { kickOff(s); subOut = subIn = null; },
   go() { startClock(); },
   pause() { stopClock(); },
   speed(_, el) { speed = +el.value; if (timer) startClock(); },
-  liveFormation(_, el) { msg = setFormation(s.live, mySide(), el.value) || ''; subOut = null; },
-  off(id) { subOut = subOut === id ? null : id; },
+  liveFormation(_, el) { msg = setFormation(s.live, mySide(), el.value) || ''; subOut = subIn = null; },
+  off(id) { if (subIn !== null) return actions.on(subIn, null, id); subOut = subOut === id ? null : id; },
   pickOn(id) {
+    if (subIn !== null) return actions.on(subIn, null, id);
     if (subOut === null || subOut === id) { subOut = subOut === id ? null : id; return; }
     const a = s.live.pl[subOut].name, b = s.live.pl[id].name;
     msg = swapPositions(s.live, mySide(), subOut, id) || `${esc(a)} and ${esc(b)} swap positions.`;
@@ -513,12 +518,12 @@ const actions = {
   moveTo(_, el) {
     if (subOut === null) { msg = 'Click the name of the player to move first.'; return; }
     msg = moveTo(s.live, mySide(), subOut, el.dataset.field) || `${esc(s.live.pl[subOut].name)} moves to ${el.dataset.field}.`;
-    subOut = null;
+    subOut = subIn = null;
   },
-  on(id) {
-    if (subOut === null) { msg = 'Click Off next to the player who is coming off first.'; return; }
-    msg = substitute(s.live, mySide(), subOut, id) || 'Substitution made.';
-    subOut = null;
+  on(id, _, out = subOut) { // a sub, picked first or after the player he replaces
+    if (out === null) { subIn = subIn === id ? null : id; return; }
+    msg = substitute(s.live, mySide(), out, id) || 'Substitution made.';
+    subOut = subIn = null;
   },
   end() { endSeason(s); tab = s.me === null ? 'Inbox' : 'History'; if (s.me !== null) tableDiv = myClub(s).div; },
   buy(id) { msg = buy(s, id, ownPay) || 'Signed.'; },
@@ -571,7 +576,7 @@ function render() {
     return;
   }
   $('info').innerHTML = `${badge(s.me, 22)}<b>${clubName(s.me)}</b><span>${esc(s.divisions[myClub(s).div].name)} · Season ${s.season} · ${s.done ? 'season over' : dateLabel(s.days[s.next].day)}</span>
-    <span class="chip" title="transfer budget">Transfers ${money(s.budget)}</span><span class="chip" title="wage bill of wage budget">Wages ${perWeek(wageBill(myClub(s)))} of ${perWeek(s.wageBudget)}</span>`;
+    <span class="chip" title="transfer budget">Transfers ${money(s.budget)}</span><span class="chip" title="wage bill">Wages ${perWeek(wageBill(myClub(s)))}</span>`;
   if (s.live) tab = 'Match'; // the other screens wait for the final whistle
   const main = `<div class="msg" role="status">${msg}</div>` + profile() + views[tab](); // first: the inbox marks what it shows as read
   $('nav').innerHTML = (s.live ? ['Match'] : Object.keys(views)).map(navButton).join('');

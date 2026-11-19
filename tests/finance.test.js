@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRng } from '../src/rng.js';
 import { createPlayer, value } from '../src/player.js';
-import { wage, sponsorship, gate, wageBill, blankLedger, newBooks, projection, payWeeks, payGate, payPrizes, seasonBudgets, SAVINGS_WEEKS, DEBT_CUT, SEASON_WEEKS, BROADCAST, MERIT, CUP_PRIZE } from '../src/finance.js';
+import { wage, sponsorship, gate, wageBill, blankLedger, newBooks, projection, payWeeks, payGate, payPrizes, seasonBudgets, SEASON_WEEKS, BROADCAST, MERIT, CUP_PRIZE } from '../src/finance.js';
 
 // A midfielder whose overall is exactly `ovr` (a multiple of 5): every attribute is ovr / 5.
 const at = (ovr, age = 25) => { const p = createPlayer(makeRng(1), 1, 'MF', 10, age); for (const k in p.attrs) p.attrs[k] = ovr / 5; return p; };
@@ -23,12 +23,12 @@ test('value: real-world scale, falling with age, never below €10k', () => {
   for (const o of [30, 55, 80]) assert.equal(value(at(o)) % 10e3, 0);
 });
 
-test('wage: real-world scale per week, less for under-21s, in steps of €500', () => {
-  assert.equal(wage(at(50)), 2000);
-  assert.equal(wage(at(50, 19)), 1500);
-  assert.ok(wage(at(95)) >= 250e3 && wage(at(95)) <= 450e3, `${wage(at(95))}`);
-  assert.equal(wage(at(5)), 500);
-  for (const o of [35, 60, 85]) assert.equal(wage(at(o)) % 500, 0);
+test('wage: small next to the fees, per week, less for under-21s, in steps of €100', () => {
+  assert.equal(wage(at(50)), 400);
+  assert.equal(wage(at(50, 19)), 300);
+  assert.ok(wage(at(95)) >= 50e3 && wage(at(95)) <= 90e3, `${wage(at(95))}`);
+  assert.equal(wage(at(5)), 100);
+  for (const o of [35, 60, 85]) assert.equal(wage(at(o)) % 100, 0);
   assert.equal(createPlayer(makeRng(1), 1, 'FW', 10).contract, null);
 });
 
@@ -68,14 +68,11 @@ test('prizes: merit by final position for every club, the cup winner and runner-
   assert.equal(payPrizes(books(), [[0, 1], [2]], null, null), 0);
 });
 
-test('season budgets: three quarters of the balance for fees; wages up to 55% of income or the current bill, plus the other quarter over two years', () => {
+test('season budgets: three quarters of the balance for fees, nothing in debt; wages have no budget', () => {
   const s = books(), c = s.clubs[0];
   c.fin.balance = 10e6; seasonBudgets(s);
   assert.equal(s.budget, 7.5e6);
-  assert.equal(s.wageBudget, Math.round((0.55 * projection(s, c) / 52 + 2.5e6 / SAVINGS_WEEKS) / 1e3) * 1e3);
+  assert.equal(s.wageBudget, undefined);
   c.fin.balance = -1e6; seasonBudgets(s);
   assert.equal(s.budget, 0);
-  assert.equal(s.wageBudget, Math.round(DEBT_CUT * 0.55 * projection(s, c) / 52 / 1e3) * 1e3); // in debt: no savings, less income
-  const rich = books(12, [5e6]); rich.clubs[0].fin.balance = 0; seasonBudgets(rich);
-  assert.equal(rich.wageBudget, 5e6); // never below what the club pays now: wages are frozen, not cut
 });
