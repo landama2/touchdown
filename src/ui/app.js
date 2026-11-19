@@ -74,7 +74,7 @@ const HEAD = '<th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</
 const retires = p => p.age >= RETIRE_AGE ? 'retires at the end of this season' : p.age === RETIRE_AGE - 1 ? 'retires at the end of next season' : '';
 const ageCell = p => retires(p) ? `<span class="${p.age >= RETIRE_AGE ? 'oop' : 'dim'}" title="${retires(p)}">${p.age} ⏳</span>` : p.age;
 const cells = p => `<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${money(value(p))}</td>`;
-const nameBtn = (p, act) => `<td><button class="link" data-act="${act}" data-id="${p.id}">${esc(p.name)}</button>${p.mine ? ' <span title="yours: bought with your own money">💼</span>' : ''}</td>`;
+const nameBtn = (p, act) => `<td><button class="link" data-act="${act}" data-id="${p.id}">${esc(p.name)}</button>${p.mine ? ' <span role="img" title="yours: bought with your own money" aria-label="yours">💼</span>' : ''}</td>`;
 const outFor = d => d === 1 ? '1 day' : d < 14 ? `${d} days` : `${Math.round(d / 7)} weeks`;
 const status = p => p.inj ? `${esc(p.inj.name)}, ${outFor(p.inj.days)}` : p.ban ? `banned for ${p.ban} match${p.ban > 1 ? 'es' : ''}`
   : p.yc % YELLOW_LIMIT === YELLOW_LIMIT - 1 ? '🟨 one more yellow is a ban' : '';
@@ -113,7 +113,7 @@ const allPlayers = () => [...s.clubs.flatMap(c => c.players), ...s.market, ...s.
 // The rules of a screen, folded away until wanted.
 const help = (text, title = 'How it works') => `<details class="help"><summary>${title}</summary><p>${text}</p></details>`;
 // Two clubs either side of a big middle (score, or 'v'), with a line underneath.
-const scoreboard = (h, a, mid, sub = '') => `<div class="scoreboard"><div>${badge(h, 40)}<b>${clubName(h)}</b></div>
+const scoreboard = (h, a, mid, sub = '') => `<div class="scoreboard" role="group" aria-label="${esc(`${s.clubs[h].name} ${mid === 'v' ? 'versus' : mid.replace('–', 'to')} ${s.clubs[a].name}${sub ? ', ' + sub.replace(/<[^>]+>/g, '').replace(/(\d+)'/, 'minute $1') : ''}`)}"><div>${badge(h, 40)}<b>${clubName(h)}</b></div>
   <div><span class="big">${mid}</span>${sub ? `<span class="sub">${sub}</span>` : ''}</div><div>${badge(a, 40)}<b>${clubName(a)}</b></div></div>`;
 // A [lo, hi] estimate as text: one number when known exactly.
 const span = ([lo, hi], f = String) => lo === hi ? f(lo) : `${f(lo)}–${f(hi)}`;
@@ -122,8 +122,8 @@ const scale = (x, [lo, hi], v) => [lo, hi].map(e => Math.round(x * e / v / 1e4) 
 // Cells for a player you may not know fully: position, age, overall and value as estimates, knowledge.
 const estCells = (p, e) => `<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${span(e.ovr)}</td><td class="n">${moneySpan(e.value)}</td><td class="n dim">${e.k}%</td>`;
 // A club in a narrow column: badge and three-letter code (full name on hover).
-const clubCell = c => c ? `<button class="link" data-act="club" data-id="${c.id}" title="${esc(c.name)}">${badge(c.id, 16)} ${esc(c.short)}</button>` : '<span class="dim">free</span>';
-const star = id => `<button class="link" data-act="shortlist" data-id="${id}" title="shortlist" aria-label="shortlist">${s.shortlist.includes(id) ? '★' : '☆'}</button>`;
+const clubCell = c => c ? `<button class="link" data-act="club" data-id="${c.id}" title="${esc(c.name)}" aria-label="${esc(c.name)}">${badge(c.id, 16)} ${esc(c.short)}</button>` : '<span class="dim">free</span>';
+const star = (id, name = '') => `<button class="link" data-act="shortlist" data-id="${id}" title="shortlist" aria-label="shortlist ${esc(name)}" aria-pressed="${s.shortlist.includes(id)}">${s.shortlist.includes(id) ? '★' : '☆'}</button>`;
 const taskText = t => t.kind === 'free' ? 'the free agents' : t.kind === 'division' ? esc(s.divisions[t.id].name) : t.kind === 'club' ? clubName(t.id)
   : esc(allPlayers().find(p => p.id === t.id)?.name ?? 'a player who has gone');
 const options = (pairs, current) => pairs.map(([v, text]) => `<option value="${esc(v)}"${v === current ? ' selected' : ''}>${esc(text)}</option>`).join('');
@@ -166,7 +166,7 @@ function liveView() {
   const hint = subIn !== null ? `${esc(m.pl[subIn].name)} picked: click the player he replaces.`
     : subOut === null ? 'Click a player, then another to swap positions, or a sub to bring on.' : `${esc(m.pl[subOut].name)} picked: click another player to swap positions, Move here to fill an empty slot, or a sub to replace him.`;
   const controls = m.done ? '<button class="primary" data-act="play">Continue</button>'
-    : `<button class="primary" data-act="${timer ? 'pause' : 'go'}">${timer ? 'Pause' : m.min ? 'Resume' : 'Kick off'}</button>
+    : `<button class="primary" id="clock" data-act="${timer ? 'pause' : 'go'}">${timer ? 'Pause' : m.min ? 'Resume' : 'Kick off'}</button>
       <label>Speed <select data-act="speed">${SPEEDS.map(([t, ms]) => `<option value="${ms}"${ms === speed ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
       <label>Formation ${formationSelect('liveFormation', S.formation)}</label>
       <button data-act="play">Skip to result</button></div><div class="bar">${teamSelects('liveTeam', S.tac)}`;
@@ -215,7 +215,11 @@ function tick() {
   if (m.done) stopClock();
   if (m.ev.slice(seen).some(e => e.side === i && (e.type === 'injury' || e.type === 'red'))) { stopClock(); msg = 'Play paused: make a change if you need one.'; }
   if (!timer || m.min % 5 === 0) save();
+  const news = m.ev.slice(seen).filter(e => FEED[e.type] && FEED[e.type][1] !== 'dim').map(e => esc(line(e, s.clubs[m.sides[e.side].club].short)));
+  if (m.done) news.push(`Full time: ${esc(s.clubs[m.sides[0].club].name)} ${m.sides[0].st.goals}, ${esc(s.clubs[m.sides[1].club].name)} ${m.sides[1].st.goals}.`);
+  if (news.length) pendingSay = news.join(' ');
   if (!timer || document.activeElement?.tagName !== 'SELECT') render(); // ponytail: routine ticks skip a redraw so an open dropdown survives; a tick that stopped the clock (full time, pause) always renders
+  else if (pendingSay) { say(pendingSay); pendingSay = ''; }
 }
 
 // Rounds of knockout ties: [[title, ties], ...].
@@ -248,7 +252,7 @@ export function playerView(id) {
   const go = (t, text) => `<button data-act="tab" data-tab="${t}">${text}</button>`;
   const links = s.youth.includes(p) ? go('Youth', 'Youth squad') : mine ? go('Contracts', 'Contract') + go('Transfers', 'Sell or list') + go('Training', 'Training')
     : `<button data-act="findPlayer" data-id="${p.id}">${c ? 'Bid on Transfers' : 'Sign on Transfers'}</button>`;
-  return `<div class="attrs"><div class="ph">${mine ? '' : star(p.id)}<b class="pname">${esc(p.name)}</b><span class="dim">${p.pos} · age ${p.age}${retires(p) ? ` <span class="oop">⏳ ${retires(p)}</span>` : ''} · ${c ? clubLink(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · potential ${potential(p, e)} · ${moneySpan(e.value)}${known}</span>
+  return `<div class="attrs"><div class="ph">${mine ? '' : star(p.id, p.name)}<b class="pname">${esc(p.name)}</b><span class="dim">${p.pos} · age ${p.age}${retires(p) ? ` <span class="oop">⏳ ${retires(p)}</span>` : ''} · ${c ? clubLink(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · potential ${potential(p, e)} · ${moneySpan(e.value)}${known}</span>
     <button data-act="close">Close</button></div>
     <p>Condition ${p.cond}% · sharpness ${Math.round(p.sharp)}% · morale ${moraleLabel(p.morale)} · form ${formAvg(p) ?? '–'} · ${p.yc} league yellow${p.yc === 1 ? '' : 's'}${status(p) ? ` · <span class="oop">${status(p)}</span>` : ''}${p.contract ? ` · contract ${perWeek(p.contract.wage)} until season ${p.contract.until}${p.contract.clause ? `, release clause ${money(p.contract.clause)}` : ''}` : ''}</p>
     <p>This season: ${statsText(p)}</p><div class="bar" style="grid-column:1/-1">${links}</div>${Object.entries(ATTRS).map(group).join('')}</div>`;
@@ -281,7 +285,7 @@ const views = {
     fixLineup(s);
     const club = myClub(s), pos = slots(s.formation), find = id => club.players.find(p => p.id === id);
     const st = preview({ club, ids: s.lineup, formation: s.formation, bench: s.bench, tactics: s.tactics, fam: s.fam });
-    const row = (p, slot) => `<tr class="${sel === p.id ? 'sel' : ''}"><td class="${slot && slot !== p.pos ? 'oop' : 'dim'}">${slot || (s.bench.includes(p.id) ? 'Sub' : '–')}</td>${nameBtn(p, 'pick')}${cells(p)}${squadCells(p)}<td><button data-act="view" data-id="${p.id}">Profile</button></td></tr>`;
+    const row = (p, slot) => `<tr class="${sel === p.id ? 'sel' : ''}"><td class="${slot && slot !== p.pos ? 'oop' : 'dim'}">${slot && slot !== p.pos ? '<span class="sr">out of position: </span>' : ''}${slot || (s.bench.includes(p.id) ? 'Sub' : '–')}</td>${nameBtn(p, 'pick')}${cells(p)}${squadCells(p)}<td><button data-act="view" data-id="${p.id}">Profile</button></td></tr>`;
     const reserves = byPos(club.players.filter(p => !s.lineup.includes(p.id) && !s.bench.includes(p.id)));
     return `<div class="club">${crestSvg(club, 56)}${kitSvg(club.kit, 56)}<b>${esc(club.name)}</b></div>
       <div class="bar"><label>Formation ${formationSelect('formation', s.formation)}</label>
@@ -349,10 +353,11 @@ const views = {
     return h;
   },
   Table() {
+    const ZONE_TEXT = { up: 'promotion place', playoff: 'play-off place', down: 'relegation place' };
     const cols = ['P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts'];
     // Sorting reorders the rows; # and the zone colours stay the real league position.
     const st = id => s.clubs[id].st, LEAGUE_COLS = { pos: x => x.k, club: x => s.clubs[x.id].name, p: x => st(x.id).p, w: x => st(x.id).w, d: x => st(x.id).d, l: x => st(x.id).l, gf: x => st(x.id).gf, ga: x => st(x.id).ga, gd: x => st(x.id).gf - st(x.id).ga, pts: x => st(x.id).pts };
-    const row = ({ id, k }) => { const t = s.clubs[id].st; return `<tr class="${id === s.me ? 'me' : ''} ${zone(s, tableDiv, k) || ''}"><td class="n">${k + 1}</td><td>${clubLink(id, 18)}</td>${[t.p, t.w, t.d, t.l, t.gf, t.ga, t.gf - t.ga, t.pts].map(v => `<td class="n">${v}</td>`).join('')}</tr>`; };
+    const row = ({ id, k }) => { const t = s.clubs[id].st; return `<tr class="${id === s.me ? 'me' : ''} ${zone(s, tableDiv, k) || ''}"><td class="n">${k + 1}${ZONE_TEXT[zone(s, tableDiv, k)] ? `<span class="sr"> (${ZONE_TEXT[zone(s, tableDiv, k)]})</span>` : ''}</td><td>${clubLink(id, 18)}</td>${[t.p, t.w, t.d, t.l, t.gf, t.ga, t.gf - t.ga, t.pts].map(v => `<td class="n">${v}</td>`).join('')}</tr>`; };
     return `<div class="bar">${s.divisions.map((d, i) => `<button data-act="div" data-id="${i}" class="${i === tableDiv ? 'on' : ''}">${esc(d.name)}</button>`).join('')}</div>
       <h2>Season ${s.season}</h2><div class="wrap"><table><tr>${heads('league', [['#', 'pos', 'n'], ['Club', 'club'], ...cols.map(c => [c, c.toLowerCase(), 'n'])])}</tr>${order('league', LEAGUE_COLS, table(s, tableDiv).map((id, k) => ({ id, k })), l => l).map(row).join('')}</table></div>
       <p class="dim">${[['up', 'promoted'], ['playoff', 'play-offs'], ['down', 'relegated']].filter(([z]) => s.divisions[tableDiv].clubIds.some((_, k) => zone(s, tableDiv, k) === z)).map(([z, text]) => `<span class="key ${z}"></span>${text}`).join(' ')}</p>
@@ -399,7 +404,7 @@ const views = {
       const a = askSpan(p, c, e);
       return `${feeBox(p.id, t?.counter ?? Math.round((a[0] + a[1]) / 2e4) * 1e4)} <button data-act="bid" data-id="${p.id}">Bid</button>${t?.counter ? ` <button data-act="counter" data-id="${p.id}">Pay ${money(t.counter)}</button>` : ''}${loanable(s, c, p) ? ` <button data-act="loan" data-id="${p.id}">Loan (${perWeek(loanPay(p.contract.wage))})</button>` : ''}`;
     };
-    const found = estOrder('find', searchPlayers(s, filters).map(({ p, c, est: e }) => ({ p, c, e }))).map(({ p, c, e }) => `<tr><td>${star(p.id)}</td>${nameBtn(p, 'view')}<td>${clubCell(c)}</td>${estCells(p, e)}
+    const found = estOrder('find', searchPlayers(s, filters).map(({ p, c, est: e }) => ({ p, c, e }))).map(({ p, c, e }) => `<tr><td>${star(p.id, p.name)}</td>${nameBtn(p, 'view')}<td>${clubCell(c)}</td>${estCells(p, e)}
       <td class="n">${c ? moneySpan(askSpan(p, c, e)) : moneySpan(scale(signingFee(p), e.value, value(p)))}</td><td>${deal(p, c, e)}</td></tr>`);
     const listed = estOrder('listed', s.clubs.filter(x => x !== me).flatMap(c => c.players.filter(p => p.listed === 'sale').map(p => ({ p, c, e: estimate(s, p, c) }))))
       .map(({ p, c: x, e }) => `<tr>${nameBtn(p, 'view')}<td>${clubLink(x.id)}</td>${estCells(p, e)}<td class="n">${moneySpan(askSpan(p, x, e))}</td></tr>`);
@@ -407,16 +412,16 @@ const views = {
     const mine = squadOrder('sell', me.players).map(p => `<tr>${nameBtn(p, 'view')}${cells(p)}<td>${p.loan ? `<span class="dim">on loan from ${clubName(p.loan.from)}</span>` : listing(p)}</td>
       <td>${p.loan || justJoined(s, p) ? '' : `<button data-act="sell" data-id="${p.id}">Quick sale ${money(Math.round(QUICK_SALE * value(p) / 1e4) * 1e4)}</button>`}</td></tr>`);
     const away = s.clubs.flatMap(x => x.players.filter(p => p.loan?.from === s.me).map(p => `<tr>${nameBtn(p, 'view')}${cells(p)}<td>at ${clubName(x.id)} until the end of season ${p.loan.until}</td></tr>`));
-    const free = order('free', EST_COLS, s.market.map(p => ({ p, c: null, e: estimate(s, p, null) })), l => [...l].sort((a, b) => POS.indexOf(a.p.pos) - POS.indexOf(b.p.pos) || overall(b.p) - overall(a.p))).map(({ p, e }) => { return `<tr><td>${star(p.id)}</td>${nameBtn(p, 'view')}${estCells(p, e)}<td class="n">${moneySpan(scale(signingFee(p), e.value, value(p)))}</td><td class="dim">${termsText(terms(s, p))}</td><td><button data-act="buy" data-id="${p.id}">Sign</button></td></tr>`; });
+    const free = order('free', EST_COLS, s.market.map(p => ({ p, c: null, e: estimate(s, p, null) })), l => [...l].sort((a, b) => POS.indexOf(a.p.pos) - POS.indexOf(b.p.pos) || overall(b.p) - overall(a.p))).map(({ p, e }) => { return `<tr><td>${star(p.id, p.name)}</td>${nameBtn(p, 'view')}${estCells(p, e)}<td class="n">${moneySpan(scale(signingFee(p), e.value, value(p)))}</td><td class="dim">${termsText(terms(s, p))}</td><td><button data-act="buy" data-id="${p.id}">Sign</button></td></tr>`; });
     const biggest = s.deals.filter(d => !d.loan && d.from !== null && d.to !== null).sort((a, b) => b.fee - a.fee).slice(0, 10).map(d => `<div>${dealText(d)}</div>`).join('');
-    const f = filters, pick = (id, pairs, v) => `<select id="${id}">${options(pairs, v ?? '')}</select>`;
+    const f = filters, pick = (id, pairs, v) => `<select id="${id}" aria-label="${esc(pairs[0][1].replace('Any ', ''))}">${options(pairs, v ?? '')}</select>`;
     const divPairs = [['', 'Any division'], ...s.divisions.map((d, i) => [String(i), d.name]), ['free', 'Free agents']];
     const clubPairs = [['', 'Any club'], ...s.clubs.filter(c => c.id !== s.me).map(c => [String(c.id), c.name])];
     const num = (id, v, label, w = 5) => `<label>${label} <input type="number" id="${id}" min="0" value="${v ?? ''}" style="width:${w}em"></label>`;
     const search = `<div class="bar">${pick('f-pos', [['', 'Any position'], ...POS.map(x => [x, x])], f.pos)}${pick('f-div', divPairs, f.div)}${pick('f-club', clubPairs, f.club)}
       ${num('f-age', f.maxAge, 'Age ≤')}${num('f-ovr', f.minOvr, 'Ovr ≥')}${num('f-val', f.maxValue ? f.maxValue / 1e6 : '', 'Value ≤ €M')}
       <label><input type="checkbox" id="f-listed"${f.listed ? ' checked' : ''}> listed</label><label><input type="checkbox" id="f-loan"${f.loan ? ' checked' : ''}> loan</label>
-      <input type="text" id="f-name" placeholder="name" value="${esc(f.name ?? '')}" style="width:9em"><button class="primary" data-act="search">Search</button> <button data-act="clearSearch">Clear</button></div>`;
+      <input type="text" id="f-name" placeholder="name" aria-label="name" value="${esc(f.name ?? '')}" style="width:9em"><button class="primary" data-act="search">Search</button> <button data-act="clearSearch">Clear</button></div>`;
     return `<p><b>${windowText()}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(me))}</p>
       <p><label><input type="checkbox" data-act="ownPay"${ownPay ? ' checked' : ''}> Pay fees from your own money (${money(s.career?.money ?? 0)})</label> <span class="dim">A player you pay for is yours 💼: the club pays his wages, he follows you to every new job, and when he is sold the fee is yours.</span></p>
       ${help(`Bid for players at other clubs while a window is open: a club takes ${Math.round(0.9 * 100)}% of its asking price or counters, and talks stop after three rounds. Players under 24 who are not regulars can come on loan for half their wage. Free agents sign at any time for a signing-on fee of half their value.`)}
@@ -457,7 +462,7 @@ views.Scouting = () => {
   const scouts = s.scouts.map((sc, k) => `<tr><td>Scout ${k + 1}</td><td>${sc.task ? `${taskText(sc.task)} · reports in ${outFor(sc.days)}` : '<span class="dim">idle</span>'}</td>
     <td><select data-act="assign" data-id="${k}">${options(taskPairs.some(([v]) => v === taskValue(sc)) ? taskPairs : [...taskPairs, [taskValue(sc), 'Player: ' + taskText(sc.task)]], taskValue(sc))}</select></td></tr>`).join('');
   const list = estOrder('short', s.shortlist.map(id => allPlayers().find(p => p.id === id)).filter(Boolean).map(p => { const c = clubOfPlayer(p); return { p, c, e: estimate(s, p, c) }; })).map(({ p, c, e }) => {
-    return `<tr><td>${star(p.id)}</td>${nameBtn(p, 'view')}<td>${clubCell(c)}</td>${estCells(p, e)}<td>${e.ovr[0] < e.ovr[1] && s.scouts.some(x => !x.task) ? `<button data-act="scoutPlayer" data-id="${p.id}">Scout</button>` : ''}</td></tr>`;
+    return `<tr><td>${star(p.id, p.name)}</td>${nameBtn(p, 'view')}<td>${clubCell(c)}</td>${estCells(p, e)}<td>${e.ovr[0] < e.ovr[1] && s.scouts.some(x => !x.task) ? `<button data-act="scoutPlayer" data-id="${p.id}">Scout</button>` : ''}</td></tr>`;
   });
   const days = Object.entries(TASKS).map(([k, t]) => `${k === 'free' ? 'the free agents' : 'a ' + k}: ${taskDays(s, k)} days, to ${t.level}%`).join(' · ');
   return `<h2>Scouts</h2>${help(`Send a scout to watch a player, a club, a division or the free agents. When he reports, you know everyone he watched: ${days}. What you know fades over two seasons, and Premier League players are always known. Your scouting staff level (Staff) sets how many scouts you have and how fast they work.`)}
@@ -574,7 +579,7 @@ export const exportText = () => serialize(s);
 export async function importText(text) { const next = deserialize(text); if (!next) return 'That file is not a Touchline save.'; await replaceGame(next); return ''; }
 
 function savesView() {
-  const kb = n => `${Math.max(1, Math.round(n / 1024))} KB`, act = (a, n, text) => `<button data-act="${a}" data-id="${n}">${text}</button>`;
+  const kb = n => `${Math.max(1, Math.round(n / 1024))} KB`, act = (a, n, text) => `<button data-act="${a}" data-id="${n}" aria-label="${text} slot ${n}">${text}</button>`;
   const row = (x, k) => `<tr><td>Slot ${k + 1}</td><td>${x ? `<b>${esc(x.name)}</b>` : '<span class="dim">empty</span>'}</td><td class="dim">${x?.at ? new Date(x.at).toLocaleString() : ''}</td><td class="n dim">${x ? kb(x.size) : ''}</td>
     <td>${inGame() ? act('slotSave', k + 1, 'Save here') : ''} ${x ? act('slotLoad', k + 1, 'Load') + ' ' + act('slotRename', k + 1, 'Rename') + ' ' + act('slotDelete', k + 1, 'Delete') : ''}</td></tr>`;
   return `<div class="club"><b>Saved games</b><button data-act="close" style="margin-left:auto">Close</button></div>
@@ -583,7 +588,8 @@ function savesView() {
     <div class="bar">${inGame() ? '<button data-act="exportSave">Export current game</button>' : ''}<button data-act="importSave">Import a save file</button></div>`;
 }
 const SAVE_BUTTONS = '<button data-act="saves">Saved games</button><button data-act="exportSave">Export save</button><button data-act="importSave">Import save</button>';
-const navButton = t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}">${t === 'Inbox' && unread() ? `Inbox (${unread()})` : t}</button>`;
+// One Tab stop for the strip (the current screen); arrow keys move along it (see the keydown handler).
+const navButton = t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}"${t === tab ? ' aria-current="page"' : ' tabindex="-1"'}>${t === 'Inbox' && unread() ? `Inbox (${unread()})` : t}</button>`;
 
 const actions = {
   start(id) { startCareer(s, id); tab = 'Squad'; tableDiv = s.clubs[id].div; },
@@ -636,7 +642,7 @@ const actions = {
   slot(k, el) { const f = el.dataset.field; msg = setSlot(s.tactics.slots[k], slots(s.formation)[k], f, f === 'role' || f === 'duty' ? el.value : +el.value) || ''; },
   taker(_, el) { msg = setTaker(s.tactics, el.dataset.field, el.value === '' ? null : +el.value, myClub(s).players) || ''; },
   liveTeam(_, el) { msg = setLiveTactic(s.live, mySide(), el.dataset.field, +el.value) || ''; },
-  play() { stopClock(); playDay(s); subOut = subIn = null; msg = newsText(); },
+  play() { stopClock(); playDay(s); subOut = subIn = null; msg = newsText(); const r = s.last?.find(x => x.h === s.me || x.a === s.me); if (r) pendingSay = `Result: ${scoreLine(r)}.`; },
   trainField(_, el) { msg = setTraining(s, el.dataset.field, el.value) || ''; },
   focus(id, el) { msg = setFocus(s, id, el.value || null) || ''; },
   load(id, el) { msg = setLoad(s, id, el.value || null) || ''; },
@@ -699,7 +705,42 @@ const actions = {
 // A screen that covers the tab until closed: saved games, or a profile (never during a live match).
 const overlay = () => savesOpen ? savesView() : s.live ? null : viewing !== null ? playerView(viewing) : clubOpen !== null ? clubView(clubOpen) : null;
 
+// After each redraw (the screen is rebuilt as HTML): focus goes back to the control that had it, or to the
+// content when that control is gone (a profile opened, say); tables and in-table controls get names; and the
+// message, plus live-match news, is read out from a region outside the redraw.
+const FOCUS_ATTRS = ['data-act', 'data-id', 'data-tab', 'data-table', 'data-key', 'data-field'];
+const focusKey = el => !el || el === document.body || !el.closest?.('#main, #nav, #sys, #menu') ? null
+  : el.id ? '#' + CSS.escape(el.id) : FOCUS_ATTRS.filter(a => el.hasAttribute(a)).map(a => `[${a}="${CSS.escape(el.getAttribute(a))}"]`).join('') || '#main'; // an id wins: it survives a change of action (Kick off, Pause, Resume)
+let pendingSay = '';
+const say = html => { $('say').innerHTML = html; };
+// ponytail: names come from the page itself (heading above a table; column header and row for a control in a table)
+// rather than being written into every template; a control the rule cannot name gets its label in the markup.
+function nameThings(main) {
+  for (const t of main.querySelectorAll('table:not([aria-label])')) {
+    let h = t.closest('.wrap') ?? t;
+    while ((h = h.previousElementSibling) && !/^H[23]$/.test(h.tagName));
+    t.setAttribute('aria-label', h ? h.textContent.trim() : tab);
+  }
+  for (const el of main.querySelectorAll('td select, td input')) {
+    if (el.labels?.length || el.hasAttribute('aria-label')) continue;
+    const td = el.closest('td'), tr = td.parentElement, head = tr.closest('table').rows[0];
+    const col = head.cells[td.cellIndex]?.tagName === 'TH' ? head.cells[td.cellIndex].textContent.trim() : '';
+    const link = [...tr.cells].find(c => c.querySelector('.link')), who = (link ? [link] : [...tr.cells].slice(0, 2)).map(c => c.textContent.trim()).join(' ');
+    el.setAttribute('aria-label', [col, who].filter(Boolean).join(', '));
+  }
+}
 function render() {
+  const keep = focusKey(document.activeElement), said = msg;
+  draw();
+  const main = $('main');
+  if (main.querySelectorAll) nameThings(main);
+  if (keep) { const back = document.querySelector(keep), shown = back?.offsetParent != null; (shown ? back : main).focus?.({ preventScroll: shown }); } // hidden: in the closed menu
+  const text = [said, pendingSay].filter(Boolean).join(' ');
+  pendingSay = '';
+  if (text) say(text);
+}
+
+function draw() {
   if (s.me === null && s.career) {
     if (!UNEMPLOYED.includes(tab)) tab = 'Inbox';
     $('info').textContent = `Out of work · reputation ${s.career.rep} · Season ${s.season}`;
@@ -734,11 +775,21 @@ function render() {
 async function dispatch(e) {
   const el = e.target.closest('[data-act]');
   if (!el || (e.type === 'click') === (el.tagName === 'SELECT')) return; // selects act on change, everything else on click
-  $('menu').open = false;
+  const fromMenu = !!el.closest('#menu');
+  $('menu').open = false; // the browser drops focus from inside the closed menu, so a menu action hands it to the content
   await actions[el.dataset.act](+el.dataset.id, el); // slot actions are async (compression)
   render(); // before save: the Inbox marks items read as it draws
+  if (fromMenu) $('main').focus();
   save();
 }
 document.addEventListener('click', dispatch);
+// The tab strip: arrow keys, Home and End move along it.
+document.addEventListener('keydown', e => {
+  const b = e.target.closest?.('#nav button'), all = b && [...$('nav').querySelectorAll('button')], k = all?.indexOf(b);
+  const to = b && { ArrowRight: k + 1, ArrowLeft: k - 1, Home: 0, End: all.length - 1 }[e.key];
+  if (to === undefined || !b) return;
+  e.preventDefault();
+  all[(to + all.length) % all.length].focus();
+});
 document.addEventListener('change', dispatch);
 render();

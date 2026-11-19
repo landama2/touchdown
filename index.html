@@ -96,7 +96,11 @@
   nav button:hover { color:var(--text); }
   /* controls */
   input[type=number], input[type=text] { font:inherit; color:var(--text); background:var(--panel-2); border:1px solid var(--line); border-radius:6px; padding:5px 8px; }
-  :is(button, select, input, summary):focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  :is(button, select, input, summary, a):focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  #main:focus { outline:none; }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  .skip { position:absolute; left:-9999px; }
+  .skip:focus { left:16px; top:8px; z-index:20; background:var(--panel); color:var(--text); padding:6px 12px; border-radius:6px; }
   td button:not(.link), td input[type=number] { padding:2px 8px; font-size:13px; }
   @media (max-width:700px) { header h1 { display:none; } .scoreboard .big { font-size:28px; } }
   /* rules text, folded away until wanted */
@@ -119,8 +123,10 @@
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header><div class="top"><h1>Touchline</h1><span id="info"></span><details id="menu"><summary>Menu</summary><div id="sys"></div></details></div><nav id="nav"></nav></header>
-<main id="main"></main>
+<main id="main" tabindex="-1"></main>
+<div id="say" class="sr" aria-live="polite"></div>
 <script type="module" src="src/ui/app.js"></script>
 <script type="module" src="src/ui/pwa.js"></script>
 </body>

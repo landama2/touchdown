@@ -1,6 +1,6 @@
 # Touchline Phase 11: interface
 
-Status: in progress. Order-of-work steps 1–5 done 2026-11-19 (tokens, sortable tables, profiles, save slots, pitch view). The formation table lives in `src/lineup.js`, not `tactics.js`. Base: main @ d4da319.
+Status: done 2026-11-19 (all seven steps). The formation table lives in `src/lineup.js`, not `tactics.js`. Base: main @ d4da319.
 No save bump planned: this phase changes screens and storage access, not the shape of the career state. If a view needs a new field, that field goes through a migration in `src/save.js` as in earlier phases.
 
 ## Goal
@@ -85,6 +85,13 @@ Tests: `tests/save.test.js`: slot keys are distinct; an exported file re-imports
 
 Files: `src/ui/app.js`, `index.html`, token CSS.
 Checks: a manual pass with keyboard only and with a screen reader on the desktop build, recorded in the step's notes. Automated: `tests/ui-a11y.test.js` is out of scope (no DOM test dependency; the project has none). Say so in the summary rather than adding a framework.
+
+Notes (done 2026-11-19):
+- Keyboard-only pass in the browser with real key presses: skip link, Menu, tab strip (arrow keys, Home, End), Match → Quick result and Continue through several days, Inbox, Transfers (value filter, Search, typed fee, Bid: accepted), Saved games (Load slot), a player profile and Close, a live match (Play live, Kick off, Pause, Resume). Focus stayed on the control used, or moved to the start of the new screen when that control was gone.
+- A script opened every screen and found no control or table without an accessible name.
+- Screen reader: not tried with a real one (NVDA, Narrator). What one would read was checked from the page: accessible names, the announcer region's text (messages, results, live goals and cards), the scoreboard label and the hidden zone text in the league table.
+- How: focus is put back after every redraw (an id wins over the action, so Kick off → Pause keeps focus); a menu action hands focus to the content; tables are named from the heading above them and in-table controls from their column and row (`nameThings()` in `src/ui/app.js`); one persistent `aria-live` region (`#say`) reads messages, results and live-match news; the tab strip is one Tab stop with `aria-current`.
+- Not done: no shortcut keys (the plan's "if any"); pitch dots are not interactive (the table beside the pitch is).
 
 ## Order of work
 

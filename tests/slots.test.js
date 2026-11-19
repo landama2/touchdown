@@ -11,7 +11,7 @@ startCareer(world, 2);
 const store = new Map();
 globalThis.localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) };
 store.set(KEY, serialize(world)); // an autosave from before saves were compressed
-globalThis.document = { getElementById: () => ({ innerHTML: '', textContent: '', querySelector: () => null }), addEventListener() {} };
+globalThis.document = { getElementById: () => ({ innerHTML: '', textContent: '', querySelector: () => null, querySelectorAll: () => [] }), addEventListener() {} };
 const ui = await import('../src/ui/app.js');
 
 test('an uncompressed autosave from before still loads', () => {

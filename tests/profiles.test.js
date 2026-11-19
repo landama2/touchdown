@@ -11,7 +11,7 @@ import { wageBill } from '../src/finance.js';
 const world = createWorld(7);
 startCareer(world, 0);
 globalThis.localStorage = { getItem: () => serialize(world), setItem() {} };
-globalThis.document = { getElementById: () => ({ innerHTML: '', textContent: '', querySelector: () => null }), addEventListener() {} };
+globalThis.document = { getElementById: () => ({ innerHTML: '', textContent: '', querySelector: () => null, querySelectorAll: () => [] }), addEventListener() {} };
 const { playerView, clubView } = await import('../src/ui/app.js');
 
 const lastDiv = world.divisions.length - 1;
