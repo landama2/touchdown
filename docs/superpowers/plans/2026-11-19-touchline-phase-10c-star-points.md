@@ -1,6 +1,6 @@
 # Touchline Phase 10c: Star points, young legends and a hall of fame
 
-Status: proposal, waiting for the owner's answers (open questions at the end). Base: main @ 91567f4.
+Status: approved 2026-11-19 with the answers below; ready to implement. Base: main @ 91567f4.
 One save bump (13 → 14) covers everything below.
 
 ## Decisions already made (2026-11-17, Phase 10b discussion)
@@ -10,12 +10,20 @@ One save bump (13 → 14) covers everything below.
 4. Potential always high: no flops.
 5. AI clubs can get legends too, at a much smaller chance.
 
+## Owner's answers (2026-11-19)
+1. Tenure counts from when he joined the club, not from when you arrived.
+2. A legend arrives in the **youth squad**, not the first team.
+3. No limit on legends a season: points are the only brake.
+4. Marked on screen: "Thierry Henry ★". The save keeps the plain name with `p.legend`.
+5. Hall of fame keeps apps and goals (`p.tally`).
+6. Your own retired stars become legends at 2 points off.
+
 ## The loop in one paragraph
 
 Keep a star to the end of his career and, when he retires at your club, you earn Star points. Points belong to the
 manager (`s.career`), so they follow you from job to job and survive a sacking. Spend them on a 17-year-old "young
 version" of a legend: a hand-made list of greats (Henry, Zidane, Maldini, Yamal…), plus every real star who retires
-anywhere in the world during your career. The youngster arrives on a starter contract with modest attributes, a
+anywhere in the world during your career. The youngster joins your youth squad with modest attributes, a
 guaranteed high ceiling, and a signature shape (a pace-and-finishing forward, a vision-and-touch playmaker). He has to be
 trained to get there. Your retired stars go into a Hall of fame.
 
@@ -48,7 +56,7 @@ is a squad player.
 | For | Points |
 |-----|--------|
 | A star retiring from your club | 2 |
-| Each full season at your club after the first (cap 4) | +1 |
+| Each full season at the club after the first, counted from when he joined it, also before you arrived (cap 4) | +1 |
 | Each season award he ever won (cap 3) | +1 |
 | He retires in the Premier League | +1 |
 
@@ -93,7 +101,8 @@ At 17 he is about overall 62–68 (a League One starter, a Premier League squad 
 coaching, sooner. A legend left on the bench at a club with level-1 coaching never gets there: no flops in the
 ceiling, but the manager can still waste him.
 
-Legends carry `p.legend = 'icon' | 'great' | 'star'` (shown as ★ on the profile and in squad lists) and their
+Legends carry `p.legend = 'icon' | 'great' | 'star'`; the UI writes the name with a ★ ("Thierry Henry ★") everywhere
+it shows a player (squad, youth, profile, match, commentary, tables), via one `pname(p)` helper. Their
 potential is shown exactly, not as a range: you paid for it.
 
 **Current stars and name clashes.** Most of the list plays outside England, so they are not in the world. A legend
@@ -108,16 +117,24 @@ League (top-10% line) joins `s.legends.extra` the next summer, with tier from hi
 
 - New tab **Legends** (also reachable from Youth): your points, the list grouped by tier with cost, signature and
   position, filters by position; and the Hall of fame below it.
-- **Sign** button: one legend per season, any time of the season; needs a free squad place. He joins the first team on
-  a starter contract (`YOUTH_YEARS`, 3 seasons, wage from `wage(p)`), no fee. When it ends he negotiates like anyone
-  else: a 20-year-old at 85 will ask for a lot, and a club that can't pay may lose him. That is deliberate.
+- **Sign** button: any time, as many as your points buy; needs a free youth place (`YOUTH_MAX` 20). No fee, no wage
+  while in the youth squad.
+- In the youth squad he trains with the youth (`trainYouth`, coaching-scaled) and is promoted like any youth player
+  with `promote()` onto a starter contract (`YOUTH_YEARS`, 3 seasons). When that ends he negotiates like anyone
+  else: a 20-year-old at 85 will ask for a lot. That is deliberate.
+- **He must be promoted before 19** (`LEAVE_AGE`): at 17 that gives two summers. A legend left in the youth squad at
+  19 leaves like any other youth player, and is gone from the list for good. The Youth tab warns a season ahead.
+- **Changing jobs.** Today the youth squad is wiped when you change club (fun surprise #23). Legends in it come with you
+  instead (like players of your own, fun surprise #31): `takeClub()` keeps youth players with `p.legend`. If the new
+  youth squad is full, the intake is cut, not the legend. When you are sacked they wait with you
+  (`s.career.waiting`) and join your next club's youth squad.
 - Each legend exists once per world. Once you or an AI club has him, he is gone from the list.
 - Unemployed: points keep, signing waits for a job.
 
 ## 5. AI clubs
 
 Each summer, for each star retiring from an AI club: a 1-in-20 chance that a legend replaces the academy kid who fills
-his place. Pick weighted 6 : 3 : 1 Star : Great : Icon from what is left. About 6–10 stars retire world-wide a
+his place, straight into the first team (AI clubs have no youth squads). Pick weighted 6 : 3 : 1 Star : Great : Icon from what is left. About 6–10 stars retire world-wide a
 season, so an AI legend turns up roughly every two or three seasons, and sometimes takes the one you were saving for.
 
 **Determinism and calibration.** The AI roll uses its own RNG seeded from `(s.seed, s.season)`, not the world's
@@ -140,14 +157,16 @@ The inbox gets a message on each retirement: "Virgil van Dijk retires. 8 seasons
 - `src/legends.js` (new): `isStar()`, `starPoints()`, `retireStars(s, retirees)`, `makeLegend()`, `available(s)`,
   `signLegend(s, key)` (error message or null), `aiLegends(s, retirees)`.
 - `src/data/legends.js` (new): the hand-made list, with a header comment on sources and the real-names rule.
+- `src/youth.js`: `ageYouth()` warns on legends turning 18; legends keep a place over the intake.
+- `src/season.js` `takeClub()`: keep legends in the youth squad (and `s.career.waiting`) instead of wiping them.
 - `src/season.js` `endSeason()`: collect retirees before the academy swap; call `retireStars` and `aiLegends`; add
   `p.stats` into `p.tally`.
 - `src/market.js` `move()`, `src/youth.js` `promote()`/`fromYouth()`, `src/contracts.js` `academy()`: set `p.since`,
   reset `p.tally`.
-- `src/career.js`: `stars`, `hall`, `legendSeason` on `s.career`; inbox post types `retired`, `legend`.
+- `src/career.js`: `stars`, `hall`, `waiting` on `s.career`; sacking moves youth legends to `waiting`; inbox post types `retired`, `legend`.
 - `src/ui/app.js`: Legends tab + Hall of fame; ★ marker; retirement inbox texts.
 - `src/save.js`: v14: `p.since = s.season`, `p.tally = { apps: 0, goals: 0 }` on every player; `s.career.stars = 0`,
-  `hall = []`, `legendSeason = null`; `s.legends = { used: [], extra: [] }`; `valid()` checks them.
+  `hall = []`, `waiting = []`; `s.legends = { used: [], extra: [] }`; `valid()` checks them.
 
 ## Tests (`tests/legends.test.js`)
 
@@ -155,8 +174,10 @@ The inbox gets a message on each retirement: "Virgil van Dijk retires. 8 seasons
   League bonus); a non-star gives none; a star retiring at an AI club gives you nothing.
 - A loaned-out star of yours retiring counts for you.
 - `makeLegend`: age 17, `pot` by tier, signature attributes above the rest, overall in 60–70 for every list entry.
-- `signLegend`: rejects no points, one-a-season, full squad, unknown or used legend; takes points, adds a starter
-  contract.
+- `signLegend`: rejects no points, full youth squad, unknown or used legend, no job; takes points, puts him in
+  `s.youth` with no contract; two in one season both work.
+- A legend in the youth squad survives a job change and a sacking (via `waiting`); one left there at 19 leaves.
+- `pname()` adds the ★ only for legends.
 - Namesake still in the world → hidden; after he retires → offered next summer.
 - AI legends: the world's own RNG sequence is unchanged by the AI roll (same world after a season with and without it).
 - Save: a v13 save migrates and plays a season.
@@ -169,19 +190,10 @@ The inbox gets a message on each retirement: "Virgil van Dijk retires. 8 seasons
 - **Lend him, keep him.** A star you loaned out still retires from your club: his points come home with him.
 - **The race for Henry.** Legends are once per world. An AI club can draw the one you were saving for.
 
-## Open questions for the owner
+## Fun surprises to add if they survive
 
-1. **Tenure: at the club, or under you?** A veteran who spent 8 seasons at a club you took over last year: does he
-   bring 8 seasons of points (as above, rewards taking over clubs with loyal veterans) or only the seasons he played for
-   you?
-2. **Where does a legend arrive?** First team at 17 (as above), or the youth squad (then he leaves at 19 if not
-   promoted, and squad room is not needed)?
-3. **One legend a season** — or no limit, with points as the only brake?
-4. **Name**: plain real name ("Thierry Henry"), or marked as the young version on screen ("Thierry Henry ★")? The
-   save keeps the real name either way.
-5. **Hall of fame stats**: worth the `p.tally` field (apps and goals at the club), or keep the hall to seasons, awards
-   and overall?
-6. **Your own retired stars as legends** at 2 points off: yes, or keep only the hand-made list plus Premier League stars?
+- **The legend ladder.** A legend in the youth squad costs nothing until promoted, and youth players need no squad
+  place. Bank a few and promote them one by one as the first team has room.
 
 ## Order of work if approved
 1 (stars, `p.since`) → 2 (points, hall, inbox) → 3 (legend list and builder) → 4 (Legends tab, signing) →

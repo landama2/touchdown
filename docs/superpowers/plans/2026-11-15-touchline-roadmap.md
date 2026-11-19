@@ -24,7 +24,8 @@
 | 9 | Youth & staff | Annual academy intake, youth squad, staff (coaches, scouts, physios) with their own attributes that affect training, scouting accuracy and recovery; hiring and firing | 5, 8 | `2026-11-16-touchline-phase-9-youth-staff.md` (done 2026-11-16) |
 | 10 | Manager career | Board expectations and confidence, job security, sackings, job offers at other clubs, manager reputation, inbox with news and decisions | 6, 7 | `2026-11-16-touchline-phase-10-manager-career.md` (done 2026-11-16) |
 | 10b | Training & money | Training for every age, per-player intensity, budgets favour transfers, the manager's own money: salary, own players, club shares | 5, 6, 10 | `2026-11-17-touchline-phase-10b-training-money.md` (done 2026-11-17) |
-| 10c | Star points & legends | Star points for stars who retire at your club, 17-year-old young versions of legends to spend them on, a hall of fame; AI clubs get legends rarely | 9, 10b | `2026-11-19-touchline-phase-10c-star-points.md` (proposal, awaiting answers) |
+| 10c | Star points & legends | Star points for stars who retire at your club, 17-year-old young versions of legends to spend them on, a hall of fame; AI clubs get legends rarely | 9, 10b | `2026-11-19-touchline-phase-10c-star-points.md` (approved 2026-11-19, to implement) |
+| 10d | Scorer rankings | Live top scorers and top assists per division, a top-assists award and records, prize money for the winners' clubs | 4, 6 | `2026-11-19-touchline-phase-10d-scorer-rankings.md` (proposal, awaiting answers) |
 | 11 | Interface | Touchline's own visual identity, player and club profile screens, 2D pitch match view, sortable/filterable tables, save slots with export/import, keyboard and screen-reader support | 2–10 | to write |
 | 12 | Balance & soak | 20-season automated runs checked against statistical targets (goals per match 2.5–2.9, home wins 43–47%, plausible wage/value curves), performance budget, save-size budget | all | to write |
 
