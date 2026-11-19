@@ -5,10 +5,11 @@ import { FORMATIONS, BENCH, slots, bestXI, autoBench, autoPick, fixLineup, stren
 import { available } from '../src/squad.js';
 import { setTraining } from '../src/training.js';
 import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason } from '../src/season.js';
+import { ranking } from '../src/awards.js';
 import { serialize, deserialize } from '../src/save.js';
 import { cupRounds } from '../src/cup.js';
 import { stepMinute, matchResult } from '../src/match.js';
-import { SEASON_WEEKS, BROADCAST, MERIT, CUP_PRIZE, sponsorship, gate, wageBill } from '../src/finance.js';
+import { SEASON_WEEKS, BROADCAST, MERIT, CUP_PRIZE, rankPrize, sponsorship, gate, wageBill } from '../src/finance.js';
 import { MIN_SQUAD, MAX_SQUAD, buy } from '../src/transfers.js';
 import { lend } from '../src/market.js';
 import { MINI } from './fixtures/mini.js';
@@ -160,15 +161,18 @@ test('endSeason rolls over; three seasons keep squads intact', () => {
   assert.deepEqual(JSON.parse(JSON.stringify(s)), s);
 });
 
-test('prize money: every club by final position, the cup winner and runner-up; the season goes into History', () => {
+test('prize money: every club by final position, the cup winner and runner-up, the top 3 scorers and assisters; the season goes into History', () => {
   const s = world(12);
   takeClub(s, 0);
   while (!s.done) playDay(s);
   const tables = s.divisions.map((_, d) => table(s, d)), bal = s.clubs.map(c => c.fin.balance), final = s.cup.rounds.at(-1).ties[0];
+  const ranks = s.divisions.map((_, d) => ({ goals: ranking(s, d, 'goals', 3), assists: ranking(s, d, 'assists', 3) }));
   const want = id => {
     const d = tables.findIndex(t => t.includes(id)), t = tables[d];
-    return MERIT[d] * (t.length - t.indexOf(id)) + (id === final.w ? CUP_PRIZE[0] : id === final.h || id === final.a ? CUP_PRIZE[1] : 0);
+    const rank = ['goals', 'assists'].reduce((sum, key) => sum + ranks[d][key].reduce((x, r, k) => x + (r.club === id ? rankPrize(key, d, k) : 0), 0), 0);
+    return MERIT[d] * (t.length - t.indexOf(id)) + (id === final.w ? CUP_PRIZE[0] : id === final.h || id === final.a ? CUP_PRIZE[1] : 0) + rank;
   };
+  assert.ok(ranks.every(r => r.goals.length === 3 && r.assists.length === 3));
   const season = { ...myClub(s).fin.season };
   endSeason(s);
   s.clubs.forEach((c, id) => assert.equal(c.fin.balance - bal[id], want(id), c.name));
@@ -176,6 +180,7 @@ test('prize money: every club by final position, the cup winner and runner-up; t
   assert.deepEqual(s.history[0].fin, { ...season, prize: want(0), balance: s.clubs[0].fin.balance });
   assert.ok(s.clubs.every(c => c.fin.season.wages === 0 && c.fin.season.prize === 0)); // a new ledger
   assert.ok(Array.isArray(s.history[0].left));
+  assert.deepEqual(s.history[0].ranks, ranks);
 });
 
 test('same seed and same choices give the same career; works with no human club', () => {

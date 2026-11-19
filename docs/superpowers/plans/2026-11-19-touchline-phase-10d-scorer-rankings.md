@@ -1,6 +1,6 @@
 # Touchline Phase 10d: top scorers and top assists, with prize money
 
-Status: approved 2026-11-19 with the answers below; ready to implement. Base: main @ 91567f4.
+Status: done 2026-11-19 (save version 14). Base: main @ 91567f4.
 Independent of Phase 10c (Star points); either can go first. One save bump (the next free version number).
 
 ## The owner's request (2026-11-19)
@@ -41,8 +41,8 @@ leader of the ranking on the last day is the award winner.
 
 UI (`src/ui/app.js`): the **Table** tab gets three sub-views: *Table · Scorers · Assists*, with the same division
 picker it has now. Columns: rank, player, club badge, games, goals (or assists), per game. Your players in bold;
-clicking a name opens the profile. On the Squad screen's season columns, a small "3rd" marker next to a player's goals
-or assists when he is in his division's top 3.
+clicking a name opens the profile. As built: the Squad screen shows no goals, so the player profile carries the season line instead
+("This season: 37 league games · 21 goals (1st) · 16 assists (1st)"), with his place in the top 20.
 
 ## 2. A top-assists award
 
@@ -113,3 +113,8 @@ The inbox gets a message for each of your players in a top 3: "Erling Haaland is
 ## Order of work if approved
 1 (ranking + Table sub-views) → 2 (assists award, records) → 3 (top-3 prize money, manager bonus, morale, inbox) → save bump.
 Each with tests, `npm test` green, fun-surprises updated, roadmap row 10d.
+
+## As built (2026-11-19)
+- Prizes are rounded to €5k (not €10k), so the League One assists winner gets exactly €75k.
+- The season's top 3 of each ranking are kept in `s.history[i].ranks` and shown on History under the awards.
+- Fun surprises #34 and #35 recorded.

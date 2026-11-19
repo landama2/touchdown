@@ -296,3 +296,19 @@ test('a version 12 save loses its wage budget and its wages fall to a fifth', ()
   }
   assert.ok(playDay(b).length);
 });
+
+// A save as Phase 10b (version 13) wrote it: no assists records.
+test('a version 13 save gets empty assists records and plays a season with them', () => {
+  const a = createWorld(26, MINI);
+  takeClub(a, 3);
+  const o = JSON.parse(serialize(a));
+  o.version = 13;
+  for (const r of o.records) delete r.assists;
+  for (const c of o.clubs) delete c.rec.assists;
+  const b = deserialize(JSON.stringify(o));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.ok(b.records.every(r => r.assists === null) && b.clubs.every(c => c.rec.assists === null));
+  while (!b.done) playDay(b);
+  endSeason(b);
+  assert.ok(b.records.every(r => r.assists?.v > 0));
+});

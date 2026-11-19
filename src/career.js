@@ -1,5 +1,5 @@
 import { table, takeClub, PROMOTED, PLAYOFF, RELEGATED } from './season.js';
-import { SEASON_WEEKS, SHARE, clubValue, profit, stake } from './finance.js';
+import { SEASON_WEEKS, SHARE, clubValue, profit, stake, rankPrize } from './finance.js';
 import { cupRounds } from './cup.js';
 import { seeding, BOARD_START as START, REP_START } from './world.js';
 
@@ -23,7 +23,7 @@ export const REP = { pull: 0.3, trophy: 5, sacked: 10, gate: 15, patience: 10 };
 export const ASK = { conf: 60, cost: 3, transfer: 1.25 };
 export const VACANCY_DAYS = 14, INBOX_MAX = 150;
 export const SALARY = { base: 150e3, growth: 0.045 };          // a year: size 0 €150k, 50 €1.4M, 100 €13.5M
-export const BONUS = { target: 0.1, up: 0.25, trophy: 0.25 }, SEVERANCE = 0.25; // × a year's salary
+export const BONUS = { target: 0.1, up: 0.25, trophy: 0.25, ranking: [0.02, 0.01, 0.005] }, SEVERANCE = 0.25; // × a year's salary (ranking: by place in a top 3)
 
 const clamp = x => Math.max(0, Math.min(100, x));
 const round = (x, step) => Math.round(x / step) * step;
@@ -106,6 +106,12 @@ export function seasonReview(s, tables, h) {
       post(s, { type: 'review', club: id, target: b[target][0], met: missed <= 0, pos: k + 1, rep: s.career.rep, was });
       const bonus = round(salary(s) * ((missed <= 0 ? BONUS.target : 0) + (h.divs[d].up.includes(id) ? BONUS.up : 0) + BONUS.trophy * trophies), 1e3);
       if (bonus) { s.career.money += bonus; post(s, { type: 'bonus', club: id, amount: bonus }); }
+      for (const key of ['goals', 'assists']) (h.ranks?.[d][key] || []).forEach((x, place) => {
+        if (x.club !== id) return;
+        const own = round(salary(s) * BONUS.ranking[place], 1e3);
+        s.career.money += own;
+        post(s, { type: 'ranking', club: id, name: x.name, key, place, v: x.v, div: d, amount: rankPrize(key, d, place), bonus: own });
+      });
     });
     above += t.length;
   });

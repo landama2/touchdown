@@ -5,7 +5,7 @@ import { slots, bestXI, autoBench, fixLineup, newFam, learnFam } from './lineup.
 import { defaultTactics } from './tactics.js';
 import { startMatch, stepMinute, matchResult, shootout } from './match.js';
 import { cupRounds, nextCupRound, addLeg, decide, playoffSemis, playoffFinal } from './cup.js';
-import { addMatch, seasonAwards, noteSeason } from './awards.js';
+import { addMatch, seasonAwards, noteSeason, ranking } from './awards.js';
 import { afterMatch, passDays, offseason } from './squad.js';
 import { defaultTraining, trainingOf, recoverRate, trainWeek, INTENSITY } from './training.js';
 import { payWeeks, payGate, payPrizes, seasonBudgets, blankLedger } from './finance.js';
@@ -201,6 +201,15 @@ export function zone(s, d, pos) {
   return null;
 }
 
+// A place in a season's top 3 of scorers or assists lifts the player's morale (the winner most).
+export const RANK_MORALE = [15, 5, 5];
+function rankMorale(s, ranks) {
+  for (const r of ranks) for (const key of ['goals', 'assists']) r[key].forEach((x, k) => {
+    const p = s.clubs[x.club].players.find(q => q.id === x.id);
+    if (p) p.morale = Math.min(100, p.morale + RANK_MORALE[k]);
+  });
+}
+
 const winnerOf = p => p?.rounds[1]?.ties[0].w ?? null;
 
 // Closes the season: prize money, awards, records, promotion and relegation, contracts, the history entry;
@@ -218,7 +227,9 @@ export function endSeason(s) {
     divs: tables.map((t, d) => ({ champion: t[0], up: [], down: [], playoff: winnerOf(s.playoffs[d]), awards: awards[d] })),
   };
   if (s.me !== null) { h.div = myClub(s).div; h.pos = tables[h.div].indexOf(s.me) + 1; }
-  h.prize = payPrizes(s, tables, h.cup, s.me);
+  h.ranks = s.divisions.map((_, d) => ({ goals: ranking(s, d, 'goals', 3), assists: ranking(s, d, 'assists', 3) }));
+  rankMorale(s, h.ranks);
+  h.prize = payPrizes(s, tables, h.cup, s.me, h.ranks);
   h.fin = s.me === null ? null : { ...myClub(s).fin.season, balance: myClub(s).fin.balance };
   noteSeason(s, tables, awards);
   for (let d = 0; d + 1 < tables.length; d++) {

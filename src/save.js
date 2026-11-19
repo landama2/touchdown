@@ -11,7 +11,7 @@ import { staffScouts } from './scouting.js';
 import { aiStaff, standardStaff } from './staff.js';
 import { BOARD_START, REP_START } from './world.js';
 
-export const SAVE_VERSION = 13; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad. 11: boards, the manager's career, the inbox. 12: per-player training intensity, the manager's money. 13: no wage budget, wages cut to a fifth
+export const SAVE_VERSION = 14; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad. 11: boards, the manager's career, the inbox. 12: per-player training intensity, the manager's money. 13: no wage budget, wages cut to a fifth. 14: assists records
 export const KEY = 'touchline.save';
 
 export const serialize = state => JSON.stringify(state);
@@ -21,7 +21,7 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
   && Array.isArray(s.lineup) && Array.isArray(s.history) && (s.me === null || s.clubs[s.me] !== undefined)
   && (s.live === null || (typeof s.live === 'object' && Array.isArray(s.live.sides)))
   && Array.isArray(s.bench) && !!s.tactics && Array.isArray(s.tactics.slots) && !!s.fam && typeof s.fam === 'object'
-  && Array.isArray(s.days) && Number.isInteger(s.next) && Array.isArray(s.playoffs) && Array.isArray(s.records) && (s.cup === null || typeof s.cup === 'object')
+  && Array.isArray(s.days) && Number.isInteger(s.next) && Array.isArray(s.playoffs) && Array.isArray(s.records) && s.records.every(r => 'assists' in r) && (s.cup === null || typeof s.cup === 'object')
   && !!s.training && !!s.training.ind && typeof s.training.ind === 'object' && !!s.training.load && typeof s.training.load === 'object' && Array.isArray(s.news)
   && s.clubs.every(c => c.fin && Number.isFinite(c.fin.balance) && !!c.fin.season)
   && Array.isArray(s.offers) && !!s.talks && Array.isArray(s.deals) && s.clubs.every(c => Number.isFinite(c.lentPay))
@@ -82,6 +82,7 @@ const MIGRATIONS = {
     for (const p of [...s.clubs.flatMap(c => c.players), ...s.youth]) if (p.contract) p.contract.wage = cut(p.contract.wage);
     for (const c of s.clubs) c.lentPay = Math.round(c.lentPay / WAGE_CUT);
   },
+  13: s => { for (const r of s.records) r.assists = null; for (const c of s.clubs) c.rec.assists = null; }, // no assists records yet
 };
 
 export function deserialize(text) {
