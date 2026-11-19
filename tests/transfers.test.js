@@ -11,17 +11,15 @@ import { asking, signingFee, marketDay, regular, FLOOR, QUICK_SALE, LOAN_SHARE, 
 import { buy, sell, bid, acceptCounter, talksOn, loanIn, setListing, acceptOffer, rejectOffer, counterOffer, MIN_SQUAD, MAX_SQUAD } from '../src/transfers.js';
 
 // Managing Kilo (bottom division, club 14) with money to spare, on day -1 of season 1: the summer window is open.
-const fresh = () => { const s = createWorld(11, MINI); takeClub(s, 14); s.budget = 1e12; s.wageBudget = 1e12; return s; };
+const fresh = () => { const s = createWorld(11, MINI); takeClub(s, 14); s.budget = 1e12; return s; };
 const r10k = x => Math.round(x / 1e4) * 1e4;
 // A player at AI club `id` who would join you: not a regular there (a regular won't drop a division).
 const target = (s, id) => { const c = s.clubs[id]; return c.players.find(p => !regular(c, p)); };
 
-test('free agents: a signing-on fee of half his value, his terms within the wage budget, at any time', () => {
+test('free agents: a signing-on fee of half his value, his terms whatever they are, at any time', () => {
   const s = fresh(), p = [...s.market].sort((a, b) => value(a) - value(b))[0], club = myClub(s), t = terms(s, p), bal = club.fin.balance;
   s.day = 100; // window closed: free agents still sign
-  s.wageBudget = wageBill(club) + t.wage - 1;
-  assert.equal(buy(s, p.id), 'Over the wage budget.');
-  s.wageBudget = 1e12; s.budget = signingFee(p) - 1;
+  s.budget = signingFee(p) - 1;
   assert.equal(buy(s, p.id), 'Not enough transfer budget.');
   s.budget = signingFee(p);
   assert.equal(buy(s, p.id), null);

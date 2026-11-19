@@ -66,9 +66,8 @@ test('each week the board looks at the table and the books', () => {
   assert.equal(s.clubs[13].conf, START + 2 * MOVE.onTarget);
   assert.equal(s.clubs[4].conf, START - 2 * MOVE.below);
   assert.equal(s.clubs[14].conf, START + 2 * (MOVE.onTarget - MOVE.debt));
-  s.wageBudget = 0;                  // the human club now over its wage budget
   boardWeeks(s, 1);
-  assert.equal(s.clubs[13].conf, START + 3 * MOVE.onTarget - MOVE.overBudget);
+  assert.equal(s.clubs[13].conf, START + 3 * MOVE.onTarget); // a big wage bill costs nothing with the board
   const early = world(1); early.clubs[4].st.pts = -1; boardWeeks(early, 1);
   assert.equal(early.clubs[4].conf, START); // before MIN_GAMES league games the table does not count yet
 });
@@ -154,9 +153,10 @@ test('a vacancy still open when the season ends stays open for the first days of
 test('the board grants one request a season while confident and out of debt; a refusal costs confidence', () => {
   const s = world(1);
   startCareer(s, 5);
-  const w = s.wageBudget;
-  assert.equal(askBoard(s, 'wage').startsWith('The board agrees'), true);
-  assert.equal(s.wageBudget, Math.round(w * ASK.wage / 1e3) * 1e3);
+  const w = s.budget;
+  assert.equal(askBoard(s, 'wage'), 'Unknown request.');
+  assert.equal(askBoard(s, 'transfer').startsWith('The board agrees'), true);
+  assert.equal(s.budget, Math.round(w * ASK.transfer / 1e5) * 1e5);
   assert.equal(askBoard(s, 'transfer'), 'The board has already heard you this season.');
   s.career.asked = null; s.clubs[5].conf = ASK.conf - 1;
   const b = s.budget;
@@ -310,7 +310,7 @@ test('a stake in your own club: patience at 10%, every request granted and a big
 test('a player bought with your own money is yours: you pay, he follows you, his sale pays you', () => {
   const s = world(11);
   startCareer(s, 14);
-  s.wageBudget = 1e12; s.budget = 0;
+  s.budget = 0;
   const p = s.market[0];
   s.career.money = 0;
   assert.equal(buy(s, p.id, true), 'You cannot afford that yourself.');

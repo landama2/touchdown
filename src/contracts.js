@@ -1,5 +1,5 @@
 import { createPlayer, overall, value } from './player.js';
-import { wage, wageBill, staffBill } from './finance.js';
+import { wage } from './finance.js';
 import { fromYouth } from './youth.js';
 
 // Contracts. p.contract = { wage (euros a week), until (the last season it covers), clause (release
@@ -14,7 +14,7 @@ export const yearsFor = age => age <= 23 ? 5 : age <= 29 ? 4 : age <= 32 ? 2 : 1
 // A new world's contracts: the going rate, ending 0-3 seasons after `season`, staggered by id (no RNG).
 export const startContract = (p, season) => ({ wage: wage(p), until: season + p.id % 4, clause: null });
 
-const roundWage = x => Math.round(x / 500) * 500;
+const roundWage = x => Math.round(x / 100) * 100;
 const xiAverage = club => { const o = club.players.map(p => overall(p)).sort((a, b) => b - a).slice(0, 11); return o.reduce((t, x) => t + x, 0) / o.length; };
 
 // What player p asks to sign for, or to stay at, the human club: his going rate (×1.25 when unhappy,
@@ -28,14 +28,13 @@ export function terms(s, p) {
 export const canRenew = (s, p) => !!p.contract && !p.loan && p.contract.until <= s.season + 1 && s.season + yearsFor(p.age) > p.contract.until;
 
 // Accepts the terms of the human club's player `id`: the new terms apply now and the contract runs to
-// `season + years`. A raise must fit the wage budget; the same wage always does. Error message or null.
+// `season + years`. Error message or null.
 export function renew(s, id) {
   const club = s.clubs[s.me], p = club.players.find(x => x.id === id);
   if (!p) return 'Not your player.';
   if (p.loan) return `${p.name} is on loan here.`;
   if (!canRenew(s, p)) return 'He has more than a season left on his contract.';
   const t = terms(s, p);
-  if (t.wage > p.contract.wage && wageBill(club) + staffBill(s, club) - p.contract.wage + t.wage > s.wageBudget) return 'Over the wage budget.';
   p.contract = { wage: t.wage, until: s.season + t.years, clause: t.clause };
   return null;
 }

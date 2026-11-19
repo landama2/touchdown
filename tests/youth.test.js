@@ -11,7 +11,7 @@ import { YOUTH_MAX, YOUTH_YEARS, intake, trainYouth, ceiling, ceilingRange, prom
 import { MINI } from './fixtures/mini.js';
 
 // Managing Kilo (bottom division, club 14): standard coaching there is level 2.
-const fresh = seed => { const s = createWorld(seed, MINI); takeClub(s, 14); s.wageBudget = 1e12; return s; };
+const fresh = seed => { const s = createWorld(seed, MINI); takeClub(s, 14); return s; };
 const best = p => Math.max(...Object.keys(WEIGHTS[p.pos]).map(k => p.attrs[k]));
 
 test('taking a club brings a first intake: 2 + coaching level, aged 15-16, no contracts, room to grow', () => {
@@ -49,9 +49,6 @@ test('the ceiling: the overall at full potential, shown as a range that narrows 
 
 test('promote and release: a promoted player joins the first team on a starter contract', () => {
   const s = fresh(4), me = s.clubs[14], [a, b] = s.youth;
-  s.wageBudget = wageBill(me);
-  assert.equal(promote(s, a.id, MAX_SQUAD), 'Over the wage budget.');
-  s.wageBudget = 1e12;
   assert.equal(promote(s, a.id, MAX_SQUAD), null);
   assert.ok(me.players.includes(a) && !s.youth.includes(a));
   assert.deepEqual(a.contract, { wage: wage(a), until: s.season + YOUTH_YEARS, clause: null });
