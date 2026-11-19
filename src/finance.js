@@ -21,9 +21,9 @@ export const START_SHARE = 0.25, TRANSFER_SHARE = 0.75; // in favour of transfer
 const byDiv = (list, d) => list[Math.min(d, list.length - 1)];
 const round = (x, step) => Math.round(x / step) * step;
 
-export const blankLedger = () => ({ broadcast: 0, sponsor: 0, gate: 0, prize: 0, wages: 0, fees: 0, sales: 0, staff: 0, dividends: 0 });
+export const blankLedger = () => ({ broadcast: 0, sponsor: 0, gate: 0, prize: 0, wages: 0, fees: 0, sales: 0, staff: 0, dividends: 0, build: 0 });
 // The season's profit so far, before dividends.
-export const profit = c => { const L = c.fin.season; return L.broadcast + L.sponsor + L.gate + L.prize + L.sales - L.wages - L.fees - L.staff; };
+export const profit = c => { const L = c.fin.season; return L.broadcast + L.sponsor + L.gate + L.prize + L.sales - L.wages - L.fees - L.staff - L.build; };
 
 // Shares the manager can own in clubs (trade() in src/career.js): a club is worth SHARE.value × its projected
 // income; at most SHARE.max percent of each (a majority would be buying the club: a later phase); a sale loses
@@ -37,7 +37,19 @@ export const stake = (s, id) => s.career?.shares?.[id] ?? 0;
 // What a player earns a week at his level; under-21s less. Contracts start from it.
 export const wage = p => Math.max(100, round(WAGE.at50 * Math.exp(WAGE.growth * (overall(p) - 50)) * (p.age < 21 ? 0.6 : 1), 100));
 export const sponsorship = c => round(SPONSOR.at8 * Math.exp(SPONSOR.growth * (c.quality - 8)), 1e5);
-export const gate = c => round(GATE.at8 * Math.exp(GATE.growth * (c.quality - 8)), 1e3);
+// The stadium (Phase 12): each level adds STADIUM.boost to gate receipts, for good. A level costs `payback` seasons
+// of what it adds, paid from the transfer budget. Only the human club builds (AI clubs: a later phase).
+export const STADIUM = { max: 5, boost: 0.15, payback: 8 };
+const baseGate = c => GATE.at8 * Math.exp(GATE.growth * (c.quality - 8));
+export const gate = c => round(baseGate(c) * (1 + STADIUM.boost * c.stadium), 1e3);
+export const stadiumCost = (s, c) => round(STADIUM.payback * STADIUM.boost * baseGate(c) * (s.divisions[c.div].clubIds.length - 1), 1e5);
+export function buildStadium(s) {
+  const c = s.clubs[s.me], cost = stadiumCost(s, c);
+  if (c.stadium >= STADIUM.max) return 'The stadium is as big as it gets.';
+  if (cost > s.budget) return 'The next stand costs more than your transfer budget.';
+  s.budget -= cost; c.fin.balance -= cost; c.fin.season.build += cost; c.stadium++;
+  return null;
+}
 // What club c pays a week: its players' wages (for a player on loan there, the borrower's part) plus
 // the part it still pays of the players it has lent out (c.lentPay).
 export const lentPart = p => Math.round(p.contract.wage * (1 - p.loan.share)); // the lender's part
@@ -82,6 +94,17 @@ export function payPrizes(s, tables, cup, me) {
   tables.forEach((t, d) => t.forEach((id, k) => pay(id, byDiv(MERIT, d) * (t.length - k))));
   if (cup) { pay(cup.winner, CUP_PRIZE[0]); pay(cup.runnerUp, CUP_PRIZE[1]); }
   return mine;
+}
+
+// Each summer the owners take out whatever a club holds above OWNER_CAP seasons of projected income (Phase 12):
+// without it, wages a fifth of their old size (WAGE_CUT) let Premier League clubs bank about €100M a season forever.
+// Booked as dividends, after the manager's own dividends (src/career.js), which come out of the season's profit.
+export const OWNER_CAP = 5; // owner's choice, 2026-11-19
+export function ownerTake(s) {
+  for (const c of s.clubs) {
+    const x = Math.max(0, c.fin.balance - round(OWNER_CAP * projection(s, c), 1e5));
+    c.fin.balance -= x; c.fin.season.dividends += x;
+  }
 }
 
 // The board's limit for the human club's season: a transfer budget of TRANSFER_SHARE of its balance (none in

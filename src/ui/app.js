@@ -15,7 +15,7 @@ import { KEY, SLOTS, slotKey, serialize, deserialize } from '../save.js';
 import { TASKS, taskDays, estimate, ranges, assign, recall, toggleShortlist, searchPlayers } from '../scouting.js';
 import { AREAS, COACHING, MEDICAL, SCOUTS, SCOUT_SPEED, setStaff } from '../staff.js';
 import { YOUTH_MAX, LEAVE_AGE, ceilingRange, promote, release } from '../youth.js';
-import { wage, wageBill, projection, staffBill, STAFF_COST, STANDARD, SHARE, clubValue, stake } from '../finance.js';
+import { wage, wageBill, projection, staffBill, STAFF_COST, STANDARD, SHARE, clubValue, stake, gate, STADIUM, stadiumCost, buildStadium } from '../finance.js';
 import { terms, canRenew, renew as renewContract } from '../contracts.js';
 import { MIN_GAMES, ASK, REP, BONUS, SEVERANCE, bands, leagueTarget, cupTarget, level, startCareer, acceptJob, declineJob, openOffer, askBoard, sackLine, salaryFor, trade } from '../career.js';
 import { crestSvg, kitSvg } from './art.js';
@@ -450,8 +450,9 @@ const views = {
     return `<h2>Finances · season ${s.season}</h2>
       <p>Balance <b>${money(c.fin.balance)}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(c))}</p>
       <div class="wrap"><table><tr><th>Income this season</th><th></th></tr>${line('Broadcasting', L.broadcast)}${line('Sponsorship', L.sponsor)}${line('Gate receipts', L.gate)}${line('Prize money', L.prize)}${line('Player sales', L.sales)}
-      <tr><th>Costs this season</th><th></th></tr>${line('Wages', L.wages)}${line('Transfer fees', L.fees)}${line('Staff beyond the standard', L.staff)}</table></div>
-      ${help(`Expected income for a mid-table season: ${money(projection(s, c))}. The board sets each season's transfer budget: three quarters of the balance (none in debt). Wages are small and have no limit: they come out of the balance every week, so keep an eye on debt, which the board does not like. You may ask the board for more transfer budget once a season (Board).`)}`;
+      <tr><th>Costs this season</th><th></th></tr>${line('Wages', L.wages)}${line('Transfer fees', L.fees)}${line('Staff beyond the standard', L.staff)}${line('Stadium building', L.build)}</table></div>
+      <p>Stadium level ${c.stadium} of ${STADIUM.max} · gate ${money(gate(c))} a home match${c.stadium < STADIUM.max ? ` <button data-act="build">Build a stand: ${money(stadiumCost(s, c))}, +${Math.round(STADIUM.boost * 100)}% gate for good</button>` : ''}</p>
+      ${help(`Expected income for a mid-table season: ${money(projection(s, c))}. The board sets each season's transfer budget: three quarters of the balance (none in debt). Wages are small and have no limit: they come out of the balance every week, so keep an eye on debt, which the board does not like. You may ask the board for more transfer budget once a season (Board). A bigger stadium earns more at every home game; a stand is paid from the transfer budget and pays for itself in about ${STADIUM.payback} seasons. Each summer the owners take out anything above five seasons of expected income.`)}`;
   },
 };
 
@@ -686,6 +687,7 @@ const actions = {
     msg = assign(s, k, id === undefined ? { kind } : { kind, id: +id }) || 'Scout sent.';
   },
   staff(_, el) { msg = setStaff(s, el.dataset.field, +el.value) || 'Staff changed.'; },
+  build() { msg = buildStadium(s) || 'The new stand is open: gate receipts are up for good.'; },
   promote(id) { msg = promote(s, id, MAX_SQUAD) || 'Promoted to the first team.'; },
   releaseYouth(id) { msg = release(s, id) || 'Released.'; if (viewing === id) viewing = null; },
   scoutPlayer(id) { const k = s.scouts.findIndex(x => !x.task); msg = k < 0 ? 'Every scout is busy.' : assign(s, k, { kind: 'player', id }) || `Scout ${k + 1} sent: report in ${TASKS.player.days} days.`; },

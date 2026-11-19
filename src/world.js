@@ -69,7 +69,7 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
     s.divisions.push({ name: league.name, clubIds, fixtures: [] });
     s.records.push(blankRecords());
   });
-  for (const c of s.clubs) { for (const p of c.players) p.contract = startContract(p, s.season); c.fin = newBooks(s, c); c.lentPay = 0; }
+  for (const c of s.clubs) { c.stadium = 0; for (const p of c.players) p.contract = startContract(p, s.season); c.fin = newBooks(s, c); c.lentPay = 0; }
   aiStaff(s);
   for (let i = 0; i < MARKET_SIZE; i++) s.market.push(newFreeAgent(rng, s.nid++));
   scheduleSeason(s, rng);

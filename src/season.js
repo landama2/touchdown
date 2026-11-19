@@ -8,7 +8,7 @@ import { cupRounds, nextCupRound, addLeg, decide, playoffSemis, playoffFinal } f
 import { addMatch, seasonAwards, noteSeason } from './awards.js';
 import { afterMatch, passDays, offseason } from './squad.js';
 import { defaultTraining, trainingOf, recoverRate, trainWeek, INTENSITY } from './training.js';
-import { payWeeks, payGate, payPrizes, seasonBudgets, blankLedger } from './finance.js';
+import { payWeeks, payGate, payPrizes, seasonBudgets, blankLedger, ownerTake } from './finance.js';
 import { expireContracts, academy } from './contracts.js';
 import { MIN_SQUAD, inWindow, windowId, marketDay, returnLoans } from './market.js';
 import { scoutDays, staffScouts, prune } from './scouting.js';
@@ -227,6 +227,7 @@ export function endSeason(s) {
     h.divs[d].down = tables[d].slice(-RELEGATED);
   }
   seasonReview(s, tables, h); // boards and the manager's reputation, before the clubs move
+  ownerTake(s); // owners take the surplus, by the division the club played in
   h.divs.forEach((x, d) => { for (const id of x.up) s.clubs[id].div = d - 1; for (const id of x.down) s.clubs[id].div = d + 1; });
   s.divisions.forEach((dv, d) => { dv.clubIds = s.clubs.filter(c => c.div === d).map(c => c.id); });
   returnLoans(s);

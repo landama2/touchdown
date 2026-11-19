@@ -301,3 +301,12 @@ test('a version 12 save loses its wage budget and its wages fall to a fifth', ()
   }
   assert.ok(playDay(b).length);
 });
+
+test('version 13 saves get stadiums at level 0 and a building line in the books', () => {
+  const s = createWorld(3);
+  s.version = 13;
+  for (const c of s.clubs) { delete c.stadium; delete c.fin.season.build; }
+  const t = deserialize(serialize(s));
+  assert.equal(t.version, SAVE_VERSION);
+  assert.ok(t.clubs.every(c => c.stadium === 0 && c.fin.season.build === 0));
+});

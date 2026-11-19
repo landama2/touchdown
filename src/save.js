@@ -11,7 +11,7 @@ import { staffScouts } from './scouting.js';
 import { aiStaff, standardStaff } from './staff.js';
 import { BOARD_START, REP_START } from './world.js';
 
-export const SAVE_VERSION = 13; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad. 11: boards, the manager's career, the inbox. 12: per-player training intensity, the manager's money. 13: no wage budget, wages cut to a fifth
+export const SAVE_VERSION = 14; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad. 11: boards, the manager's career, the inbox. 12: per-player training intensity, the manager's money. 13: no wage budget, wages cut to a fifth. 14: stadium levels, a building line in the books
 export const KEY = 'touchline.save'; // the autosave
 export const SLOTS = 3;
 export const slotKey = n => `${KEY}:slot:${n}`; // n = 1..SLOTS; same save format as the autosave
@@ -83,6 +83,9 @@ const MIGRATIONS = {
     const cut = w => Math.max(100, Math.round(w / WAGE_CUT / 100) * 100);
     for (const p of [...s.clubs.flatMap(c => c.players), ...s.youth]) if (p.contract) p.contract.wage = cut(p.contract.wage);
     for (const c of s.clubs) c.lentPay = Math.round(c.lentPay / WAGE_CUT);
+  },
+  13: s => { // stadiums start at level 0; the books get a line for building
+    for (const c of s.clubs) { c.stadium = 0; c.fin.season.build = 0; }
   },
 };
 
