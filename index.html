@@ -21,7 +21,7 @@
   header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:12px 16px; background:var(--panel); border-bottom:1px solid var(--line); }
   h1 { margin:0; font-size:20px; color:var(--accent); letter-spacing:.5px; }
   h2 { font-size:17px; margin:20px 0 8px; }
-  #info { color:var(--dim); flex:1; min-width:200px; }
+  #info { color:var(--dim); flex:1; min-width:0; }
   main { max-width:900px; margin:0 auto; padding:0 16px 40px; }
   button, select { font:inherit; color:var(--text); background:#21382b; border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; }
   button:hover { border-color:var(--accent); }
@@ -43,7 +43,6 @@
   .oop { color:var(--warn); }
   .msg { color:var(--warn); min-height:1.4em; margin:8px 0; }
   .dim { color:var(--dim); }
-  .score { font-size:22px; font-weight:700; margin:8px 0; }
   .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0; }
   td select { padding:3px 6px; }
   .attrs { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:4px 16px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; margin:12px 0; }
@@ -59,6 +58,7 @@
   .club b { font-size:18px; }
   .fixture { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .live { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+  .live > * { min-width:0; }
   .feed { max-height:460px; overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
   .feed .goal { color:var(--accent); font-weight:700; font-size:1.1em; padding:4px 0; }
   .feed .big { font-weight:600; }
@@ -70,11 +70,47 @@
   table.stats td:nth-child(2) { text-align:center; color:var(--dim); }
   @media (max-width:700px) { .live { grid-template-columns:1fr; } }
   header { padding-top:max(12px, env(safe-area-inset-top)); }
+  /* header: sticky, one scrolling tab strip, game actions behind a menu */
+  header { position:sticky; top:0; z-index:5; display:block; padding-bottom:0; }
+  header .top { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; }
+  #info { flex-wrap:wrap; gap:4px 8px; }
+  #info b { color:var(--text); font-weight:600; }
+  .chip { background:#21382b; border:1px solid var(--line); border-radius:99px; padding:1px 8px; font-size:13px; white-space:nowrap; }
+  #menu { position:relative; }
+  #menu summary { list-style:none; cursor:pointer; color:var(--dim); border:1px solid var(--line); border-radius:6px; padding:4px 10px; }
+  #menu summary::-webkit-details-marker { display:none; }
+  #sys { position:absolute; right:0; top:calc(100% + 4px); display:flex; flex-direction:column; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:6px; min-width:150px; box-shadow:0 8px 24px #0008; }
+  nav { display:flex; overflow-x:auto; scrollbar-width:none; margin:8px -16px 0; padding:0 12px; }
+  nav::-webkit-scrollbar { display:none; }
+  nav button { background:none; border:0; border-bottom:3px solid transparent; border-radius:0; padding:8px 10px; color:var(--dim); white-space:nowrap; }
+  nav button.on { background:none; color:var(--text); border-bottom-color:var(--accent); }
+  nav button:hover { color:var(--text); }
+  /* controls */
+  input[type=number], input[type=text] { font:inherit; color:var(--text); background:#21382b; border:1px solid var(--line); border-radius:6px; padding:5px 8px; }
+  :is(button, select, input, summary):focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  td button:not(.link), td input[type=number] { padding:2px 8px; font-size:13px; }
+  @media (max-width:700px) { header h1 { display:none; } .scoreboard .big { font-size:28px; } }
+  /* rules text, folded away until wanted */
+  details.help { margin:6px 0 12px; color:var(--dim); }
+  details.help summary { cursor:pointer; font-size:13px; width:max-content; }
+  details.help p { margin:6px 0 0; max-width:70ch; }
+  table.narrow { width:auto; min-width:280px; }
+  /* scoreboard: match screen, live match, report */
+  .scoreboard { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px 12px; margin:12px 0; text-align:center; }
+  .scoreboard > div { display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0; }
+  .scoreboard b { font-size:15px; }
+  .scoreboard .big { font-size:34px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1; }
+  .scoreboard .sub { font-size:13px; color:var(--dim); }
+  /* player profile */
+  .attrs .ph { grid-column:1/-1; justify-content:flex-start; flex-wrap:wrap; align-items:center; gap:6px 10px; }
+  .attrs .ph .pname { font-size:19px; color:var(--text); }
+  .attrs .ph [data-act=close] { margin-left:auto; }
+  .attrs h3 { text-transform:uppercase; letter-spacing:.06em; font-size:11px; }
   #update { position:fixed; right:16px; bottom:max(16px, env(safe-area-inset-bottom)); z-index:10; box-shadow:0 4px 16px #0008; }
 </style>
 </head>
 <body>
-<header><h1>Touchline</h1><span id="info"></span><nav id="nav" class="bar" style="margin:0"></nav></header>
+<header><div class="top"><h1>Touchline</h1><span id="info"></span><details id="menu"><summary>Menu</summary><div id="sys"></div></details></div><nav id="nav"></nav></header>
 <main id="main"></main>
 <script type="module" src="src/ui/app.js"></script>
 <script type="module" src="src/ui/pwa.js"></script>

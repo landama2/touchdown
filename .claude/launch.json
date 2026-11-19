@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "touchline", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "8127"], "port": 8127 }
+    { "name": "touchline", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "8127"], "port": 8127 },
+    { "name": "touchline-alt", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "8128"], "port": 8128 }
   ]
 }

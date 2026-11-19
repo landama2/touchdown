@@ -230,6 +230,23 @@ export function swapPositions(m, i, a, b) {
   return null;
 }
 
+// The formation's positions nobody on the pitch fills (after a red card), one entry per empty slot.
+export function emptySlots(m, i) {
+  const left = m.sides[i].on.map(o => o.pos);
+  return slots(m.sides[i].formation).filter(pos => { const k = left.indexOf(pos); if (k < 0) return true; left.splice(k, 1); return false; });
+}
+
+// Moves one of side i's players into an empty slot of the formation; his old slot is left empty.
+// He keeps his role and instructions where the role fits. Returns an error message or null.
+export function moveTo(m, i, id, pos) {
+  const o = m.sides[i].on.find(x => x.id === id);
+  if (m.done) return 'The match is over.';
+  if (!o) return 'That player is not on the pitch.';
+  if (!emptySlots(m, i).includes(pos)) return 'That position is not empty.';
+  if (pos !== o.pos) Object.assign(o, has(ROLES[pos], o.role) ? {} : defaultSlot(pos), { pos });
+  return null;
+}
+
 // Re-slots the players on the pitch into a new shape, greedily, like bestXI(); each keeps his role
 // and instructions where the role fits his new position. With fewer than eleven on the pitch the
 // last slots (forwards first) stay empty. Returns an error message or null.

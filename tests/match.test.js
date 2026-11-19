@@ -4,7 +4,7 @@ import { makeRng } from '../src/rng.js';
 import { createWorld } from '../src/world.js';
 import { FORMATIONS, BENCH, slots, bestXI, strength } from '../src/lineup.js';
 import { ROLES, defaultTactics } from '../src/tactics.js';
-import { startMatch, stepMinute, matchResult, simMatch, power, preview, substitute, swapPositions, setFormation, setLiveTactic, shootout, MAX_SUBS } from '../src/match.js';
+import { startMatch, stepMinute, matchResult, simMatch, power, preview, substitute, swapPositions, emptySlots, moveTo, setFormation, setLiveTactic, shootout, MAX_SUBS } from '../src/match.js';
 import { MINI } from './fixtures/mini.js';
 
 const s = createWorld(3, MINI);
@@ -157,6 +157,12 @@ test('setFormation re-slots the same players; a side down to ten loses its last 
   m.sides[0].on.pop(); // as if sent off
   setFormation(m, 0, '4-4-2');
   assert.deepEqual(m.sides[0].on.map(o => o.pos), ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW']);
+  assert.deepEqual(emptySlots(m, 0), ['FW']);
+  const df = m.sides[0].on[1].id;
+  assert.equal(moveTo(m, 0, df, 'MF'), 'That position is not empty.');
+  assert.equal(moveTo(m, 0, df, 'FW'), null); // play two up front, a defender short
+  assert.equal(m.sides[0].on[1].pos, 'FW');
+  assert.deepEqual(emptySlots(m, 0), ['DF']);
 });
 const tac = (formation, change = () => {}) => { const t = defaultTactics(slots(formation)); change(t); return t; };
 const mine = (id, change, formation = '4-4-2', fam = {}) => ({ ...side(id, formation), tactics: tac(formation, change), fam });
