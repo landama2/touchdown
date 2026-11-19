@@ -11,7 +11,7 @@ import { TEAM, TEAM_KEYS, TEAM_NAMES, ROLES, DUTIES, INSTR, TAKERS, setTeam, set
 import { line } from './commentary.js';
 import { buy, sell, bid, acceptCounter, talksOn, loanIn, setListing, acceptOffer, rejectOffer, counterOffer, MAX_SQUAD } from '../transfers.js';
 import { SUMMER_END, JANUARY, QUICK_SALE, inWindow, windowOpen, justJoined, asking, signingFee, refusal, loanable, loanPay } from '../market.js';
-import { KEY, serialize, deserialize } from '../save.js';
+import { KEY, SLOTS, slotKey, serialize, deserialize } from '../save.js';
 import { TASKS, taskDays, estimate, ranges, assign, recall, toggleShortlist, searchPlayers } from '../scouting.js';
 import { AREAS, COACHING, MEDICAL, SCOUTS, SCOUT_SPEED, setStaff } from '../staff.js';
 import { YOUTH_MAX, LEAVE_AGE, ceilingRange, promote, release } from '../youth.js';
@@ -23,11 +23,22 @@ import { sortRows, nextSort, sortHead } from './table.js';
 
 // The UI is the only place allowed to touch Date, localStorage and the DOM.
 const newWorld = () => createWorld(Date.now() >>> 0);
-const load = () => { try { return deserialize(localStorage.getItem(KEY)); } catch { return null; } };
-const save = () => { try { localStorage.setItem(KEY, serialize(s)); } catch {} };
+// Stored saves are gzipped (about 7x smaller: a save is ~1 MB of JSON, browsers allow ~5 MB per site) and kept as
+// base64 behind a 'gz:' mark. Text without the mark is an older plain save and loads as it is. Exports stay plain JSON.
+const stream = (data, t) => new Response(new Blob([data]).stream().pipeThrough(t));
+const toB64 = bytes => { let b = ''; for (let i = 0; i < bytes.length; i += 0x8000) b += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(b); };
+const pack = async text => 'gz:' + toB64(new Uint8Array(await stream(text, new CompressionStream('gzip')).arrayBuffer()));
+const unpack = async stored => stored?.startsWith('gz:') ? stream(Uint8Array.from(atob(stored.slice(3)), c => c.charCodeAt(0)), new DecompressionStream('gzip')).text() : stored;
+const readSave = async key => { try { return deserialize(await unpack(localStorage.getItem(key))); } catch { return null; } };
+const STORAGE_FAIL = 'Could not save: browser storage is full or blocked. Export the game from the Menu to keep it.';
+// The state is captured now; writes run one after another, so an older save never lands last.
+// ponytail: an action in the last ~50 ms before the tab closes can miss the autosave (compression is async).
+let writing = Promise.resolve();
+const write = (key, text) => { const p = writing.then(async () => localStorage.setItem(key, await pack(text))); writing = p.catch(() => {}); return p; };
+export const save = () => write(KEY, serialize(s)).catch(() => { msg = STORAGE_FAIL; render(); });
 
-let s = load() || newWorld();
-let tab = 'Squad', sel = null, viewing = null, clubOpen = null, tableDiv = s.me === null ? 0 : s.clubs[s.me].div, msg = '', filters = {}; // filters: the player search on Transfers
+let s = (await readSave(KEY)) || newWorld();
+let tab = 'Squad', sel = null, viewing = null, clubOpen = null, savesOpen = false, tableDiv = s.me === null ? 0 : s.clubs[s.me].div, msg = '', filters = {}; // filters: the player search on Transfers
 let ownPay = false; // Transfers: pay fees from the manager's own money
 let timer = null, speed = 400, subOut = null, subIn = null; // live match: clock, ms per match minute, player picked to come off / to come on
 const SPEEDS = [['Slow', 1000], ['Normal', 400], ['Fast', 100], ['Very fast', 25]];
@@ -514,7 +525,47 @@ function outOfWork() {
 }
 const UNEMPLOYED = ['Inbox', 'Money', 'Table', 'Cup'];
 const NEW_GAME = '<button data-act="reset">New game</button>';
-const SAVE_BUTTONS = '<button data-act="exportSave">Export save</button><button data-act="importSave">Import save</button>';
+
+// Save slots: a full save under slotKey(n), plus a small meta record (name, time saved, the player's own name for it)
+// so the list never parses whole saves.
+const metaKey = n => slotKey(n) + ':meta';
+const inGame = () => s.me !== null || !!s.career;
+const gameName = () => s.me !== null ? `${s.clubs[s.me].name} · season ${s.season}` : `Out of work · season ${s.season}`;
+const readMeta = n => { try { return JSON.parse(localStorage.getItem(metaKey(n)) || '{}'); } catch { return {}; } };
+export const current = () => s;
+export const slotList = () => Array.from({ length: SLOTS }, (_, k) => {
+  let text = null;
+  try { text = localStorage.getItem(slotKey(k + 1)); } catch {}
+  if (text === null) return null;
+  const m = readMeta(k + 1);
+  return { name: m.label || m.name || `Slot ${k + 1}`, at: m.at ?? null, size: text.length };
+});
+export async function saveSlot(n) {
+  try { await write(slotKey(n), serialize(s)); localStorage.setItem(metaKey(n), JSON.stringify({ name: gameName(), at: Date.now() })); return ''; }
+  catch { return STORAGE_FAIL; }
+}
+const replaceGame = next => {
+  stopClock(); s = next; tab = s.live ? 'Match' : s.me === null ? 'Inbox' : 'Squad';
+  sel = viewing = clubOpen = null; savesOpen = false; tableDiv = s.me === null ? 0 : s.clubs[s.me].div; return save();
+};
+export async function loadSlot(n) {
+  const next = await readSave(slotKey(n));
+  if (!next) return 'That slot cannot be read: it is empty or damaged.';
+  await replaceGame(next); return '';
+}
+export const exportText = () => serialize(s);
+export async function importText(text) { const next = deserialize(text); if (!next) return 'That file is not a Touchline save.'; await replaceGame(next); return ''; }
+
+function savesView() {
+  const kb = n => `${Math.max(1, Math.round(n / 1024))} KB`, act = (a, n, text) => `<button data-act="${a}" data-id="${n}">${text}</button>`;
+  const row = (x, k) => `<tr><td>Slot ${k + 1}</td><td>${x ? `<b>${esc(x.name)}</b>` : '<span class="dim">empty</span>'}</td><td class="dim">${x?.at ? new Date(x.at).toLocaleString() : ''}</td><td class="n dim">${x ? kb(x.size) : ''}</td>
+    <td>${inGame() ? act('slotSave', k + 1, 'Save here') : ''} ${x ? act('slotLoad', k + 1, 'Load') + ' ' + act('slotRename', k + 1, 'Rename') + ' ' + act('slotDelete', k + 1, 'Delete') : ''}</td></tr>`;
+  return `<div class="club"><b>Saved games</b><button data-act="close" style="margin-left:auto">Close</button></div>
+    ${help('The game saves itself after everything you do (the autosave). A slot keeps a copy you can go back to. Slots live in this browser only: export a game to keep it somewhere else or to play it on another device.')}
+    <div class="wrap"><table>${slotList().map(row).join('')}</table></div>
+    <div class="bar">${inGame() ? '<button data-act="exportSave">Export current game</button>' : ''}<button data-act="importSave">Import a save file</button></div>`;
+}
+const SAVE_BUTTONS = '<button data-act="saves">Saved games</button><button data-act="exportSave">Export save</button><button data-act="importSave">Import save</button>';
 const navButton = t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}">${t === 'Inbox' && unread() ? `Inbox (${unread()})` : t}</button>`;
 
 const actions = {
@@ -522,10 +573,10 @@ const actions = {
   acceptJob(id) { msg = acceptJob(s, id) || `Welcome to ${clubName(id)}.`; if (s.me === id) { tab = 'Board'; tableDiv = s.clubs[id].div; sel = viewing = null; } },
   declineJob(id) { declineJob(s, id); msg = 'Offer declined.'; },
   ask(_, el) { msg = askBoard(s, el.dataset.field); },
-  reset() { if ((s.me === null && !s.career) || confirm('Abandon this career and start a new game?')) { stopClock(); s = newWorld(); sel = viewing = null; tableDiv = 0; } },
+  reset() { if ((s.me === null && !s.career) || confirm('Abandon this career and start a new game?')) { stopClock(); s = newWorld(); sel = viewing = clubOpen = null; savesOpen = false; tableDiv = 0; } },
   exportSave() {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([serialize(s)], { type: 'application/json' }));
+    a.href = URL.createObjectURL(new Blob([exportText()], { type: 'application/json' }));
     a.download = `touchline-${s.me === null ? 'career' : s.clubs[s.me].short}-season-${s.season}.json`.replace(/[^\w.-]+/g, '_');
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -534,19 +585,28 @@ const actions = {
     const f = document.createElement('input');
     f.type = 'file'; f.accept = '.json,application/json';
     f.onchange = async () => {
-      const next = deserialize(await f.files[0]?.text());
-      if (!next) msg = 'That file is not a Touchline save.';
-      else if ((s.me !== null || s.career) && !confirm('Replace the current game with this save?')) return;
-      else { stopClock(); s = next; tab = s.live ? 'Match' : s.me === null ? 'Inbox' : 'Squad'; sel = viewing = null; tableDiv = s.me === null ? 0 : s.clubs[s.me].div; msg = 'Save imported.'; }
+      const text = await f.files[0]?.text();
+      if (!deserialize(text)) msg = 'That file is not a Touchline save.'; // refused before anything is replaced
+      else if (inGame() && !confirm('Replace the current game with this save?')) return;
+      else msg = (await importText(text)) || 'Save imported.';
       render(); save();
     };
     f.click();
   },
-  tab(_, el) { tab = el.dataset.tab; sel = viewing = clubOpen = null; },
+  tab(_, el) { tab = el.dataset.tab; sel = viewing = clubOpen = null; savesOpen = false; },
   div(id) { tableDiv = id; },
   view(id) { viewing = id; },
   club(id) { clubOpen = id; viewing = null; },
-  close() { if (viewing !== null) viewing = null; else clubOpen = null; }, // a player opened from a club profile closes back to the club
+  close() { if (savesOpen) savesOpen = false; else if (viewing !== null) viewing = null; else clubOpen = null; },
+  saves() { savesOpen = true; },
+  async slotSave(n) { if (slotList()[n - 1] && !confirm(`Overwrite slot ${n} (${slotList()[n - 1].name})?`)) return; msg = (await saveSlot(n)) || `Saved to slot ${n}.`; },
+  async slotLoad(n) { if (inGame() && !confirm(`Replace the current game with slot ${n}?`)) return; msg = (await loadSlot(n)) || `Loaded slot ${n}.`; },
+  slotDelete(n) { if (!confirm(`Delete slot ${n} (${slotList()[n - 1]?.name})? This cannot be undone.`)) return; try { localStorage.removeItem(slotKey(n)); localStorage.removeItem(metaKey(n)); msg = `Slot ${n} deleted.`; } catch { msg = 'Could not delete: browser storage is blocked.'; } },
+  slotRename(n) {
+    const name = prompt(`Name slot ${n}`, slotList()[n - 1]?.name ?? '');
+    if (!name?.trim()) return;
+    try { localStorage.setItem(metaKey(n), JSON.stringify({ ...readMeta(n), label: name.trim().slice(0, 60) })); } catch { msg = STORAGE_FAIL; }
+  }, // a player opened from a club profile closes back to the club
   findPlayer(id) { const p = allPlayers().find(x => x.id === id); filters = { name: p?.name ?? '' }; tab = 'Transfers'; viewing = clubOpen = null; },
   auto() { autoPick(s); sel = null; },
   formation(_, el) { s.formation = el.value; autoPick(s); sel = null; },
@@ -619,11 +679,14 @@ const actions = {
   sortBy(_, el) { sorts[el.dataset.table] = nextSort(sorts[el.dataset.table], el.dataset.key); },
 };
 
+// A screen that covers the tab until closed: saved games, or a profile (never during a live match).
+const overlay = () => savesOpen ? savesView() : s.live ? null : viewing !== null ? playerView(viewing) : clubOpen !== null ? clubView(clubOpen) : null;
+
 function render() {
   if (s.me === null && s.career) {
     if (!UNEMPLOYED.includes(tab)) tab = 'Inbox';
     $('info').textContent = `Out of work · reputation ${s.career.rep} · Season ${s.season}`;
-    const main = `<div class="msg" role="status">${msg}</div>` + (viewing !== null ? playerView(viewing) : clubOpen !== null ? clubView(clubOpen) : outOfWork() + views[tab]()); // first: the inbox marks what it shows as read
+    const main = `<div class="msg" role="status">${msg}</div>` + (overlay() ?? outOfWork() + views[tab]()); // first: the inbox marks what it shows as read
     $('nav').innerHTML = UNEMPLOYED.map(navButton).join('');
     $('sys').innerHTML = NEW_GAME + SAVE_BUTTONS;
     $('main').innerHTML = main;
@@ -633,7 +696,8 @@ function render() {
   if (s.me === null) {
     $('info').textContent = 'Pick a club to manage';
     $('nav').innerHTML = '';
-    $('sys').innerHTML = '<button data-act="importSave">Import save</button>';
+    $('sys').innerHTML = '<button data-act="saves">Saved games</button><button data-act="importSave">Import save</button>';
+    if (savesOpen) { $('main').innerHTML = `<div class="msg" role="status">${msg}</div>` + savesView(); msg = ''; return; }
     $('main').innerHTML = s.divisions.map(d => `<h2>${esc(d.name)}</h2><div class="grid">${d.clubIds.map(id => `<button data-act="start" data-id="${id}">${badge(id, 24)}${clubName(id)}</button>`).join('')}</div>`).join('');
     return;
   }
@@ -641,7 +705,7 @@ function render() {
     <span class="chip" title="transfer budget">Transfers ${money(s.budget)}</span><span class="chip" title="wage bill">Wages ${perWeek(wageBill(myClub(s)))}</span>`;
   if (s.live) tab = 'Match'; // the other screens wait for the final whistle
   // A profile replaces the screen until closed; never during a live match.
-  const screen = s.live ? views[tab]() : viewing !== null ? playerView(viewing) : clubOpen !== null ? clubView(clubOpen) : views[tab]();
+  const screen = overlay() ?? views[tab]();
   const main = `<div class="msg" role="status">${msg}</div>` + screen; // first: the inbox marks what it shows as read
   $('nav').innerHTML = (s.live ? ['Match'] : Object.keys(views)).map(navButton).join('');
   $('sys').innerHTML = NEW_GAME + SAVE_BUTTONS;
@@ -650,11 +714,11 @@ function render() {
   msg = '';
 }
 
-function dispatch(e) {
+async function dispatch(e) {
   const el = e.target.closest('[data-act]');
   if (!el || (e.type === 'click') === (el.tagName === 'SELECT')) return; // selects act on change, everything else on click
   $('menu').open = false;
-  actions[el.dataset.act](+el.dataset.id, el);
+  await actions[el.dataset.act](+el.dataset.id, el); // slot actions are async (compression)
   render(); // before save: the Inbox marks items read as it draws
   save();
 }

@@ -12,7 +12,9 @@ import { aiStaff, standardStaff } from './staff.js';
 import { BOARD_START, REP_START } from './world.js';
 
 export const SAVE_VERSION = 13; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad. 11: boards, the manager's career, the inbox. 12: per-player training intensity, the manager's money. 13: no wage budget, wages cut to a fifth
-export const KEY = 'touchline.save';
+export const KEY = 'touchline.save'; // the autosave
+export const SLOTS = 3;
+export const slotKey = n => `${KEY}:slot:${n}`; // n = 1..SLOTS; same save format as the autosave
 
 export const serialize = state => JSON.stringify(state);
 

@@ -1,6 +1,6 @@
 # Touchline Phase 11: interface
 
-Status: in progress. Order-of-work steps 1–3 done 2026-11-19 (tokens, sortable tables, profiles). Base: main @ d4da319.
+Status: in progress. Order-of-work steps 1–4 done 2026-11-19 (tokens, sortable tables, profiles, save slots). Base: main @ d4da319.
 No save bump planned: this phase changes screens and storage access, not the shape of the career state. If a view needs a new field, that field goes through a migration in `src/save.js` as in earlier phases.
 
 ## Goal
@@ -68,6 +68,7 @@ Tests: `tests/table.test.js`: sort by number vs string, direction flip, a stable
 - Export downloads the current save as `touchline-<club>-<season>.json` with a Blob link. Import reads a file with `<input type="file">`, runs it through `deserialize()` (so migrations apply), and refuses anything that fails `valid()` with a plain message.
 - Storage failure (quota, private mode) shows a message. The existing `try/catch` around `localStorage` stays.
 - Ceiling note from the roadmap: if slots push past about 3 MB total, the storage change in the roadmap's architecture section applies. Not needed yet; measure first.
+- Measured 2026-11-19: a save is ~0.95 MB of JSON at the start and ~1.1 MB after a season, so three slots and the autosave reached ~3.9 MB. Stored saves are now gzipped in `src/ui/app.js` (base64 behind a `gz:` mark, ~0.14–0.2 MB each); plain older saves still load, and exports stay plain JSON. The storage change is still not needed.
 
 Files: `src/save.js` (slot key helper, nothing else), `src/ui/app.js` (the panel and buttons).
 Tests: `tests/save.test.js`: slot keys are distinct; an exported file re-imports to the same state; a corrupt file is refused and does not overwrite the slot.

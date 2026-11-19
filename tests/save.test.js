@@ -15,7 +15,7 @@ function asV4(s, round) {
 }
 const games = s => s.clubs.reduce((t, c) => t + c.st.p, 0);
 import { stepMinute } from '../src/match.js';
-import { serialize, deserialize, SAVE_VERSION } from '../src/save.js';
+import { serialize, deserialize, SAVE_VERSION, KEY, SLOTS, slotKey } from '../src/save.js';
 import { BENCH, slots, newFam } from '../src/lineup.js';
 import { defaultTactics } from '../src/tactics.js';
 import { freshState } from '../src/player.js';
@@ -29,6 +29,11 @@ test('a career survives a save/load round trip and continues identically', () =>
   assert.deepEqual(b, a);
   playDay(a); playDay(b);
   assert.deepEqual(b, a);
+});
+
+test('save slots have their own keys, apart from the autosave', () => {
+  const keys = Array.from({ length: SLOTS }, (_, k) => slotKey(k + 1));
+  assert.equal(new Set([KEY, ...keys]).size, SLOTS + 1);
 });
 
 test('deserialize returns null for missing, corrupt or wrong-version saves', () => {
