@@ -1,6 +1,6 @@
 import { POS, overall, value } from './player.js';
 import { wage, wageBill, projection, lentPart } from './finance.js';
-import { terms, yearsFor } from './contracts.js';
+import { terms, yearsFor, lastSeason } from './contracts.js';
 import { fixLineup } from './lineup.js';
 
 // The transfer market. Clubs trade players with each other in two windows: summer (from the end of
@@ -93,7 +93,7 @@ export function move(s, p, from, to, fee, own = false) {
   else {
     const start = s.season - (s.done ? 0 : 1); // a contract agreed after the last match day counts from next season
     const t = to.id === s.me ? terms(s, p) : { wage: aiWage(p), years: yearsFor(p.age), clause: null };
-    p.contract = { wage: t.wage, until: start + t.years, clause: t.clause };
+    p.contract = { wage: t.wage, until: Math.min(start + t.years, lastSeason(s, p)), clause: t.clause };
     p.joined = windowId(s);
     to.players.push(p);
   }

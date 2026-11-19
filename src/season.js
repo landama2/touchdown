@@ -1,5 +1,5 @@
 import { makeRng } from './rng.js';
-import { createPlayer, ageOneYear } from './player.js';
+import { createPlayer, ageOneYear, RETIRE_AGE } from './player.js';
 import { blankStats, MARKET_SIZE, newFreeAgent, scheduleSeason } from './world.js';
 import { slots, bestXI, autoBench, fixLineup, newFam, learnFam } from './lineup.js';
 import { defaultTactics } from './tactics.js';
@@ -16,7 +16,6 @@ import { aiStaff, standardStaff } from './staff.js';
 import { intake, trainYouth, ageYouth } from './youth.js';
 import { afterLeague, afterCup, boardWeeks, boardDay, seasonReview, seasonStart, file, payManager } from './career.js';
 
-export const RETIRE_AGE = 35; // a player this old or older retires when the season ends
 const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
 // Between each division and the one below: PROMOTED go up automatically, the next PLAYOFF clubs
 // play off for one more place, RELEGATED come down. The bottom division has no relegation.

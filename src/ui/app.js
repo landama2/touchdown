@@ -1,9 +1,9 @@
-import { POS, ATTRS, ALL_ATTRS, overall, value } from '../player.js';
+import { POS, ATTRS, ALL_ATTRS, overall, value, RETIRE_AGE } from '../player.js';
 import { available, formAvg, moraleLabel, YELLOW_LIMIT } from '../squad.js';
 import { FOCUS, INTENSITY, LOADS, setTraining, setFocus, setLoad } from '../training.js';
 import { createWorld } from '../world.js';
 import { FORMATIONS, BENCH, slots, autoPick, fixLineup, swap } from '../lineup.js';
-import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason, RETIRE_AGE } from '../season.js';
+import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason } from '../season.js';
 import { dateLabel } from '../calendar.js';
 import { CUP_NAME, cupRoundName, aggregate } from '../cup.js';
 import { stepMinute, substitute, swapPositions, emptySlots, moveTo, setFormation, setLiveTactic, preview, MAX_SUBS } from '../match.js';
@@ -37,7 +37,7 @@ const ordinal = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', '
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => '€' + (n / 1e6).toFixed(2) + 'M';
 const perWeek = n => `€${n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n < 1e4 ? (n / 1e3).toFixed(1) + 'k' : Math.round(n / 1e3) + 'k'}/wk`;
-const termsText = t => `${perWeek(t.wage)} for ${t.years} season${t.years > 1 ? 's' : ''}${t.clause ? ` · release clause ${money(t.clause)}` : ''}`;
+const termsText = t => `${perWeek(t.wage)} for ${t.years ? `${t.years} season${t.years > 1 ? 's' : ''}` : 'the rest of this season'}${t.clause ? ` · release clause ${money(t.clause)}` : ''}`;
 const untilText = p => !p.contract ? '–' : p.loan ? `on loan from ${clubName(p.loan.from)}` : p.contract.until === s.season ? '<span class="oop">ends this season</span>' : `season ${p.contract.until}`;
 const byPos = list => [...list].sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || overall(b) - overall(a));
 const label = k => k.replace(/[A-Z]/g, c => ' ' + c.toLowerCase());

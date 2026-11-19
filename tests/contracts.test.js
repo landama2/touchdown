@@ -4,7 +4,7 @@ import { makeRng } from '../src/rng.js';
 import { overall, value } from '../src/player.js';
 import { createWorld } from '../src/world.js';
 import { wage, wageBill } from '../src/finance.js';
-import { yearsFor, startContract, terms, canRenew, renew, expireContracts, academy } from '../src/contracts.js';
+import { yearsFor, startContract, terms, canRenew, renew, expireContracts, academy, lastSeason } from '../src/contracts.js';
 import { MINI } from './fixtures/mini.js';
 
 // A mini world managed from club 6 with a wage budget that never gets in the way.
@@ -77,4 +77,17 @@ test('expiry: AI clubs renew; your players whose contracts end leave, and academ
   const kid = academy(s, makeRng(2), club, 'GK');
   assert.ok(kid.age >= 17 && kid.age <= 19 && kid.pos === 'GK');
   assert.deepEqual(kid.contract, { wage: wage(kid), until: s.season + 3, clause: null });
+});
+
+test('no contract runs past retirement', () => {
+  const s = createWorld(9, MINI), c = s.clubs[0], p = c.players[0];
+  s.me = c.id;
+  p.age = 34; p.contract.until = s.season;
+  assert.equal(terms(s, p).years, 1);
+  assert.equal(lastSeason(s, p), s.season + 1);
+  p.age = 35;
+  assert.equal(terms(s, p).years, 0);
+  assert.equal(canRenew(s, p), false);
+  p.age = 30;
+  assert.ok(canRenew(s, p) && terms(s, p).years === 2);
 });

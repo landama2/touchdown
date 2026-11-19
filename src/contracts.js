@@ -1,4 +1,4 @@
-import { createPlayer, overall, value } from './player.js';
+import { createPlayer, overall, value, RETIRE_AGE } from './player.js';
 import { wage } from './finance.js';
 import { fromYouth } from './youth.js';
 
@@ -11,6 +11,9 @@ const CLAUSE = { above: 5, times: 2 }; // 5+ overall above your best XI's averag
 const ACADEMY_YEARS = 3;
 
 export const yearsFor = age => age <= 23 ? 5 : age <= 29 ? 4 : age <= 32 ? 2 : 1;
+// The last season player p plays before he retires: no contract runs past it.
+export const lastSeason = (s, p) => s.season + Math.max(0, RETIRE_AGE - p.age);
+const years = (s, p) => Math.min(yearsFor(p.age), lastSeason(s, p) - s.season);
 // A new world's contracts: the going rate, ending 0-3 seasons after `season`, staggered by id (no RNG).
 export const startContract = (p, season) => ({ wage: wage(p), until: season + p.id % 4, clause: null });
 
@@ -22,10 +25,10 @@ const xiAverage = club => { const o = club.players.map(p => overall(p)).sort((a,
 export function terms(s, p) {
   const ask = roundWage(wage(p) * (p.morale < 40 ? 1.25 : p.morale >= 80 ? 0.9 : 1));
   const star = overall(p) >= xiAverage(s.clubs[s.me]) + CLAUSE.above;
-  return { wage: Math.max(p.contract?.wage ?? 0, ask), years: yearsFor(p.age), clause: star ? Math.round(CLAUSE.times * value(p) / 1e5) * 1e5 : null };
+  return { wage: Math.max(p.contract?.wage ?? 0, ask), years: years(s, p), clause: star ? Math.round(CLAUSE.times * value(p) / 1e5) * 1e5 : null };
 }
 
-export const canRenew = (s, p) => !!p.contract && !p.loan && p.contract.until <= s.season + 1 && s.season + yearsFor(p.age) > p.contract.until;
+export const canRenew = (s, p) => !!p.contract && !p.loan && p.contract.until <= s.season + 1 && s.season + years(s, p) > p.contract.until;
 
 // Accepts the terms of the human club's player `id`: the new terms apply now and the contract runs to
 // `season + years`. Error message or null.
@@ -54,7 +57,7 @@ export function expireContracts(s, rng, minSquad) {
   const left = [];
   for (const c of s.clubs) for (const p of [...c.players]) {
     if (!p.contract || p.contract.until > s.season) continue;
-    if (c.id !== s.me) { p.contract = { wage: wage(p), until: s.season + yearsFor(p.age), clause: null }; continue; }
+    if (c.id !== s.me) { p.contract = { wage: wage(p), until: s.season + years(s, p), clause: null }; continue; }
     c.players.splice(c.players.indexOf(p), 1);
     p.contract = null; delete p.mine; // released: no longer the manager's
     s.market.push(p);

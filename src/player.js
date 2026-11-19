@@ -1,6 +1,7 @@
 import { FIRST, LAST } from './data/names.js';
 
 export const POS = ['GK', 'DF', 'MF', 'FW'];
+export const RETIRE_AGE = 35; // a player this old or older retires when the season ends
 export const ATTRS = {
   technical: ['passing', 'dribbling', 'finishing', 'tackling', 'heading', 'firstTouch', 'crossing'],
   mental: ['vision', 'positioning', 'composure', 'workRate', 'decisions', 'aggression'],
