@@ -1,4 +1,4 @@
-import { ATTRS, ALL_ATTRS, WEIGHTS } from './player.js';
+import { ATTRS, ALL_ATTRS, WEIGHTS, ageing } from './player.js';
 import { injure } from './squad.js';
 import { has } from './tactics.js';
 import { coachScale, medicalScale } from './staff.js';
@@ -28,6 +28,9 @@ const GROWTH = 0.1, DECLINE = 0.05, INJURY = 0.004, REST_RECOVER = 2; // chances
 
 // ponytail: a linear taper with a floor; tune in Phase 12.
 export const ageGrow = age => age <= 23 ? 1 : Math.max(0.1, 0.7 - 0.08 * (age - 23));
+// A point in one key attribute lifts the overall by 5 / (number of key attributes), so keepers (5) grew faster than
+// midfielders (7). Scaling the growth chance by keys / 6 gives every position the same overall per week (Phase 12).
+export const posGrow = pos => Object.keys(WEIGHTS[pos]).length / 6;
 
 export const defaultTraining = () => ({ focus: 'Balanced', intensity: 'Normal', ind: {}, load: {} });
 const AI_TRAINING = Object.freeze({ ...defaultTraining(), ind: Object.freeze({}), load: Object.freeze({}) });
@@ -51,8 +54,8 @@ export function trainWeek(rng, club, t) {
     if (p.inj) continue;
     const I = intensityOf(t, p);
     if (rng.next() < INJURY * I.injury) { injure(rng, p, heal); hurt.push(p); continue; }
-    if (t.focus !== 'Rest' && rng.next() < grow * I.grow * ageGrow(p.age)) raise(rng, p, t);
-    if (p.age >= 31 && rng.next() < DECLINE) { const k = rng.pick(ATTRS.physical); p.attrs[k] = Math.max(1, p.attrs[k] - 1); }
+    if (t.focus !== 'Rest' && rng.next() < grow * I.grow * ageGrow(p.age) * posGrow(p.pos)) raise(rng, p, t);
+    if (p.age >= 31 && rng.next() < DECLINE) { const k = rng.pick(ageing(p)); p.attrs[k] = Math.max(1, p.attrs[k] - 1); }
   }
   return hurt;
 }

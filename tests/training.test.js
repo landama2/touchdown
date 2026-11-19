@@ -21,12 +21,19 @@ function season(club, t, seed = 1) {
 const plan = changes => ({ ...defaultTraining(), ...changes });
 
 test('young players gain about four attributes a season at Normal; Hard more, Light less, Rest none', () => {
-  const normal = season(squad(1, 300, 19), plan({}));
-  const hard = season(squad(1, 300, 19), plan({ intensity: 'Hard' })), light = season(squad(1, 300, 19), plan({ intensity: 'Light' }));
+  const normal = season(squad(1, 300, 19, 'FW'), plan({})); // six key attributes: the reference rate (posGrow)
+  const hard = season(squad(1, 300, 19, 'FW'), plan({ intensity: 'Hard' })), light = season(squad(1, 300, 19, 'FW'), plan({ intensity: 'Light' }));
   assert.ok(normal > 3.4 && normal < 4.8, `normal ${normal}`);
   assert.ok(hard > normal && normal > light, `${hard} ${normal} ${light}`);
   assert.equal(season(squad(1, 300, 19), plan({ focus: 'Rest' })), 0);
 
+});
+
+test('every position gains the same overall from a season of training (keepers have fewer key attributes, so fewer gains)', () => {
+  const gain = pos => { const c = squad(3, 400, 19, pos), before = c.players.map(p => overall(p)); season(c, plan({}));
+    return c.players.reduce((t, p, i) => t + overall(p) - before[i], 0) / c.players.length; };
+  const g = Object.fromEntries(['GK', 'DF', 'MF', 'FW'].map(pos => [pos, gain(pos)]));
+  for (const pos in g) assert.ok(Math.abs(g[pos] - g.FW) < 0.4, JSON.stringify(g));
 });
 
 test('the team focus decides which attributes grow; keepers always train as keepers', () => {

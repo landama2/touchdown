@@ -79,3 +79,15 @@ test('ageing a young player never pushes a key attribute above pot', () => {
     }
   }
 });
+
+test('age takes a keeper\'s reflexes and agility, an outfield player\'s body: both lose overall', () => {
+  const rng = makeRng(4);
+  for (const pos of ['GK', 'FW']) {
+    const p = createPlayer(rng, 1, pos, 14, 33), before = overall(p);
+    for (let i = 0; i < 3; i++) ageOneYear(rng, p);
+    assert.ok(overall(p) < before, `${pos} ${before} -> ${overall(p)}`);
+  }
+  const k = createPlayer(rng, 2, 'GK', 14, 33), kept = ['handling', 'positioning', 'composure', 'pace', 'stamina', 'strength'].map(a => k.attrs[a]);
+  for (let i = 0; i < 3; i++) ageOneYear(rng, k);
+  assert.deepEqual(['handling', 'positioning', 'composure', 'pace', 'stamina', 'strength'].map(a => k.attrs[a]), kept);
+});

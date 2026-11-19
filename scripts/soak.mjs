@@ -76,12 +76,16 @@ export function soakSeason(s, now = () => performance.now()) {
     gzBytes: gzipSync(text).length,
     loads: deserialize(text) !== null,
     employed: s.me !== null,
+    ovrBy: Object.fromEntries(['GK', 'DF', 'MF', 'FW'].map(pos => [pos, +mean(players.filter(p => p.pos === pos).map(p => overall(p))).toFixed(1)])),
+    avgAge: +mean(players.map(p => p.age)).toFixed(1),
+    under21: +(players.filter(p => p.age < 21).length / players.length).toFixed(3),
   });
 }
 
-const HEAD = ['season', 'ms', 'goals', 'home', 'sacked', 'ovr', 'PL €M', 'best €M', 'wage', 'gz KB', 'employed'].join('\t');
+const HEAD = ['season', 'ms', 'goals', 'home', 'sacked', 'ovr', 'PL €M', 'best €M', 'wage', 'gz KB', 'employed', 'by position', 'age', 'u21'].join('\t');
 const line = r => [r.season, Math.round(r.ms), (r.goals / r.matches).toFixed(2), (r.homeWins / r.matches).toFixed(3), r.sackings,
-  r.avgOvr.toFixed(1), Math.round(r.plBalance / 1e6), Math.round(r.bestValue / 1e6), r.medianWage, Math.round(r.gzBytes / 1024), r.employed ? 'yes' : 'no'].join('\t');
+  r.avgOvr.toFixed(1), Math.round(r.plBalance / 1e6), Math.round(r.bestValue / 1e6), r.medianWage, Math.round(r.gzBytes / 1024), r.employed ? 'yes' : 'no',
+  JSON.stringify(r.ovrBy), r.avgAge, r.under21].join('\t');
 
 function main() {
   const [seeds = '1,2,3', seasons = '20'] = process.argv.slice(2);

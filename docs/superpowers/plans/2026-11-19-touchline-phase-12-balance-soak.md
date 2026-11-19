@@ -622,6 +622,30 @@ git commit -m "docs: Phase 12 done: soak results and notes"
 - In range everywhere: AI sackings (every block 13.6–19.8 a season), season time (1.2–1.6 s), slowest day, save size (101–119 KB gzipped, shrinking slowly), every save loads back.
 - The autopilot manager was employed 11, 11 and 12 seasons of 20.
 
+### Owners take the surplus (Task 4, main @ 8f1e581: 52 misses)
+
+- The median PL balance levels off at €600–670M from season 6 on seeds 1 and 2, and €400–670M on seed 3. No balance misses (was €2.0–2.3B by season 20).
+- Sackings stay in range (block averages 13.2–20.0). Every save loads; times and sizes unchanged.
+- Still missing: the median wage (33 seasons), average overall (seasons 4–6 and 15), best player value (up to €236M on seed 3, seasons 5–11), goals in seasons 16–20 on seed 2 (2.47), home wins in seasons 11–15 on seed 1 (0.421).
+- The stadium (Task 5) left every row unchanged, as planned: level 0 gives the same gate. Browser check: Reading in League One, a stand at €5.80M refused on a €2.10M budget, then built with €20M (budget and balance −€5.80M, gate €0.21M → €0.24M, cost in the books), kept after a reload, all by keyboard.
+
+### Diagnosis (Task 6, after Task 4; seeds 1–3 × 20 seasons, and seed 1 × 40 seasons)
+
+- **The overall swing is a generational wave, not a drift.** Every AI retiree (35) is replaced one for one by an academy player of club quality − 2 (start overall about 52, potential 13.6 against 15.0 for the real players). The real squads age out over seasons 8–16, then the academy cohort matures. Seed 1 over 40 seasons: overall 66.0 (season 4, the Phase 10b training lift), 61.3 (16), 64.0 (24), 61.1 (32), 64.0 (40). After the first peak it swings about ±1.5 around 62.5, on a cycle of about 16 seasons, and does not run away.
+- **The median wage follows the share of under-21s**, not a change in what a player of a given quality earns: the under-21 share swings 6% → 25% → 8% → 25% → 8% in step with the wage (€2,100 → €900–1,000 → €1,900 → €900 → €1,500). Under-21s earn ×0.6, and new academy players are rated about 52. The median player is simply younger in the troughs.
+- **Goals fall because keepers outlast forwards.** Across 60 seasons (3 seeds), goals per match fall 0.034 for each point keepers gain on forwards (correlation −0.83). Forwards start 4.3 points above keepers (real data); by seasons 16–20 keepers are up to 3.6 points above forwards. Cause: from 31, age took only physical attributes, and agility (weight 1 of 10) is the only one in a keeper's overall, so old keepers kept their overall while old forwards lost pace (weight 2 of 12), midfielders stamina, defenders strength and pace. Training is not the cause: AI clubs train on the default focus, so outfield players train their key attributes too.
+- **Home wins** dip with goals (fewer goals, more draws), from 0.44 to 0.42–0.43 in the late blocks.
+- **Training made it worse for midfielders.** A training gain raises one key attribute, which lifts the overall by 5 ÷ (number of key attributes): 1.0 for a keeper (5), 0.83 for defenders and forwards (6), 0.71 for midfielders (7). A season's training gave young keepers 4.27 overall and young midfielders 3.05.
+
+### The fixes (Task 6)
+
+1. **Age takes a keeper's reflexes and agility** (`ageing()` in `src/player.js`, used by `trainWeek` and `ageOneYear`); outfield players still lose physical attributes.
+2. **Every position gains the same overall from training** (`posGrow()` in `src/training.js`: the growth chance × keys / 6). Forwards and defenders are unchanged; keepers grow 1/6 less often, midfielders 1/6 more. Same number of random draws, so the world's dice are unchanged.
+
+Result (seeds 1–3 × 20 seasons, 43 misses): goals per match 2.50–2.85 in every block (late blocks 2.56, 2.53, 2.50; were 2.47–2.53); keepers no longer pull away in the long run (seed 1 × 40 seasons: positions within 1.5 of each other from season 20 on, goals 2.53–2.64). Sackings in range everywhere (block averages 12.6–19.6), so Task 7 needs no change. `tests/england.test.js` (season 1 calibration) still passes.
+
+Still missing, all owner decisions on targets: median wage (31 seasons), average overall (66.0–66.3 in seasons 4–6, 60.9 once), best player value (€209–236M, 2 seasons), home wins in seasons 16–20 of seed 3 (0.419).
+
 ### Fun surprises at risk (Task 3)
 
 - #30 (buy low before promotion) and #32 (shares outlive the job): share prices are 2 × projected income, which the stadium raises. A €12M Premier League stand adds about €1.5M of income, so about €3M of club value; with a 49% stake that is about €1.5M of your own money for €12M of the club's. A small edge, not a shortcut; keep it if it holds.

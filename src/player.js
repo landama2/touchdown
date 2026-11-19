@@ -9,6 +9,9 @@ export const ATTRS = {
   goalkeeping: ['handling', 'reflexes'],
 };
 export const ALL_ATTRS = Object.values(ATTRS).flat();
+// What age takes from 31 on: the body for outfield players; a keeper's reflexes and agility (Phase 12: physical
+// decline barely touched a keeper's overall, so keepers outlasted the forwards and goals fell over the seasons).
+export const ageing = p => p.pos === 'GK' ? ['reflexes', 'agility'] : ATTRS.physical;
 
 // How much each attribute matters for a position. Drives overall() and generation bias.
 export const WEIGHTS = {
@@ -59,6 +62,6 @@ export function ageOneYear(rng, p) {
     for (let i = 0; i < 4; i++) { const k = rng.pick(keys); if (p.attrs[k] < p.pot) p.attrs[k]++; }
   }
   if (p.age >= 31) {
-    for (let i = 0; i < 2; i++) { const k = rng.pick(ATTRS.physical); p.attrs[k] = Math.max(1, p.attrs[k] - 1); }
+    for (let i = 0; i < 2; i++) { const k = rng.pick(ageing(p)); p.attrs[k] = Math.max(1, p.attrs[k] - 1); }
   }
 }
