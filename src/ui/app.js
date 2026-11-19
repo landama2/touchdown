@@ -3,7 +3,7 @@ import { available, formAvg, moraleLabel, YELLOW_LIMIT } from '../squad.js';
 import { FOCUS, INTENSITY, LOADS, setTraining, setFocus, setLoad } from '../training.js';
 import { createWorld } from '../world.js';
 import { FORMATIONS, BENCH, slots, autoPick, fixLineup, swap } from '../lineup.js';
-import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason } from '../season.js';
+import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason, RETIRE_AGE } from '../season.js';
 import { dateLabel } from '../calendar.js';
 import { CUP_NAME, cupRoundName, aggregate } from '../cup.js';
 import { stepMinute, substitute, swapPositions, emptySlots, moveTo, setFormation, setLiveTactic, preview, MAX_SUBS } from '../match.js';
@@ -44,7 +44,10 @@ const label = k => k.replace(/[A-Z]/g, c => ' ' + c.toLowerCase());
 const clubName = id => esc(s.clubs[id].name);
 const badge = (id, size = 20) => crestSvg(s.clubs[id], size);
 const HEAD = '<th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Value</th>';
-const cells = p => `<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${overall(p)}</td><td class="n">${money(value(p))}</td>`;
+// Retirement: at the end of a season he is RETIRE_AGE or older in; flagged a season ahead.
+const retires = p => p.age >= RETIRE_AGE ? 'retires at the end of this season' : p.age === RETIRE_AGE - 1 ? 'retires at the end of next season' : '';
+const ageCell = p => retires(p) ? `<span class="${p.age >= RETIRE_AGE ? 'oop' : 'dim'}" title="${retires(p)}">${p.age} ⏳</span>` : p.age;
+const cells = p => `<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${money(value(p))}</td>`;
 const nameBtn = (p, act) => `<td><button class="link" data-act="${act}" data-id="${p.id}">${esc(p.name)}</button>${p.mine ? ' <span title="yours: bought with your own money">💼</span>' : ''}</td>`;
 const outFor = d => d === 1 ? '1 day' : d < 14 ? `${d} days` : `${Math.round(d / 7)} weeks`;
 const status = p => p.inj ? `${esc(p.inj.name)}, ${outFor(p.inj.days)}` : p.ban ? `banned for ${p.ban} match${p.ban > 1 ? 'es' : ''}`
@@ -91,7 +94,7 @@ const span = ([lo, hi], f = String) => lo === hi ? f(lo) : `${f(lo)}–${f(hi)}`
 const moneySpan = ([lo, hi]) => lo === hi ? money(lo) : `€${(lo / 1e6).toFixed(2)}–${(hi / 1e6).toFixed(2)}M`;
 const scale = (x, [lo, hi], v) => [lo, hi].map(e => Math.round(x * e / v / 1e4) * 1e4); // a price that moves with value, over the value estimate
 // Cells for a player you may not know fully: position, age, overall and value as estimates, knowledge.
-const estCells = (p, e) => `<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${span(e.ovr)}</td><td class="n">${moneySpan(e.value)}</td><td class="n dim">${e.k}%</td>`;
+const estCells = (p, e) => `<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${span(e.ovr)}</td><td class="n">${moneySpan(e.value)}</td><td class="n dim">${e.k}%</td>`;
 const EST_HEAD = '<th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Value</th><th class="n">Known</th>';
 // A club in a narrow column: badge and three-letter code (full name on hover).
 const clubCell = c => c ? `<span title="${esc(c.name)}">${badge(c.id, 16)} ${esc(c.short)}</span>` : '<span class="dim">free</span>';
@@ -181,10 +184,12 @@ const knockout = rounds => rounds.map(([title, ties]) => `<h3>${esc(title)}</h3>
 
 // Potential: the overall he could reach (see ceiling in youth.js), as your coaches judge it; only for
 // players you know fully, and never below what he is now.
+const DECLINE_AGE = 31; // from here age takes more than training gives (training.js, player.js)
 const potential = (p, e) => {
-  if (e.k < 100 || s.me === null) return '?';
+  if (e.k < 100 || s.me === null) return '<b>?</b>';
   const [lo, hi] = ceilingRange(s, p), now = overall(p);
-  return span([Math.max(lo, now), Math.max(hi, now)]);
+  const txt = span([Math.max(lo, now), Math.max(hi, now)]);
+  return p.age >= DECLINE_AGE ? `<s style="opacity:.6" title="past his peak: he declines from here, so this is out of reach">${txt}</s>` : `<b>${txt}</b>`;
 };
 function profile() {
   const p = allPlayers().find(x => x.id === viewing);
@@ -193,7 +198,7 @@ function profile() {
   const shown = k => r ? span(r[k]) : p.attrs[k], high = k => (r ? r[k][0] : p.attrs[k]) >= 15;
   const group = ([title, keys]) => `<h3>${title}</h3>` + keys.map(k => `<div><span>${label(k)}</span><b class="${high(k) ? 'hi' : ''}">${shown(k)}</b></div>`).join('');
   const known = e.k < 100 ? ` · <span class="dim">known ${e.k}%</span> ${e.ovr[0] < e.ovr[1] && s.scouts.some(x => !x.task) ? `<button data-act="scoutPlayer" data-id="${p.id}">Scout him</button>` : ''}` : '';
-  return `<div class="attrs"><div class="ph">${c?.id === s.me ? '' : star(p.id)}<b class="pname">${esc(p.name)}</b><span class="dim">${p.pos} · age ${p.age} · ${c ? clubName(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · potential <b>${potential(p, e)}</b> · ${moneySpan(e.value)}${known}</span>
+  return `<div class="attrs"><div class="ph">${c?.id === s.me ? '' : star(p.id)}<b class="pname">${esc(p.name)}</b><span class="dim">${p.pos} · age ${p.age}${retires(p) ? ` <span class="oop">⏳ ${retires(p)}</span>` : ''} · ${c ? clubName(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · potential ${potential(p, e)} · ${moneySpan(e.value)}${known}</span>
     <button data-act="close">Close</button></div>
     <p>Condition ${p.cond}% · sharpness ${Math.round(p.sharp)}% · morale ${moraleLabel(p.morale)} · form ${formAvg(p) ?? '–'} · ${p.yc} league yellow${p.yc === 1 ? '' : 's'}${status(p) ? ` · <span class="oop">${status(p)}</span>` : ''}${p.contract ? ` · contract ${perWeek(p.contract.wage)} until season ${p.contract.until}${p.contract.clause ? `, release clause ${money(p.contract.clause)}` : ''}` : ''}</p>${Object.entries(ATTRS).map(group).join('')}</div>`;
 }
@@ -238,7 +243,7 @@ const views = {
       Each player can train at his own intensity; a personal Rest means no improvement and no training injuries.
       Keepers always work on goalkeeping. An individual focus takes half of a player's improvement. Players aged 31 and over slowly lose pace, stamina, strength and agility whatever you do.`)}
       <div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Gained</th><th>Individual focus</th><th>Intensity</th></tr>
-      ${byPos(myClub(s).players).map(p => `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${overall(p)}</td><td class="n">${p.gain ? '+' + p.gain : ''}</td><td>${focus(p)}</td><td>${load(p)}</td></tr>`).join('')}</table></div>`;
+      ${byPos(myClub(s).players).map(p => `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${p.gain ? '+' + p.gain : ''}</td><td>${focus(p)}</td><td>${load(p)}</td></tr>`).join('')}</table></div>`;
   },
   Match() {
     if (s.live) return liveView();
@@ -352,7 +357,7 @@ const views = {
     const club = myClub(s);
     const row = p => {
       const t = canRenew(s, p) ? terms(s, p) : null;
-      return `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${overall(p)}</td><td class="n">${perWeek(p.contract.wage)}</td><td>${untilText(p)}</td>
+      return `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${perWeek(p.contract.wage)}</td><td>${untilText(p)}</td>
         <td class="n">${p.contract.clause ? money(p.contract.clause) : ''}</td><td>${t ? `<span class="dim">asks ${termsText(t)}</span> <button data-act="renew" data-id="${p.id}">Accept</button>` : ''}</td></tr>`;
     };
     return `<h2>Contracts</h2><p>Wage bill ${perWeek(wageBill(club))}.</p>
@@ -400,7 +405,7 @@ views.Staff = () => {
 };
 
 views.Youth = () => {
-  const rows = byPos(s.youth).map(p => { const [lo, hi] = ceilingRange(s, p); return `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${overall(p)}</td><td class="n">${lo}–${hi}</td>
+  const rows = byPos(s.youth).map(p => { const [lo, hi] = ceilingRange(s, p); return `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${lo}–${hi}</td>
     <td><button data-act="promote" data-id="${p.id}">Promote (${perWeek(wage(p))})</button> <button data-act="releaseYouth" data-id="${p.id}">Release</button></td></tr>`; }).join('');
   return `<h2>Youth squad (${s.youth.length}/${YOUTH_MAX})</h2>${help(`Youngsters train every week but play no matches and earn nothing. A new intake arrives each summer; at ${LEAVE_AGE} those still here leave. Ceiling: the overall your coaches think he can reach (better coaching, a closer guess). When contracts end and the first team runs short, the best youth player in the position steps up.`)}
     ${rows ? `<div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Ceiling</th><th></th></tr>${rows}</table></div>` : '<p class="dim">Empty until the summer intake.</p>'}`;
@@ -433,7 +438,7 @@ views.Money = () => {
   const pay = own ? spell.salary ?? salaryFor(s, s.me) : 0;
   const rows = Object.entries(s.career.shares).map(([id, pct]) => { const c = s.clubs[id], v = clubValue(s, c);
     return `<tr><td>${clubName(c.id)}</td><td class="n">${pct}%</td><td class="n">${money(v)}</td><td class="n">${money(pct * v / 100)}</td></tr>`; }).join('');
-  const mine = s.clubs.flatMap(c => c.players.filter(p => p.mine).map(p => `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${p.age}</td><td>${clubName(c.id)}</td><td class="n">${money(value(p))}</td></tr>`)).join('');
+  const mine = s.clubs.flatMap(c => c.players.filter(p => p.mine).map(p => `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td>${clubName(c.id)}</td><td class="n">${money(value(p))}</td></tr>`)).join('');
   const clubs = [...s.clubs].sort((a, b) => a.div - b.div || a.name.localeCompare(b.name)).map(c => [String(c.id), `${c.name} · ${money(clubValue(s, c) / 100)} per 1%${stake(s, c.id) ? ` · you own ${stake(s, c.id)}%` : ''}`]);
   return `<h2>Your money: ${money(s.career.money)}</h2>
     <p>${own ? `Salary at ${clubName(s.me)}: ${money(pay)} a year, paid week by week through the season.` : 'Out of work: no salary.'}</p>
