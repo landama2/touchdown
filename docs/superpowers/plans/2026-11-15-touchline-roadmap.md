@@ -24,7 +24,7 @@
 | 9 | Youth & staff | Annual academy intake, youth squad, staff (coaches, scouts, physios) with their own attributes that affect training, scouting accuracy and recovery; hiring and firing | 5, 8 | `2026-11-16-touchline-phase-9-youth-staff.md` (done 2026-11-16) |
 | 10 | Manager career | Board expectations and confidence, job security, sackings, job offers at other clubs, manager reputation, inbox with news and decisions | 6, 7 | `2026-11-16-touchline-phase-10-manager-career.md` (done 2026-11-16) |
 | 10b | Training & money | Training for every age, per-player intensity, budgets favour transfers, the manager's own money: salary, own players, club shares | 5, 6, 10 | `2026-11-17-touchline-phase-10b-training-money.md` (done 2026-11-17) |
-| 11 | Interface | Touchline's own visual identity, player and club profile screens, 2D pitch match view, sortable/filterable tables, save slots with export/import, keyboard and screen-reader support | 2–10 | to write |
+| 11 | Interface | Touchline's own visual identity, player and club profile screens, 2D pitch match view, sortable/filterable tables, save slots with export/import, keyboard and screen-reader support | 2–10 | `2026-11-19-touchline-phase-11-interface.md` (in progress, steps 1–3 of 7 done) |
 | 12 | Balance & soak | 20-season automated runs checked against statistical targets (goals per match 2.5–2.9, home wins 43–47%, plausible wage/value curves), performance budget, save-size budget | all | to write |
 
 ## Real-world data (decided 2026-11-15, planned as Phase 1b)

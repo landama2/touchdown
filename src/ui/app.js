@@ -19,6 +19,7 @@ import { wage, wageBill, projection, staffBill, STAFF_COST, STANDARD, SHARE, clu
 import { terms, canRenew, renew as renewContract } from '../contracts.js';
 import { MIN_GAMES, ASK, REP, BONUS, SEVERANCE, bands, leagueTarget, cupTarget, level, startCareer, acceptJob, declineJob, openOffer, askBoard, sackLine, salaryFor, trade } from '../career.js';
 import { crestSvg, kitSvg } from './art.js';
+import { sortRows, nextSort, sortHead } from './table.js';
 
 // The UI is the only place allowed to touch Date, localStorage and the DOM.
 const newWorld = () => createWorld(Date.now() >>> 0);
@@ -26,7 +27,7 @@ const load = () => { try { return deserialize(localStorage.getItem(KEY)); } catc
 const save = () => { try { localStorage.setItem(KEY, serialize(s)); } catch {} };
 
 let s = load() || newWorld();
-let tab = 'Squad', sel = null, viewing = null, tableDiv = s.me === null ? 0 : s.clubs[s.me].div, msg = '', filters = {}; // filters: the player search on Transfers
+let tab = 'Squad', sel = null, viewing = null, clubOpen = null, tableDiv = s.me === null ? 0 : s.clubs[s.me].div, msg = '', filters = {}; // filters: the player search on Transfers
 let ownPay = false; // Transfers: pay fees from the manager's own money
 let timer = null, speed = 400, subOut = null, subIn = null; // live match: clock, ms per match minute, player picked to come off / to come on
 const SPEEDS = [['Slow', 1000], ['Normal', 400], ['Fast', 100], ['Very fast', 25]];
@@ -40,6 +41,19 @@ const perWeek = n => `€${n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n < 1e4 ? (n 
 const termsText = t => `${perWeek(t.wage)} for ${t.years ? `${t.years} season${t.years > 1 ? 's' : ''}` : 'the rest of this season'}${t.clause ? ` · release clause ${money(t.clause)}` : ''}`;
 const untilText = p => !p.contract ? '–' : p.loan ? `on loan from ${clubName(p.loan.from)}` : p.contract.until === s.season ? '<span class="oop">ends this season</span>' : `season ${p.contract.until}`;
 const byPos = list => [...list].sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || overall(b) - overall(a));
+// Column sorts for the squad lists. Each table keeps its own sort in the UI (not in the career); none means the default order.
+const sorts = {};
+const order = (table, cols, list, dflt) => sorts[table] && cols[sorts[table].key] ? sortRows(list, { get: cols[sorts[table].key] }, sorts[table].dir) : dflt(list);
+// heads(table, [[label, key, class]]): a column without a key is a plain header.
+const heads = (table, cols) => cols.map(([l, k, c = '']) => k ? sortHead(l, table, k, sorts[table], c) : `<th class="${c}">${l}</th>`).join('');
+// Own players: true values are known. Ceiling sorts on the coaches' shown range.
+const SORT_COLS = { name: p => p.name, pos: p => POS.indexOf(p.pos), age: p => p.age, ovr: p => overall(p), value: p => value(p), gain: p => p.gain ?? 0, wage: p => p.contract?.wage ?? 0, until: p => p.contract?.until ?? 0, clause: p => p.contract?.clause ?? 0, ceil: p => ceilingRange(s, p).reduce((a, b) => a + b) };
+const squadOrder = (table, list) => order(table, SORT_COLS, list, byPos);
+// Other clubs' players, as { p, c, e }: sort on the estimate shown, never the true values (the fog rule).
+const EST_COLS = { name: x => x.p.name, pos: x => POS.indexOf(x.p.pos), age: x => x.p.age, ovr: x => x.e.ovr[0] + x.e.ovr[1], value: x => x.e.value[0] + x.e.value[1], known: x => x.e.k, club: x => x.c?.name ?? '' };
+const estOrder = (table, list) => order(table, EST_COLS, list, l => l);
+const estHead = (table, club) => heads(table, [['Name', 'name'], ...(club ? [['Club', 'club']] : []), ['Pos', 'pos'], ['Age', 'age', 'n'], ['Ovr', 'ovr', 'n'], ['Value', 'value', 'n'], ['Known', 'known', 'n']]);
+const squadHead = table => heads(table, [['Name', 'name'], ['Pos', 'pos'], ['Age', 'age', 'n'], ['Ovr', 'ovr', 'n'], ['Value', 'value', 'n']]);
 const label = k => k.replace(/[A-Z]/g, c => ' ' + c.toLowerCase());
 const clubName = id => esc(s.clubs[id].name);
 const badge = (id, size = 20) => crestSvg(s.clubs[id], size);
@@ -95,9 +109,8 @@ const moneySpan = ([lo, hi]) => lo === hi ? money(lo) : `€${(lo / 1e6).toFixed
 const scale = (x, [lo, hi], v) => [lo, hi].map(e => Math.round(x * e / v / 1e4) * 1e4); // a price that moves with value, over the value estimate
 // Cells for a player you may not know fully: position, age, overall and value as estimates, knowledge.
 const estCells = (p, e) => `<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${span(e.ovr)}</td><td class="n">${moneySpan(e.value)}</td><td class="n dim">${e.k}%</td>`;
-const EST_HEAD = '<th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Value</th><th class="n">Known</th>';
 // A club in a narrow column: badge and three-letter code (full name on hover).
-const clubCell = c => c ? `<span title="${esc(c.name)}">${badge(c.id, 16)} ${esc(c.short)}</span>` : '<span class="dim">free</span>';
+const clubCell = c => c ? `<button class="link" data-act="club" data-id="${c.id}" title="${esc(c.name)}">${badge(c.id, 16)} ${esc(c.short)}</button>` : '<span class="dim">free</span>';
 const star = id => `<button class="link" data-act="shortlist" data-id="${id}" title="shortlist" aria-label="shortlist">${s.shortlist.includes(id) ? '★' : '☆'}</button>`;
 const taskText = t => t.kind === 'free' ? 'the free agents' : t.kind === 'division' ? esc(s.divisions[t.id].name) : t.kind === 'club' ? clubName(t.id)
   : esc(allPlayers().find(p => p.id === t.id)?.name ?? 'a player who has gone');
@@ -191,16 +204,48 @@ const potential = (p, e) => {
   const txt = span([Math.max(lo, now), Math.max(hi, now)]);
   return p.age >= DECLINE_AGE ? `<s style="opacity:.6" title="past his peak: he declines from here, so this is out of reach">${txt}</s>` : `<b>${txt}</b>`;
 };
-function profile() {
-  const p = allPlayers().find(x => x.id === viewing);
-  if (!p) return '';
-  const c = clubOfPlayer(p), e = estimate(s, p, c), r = e.k < 100 ? ranges(s, p, c) : null;
+// A club name that opens its profile.
+const clubLink = (id, size = 16) => `<button class="link" data-act="club" data-id="${id}">${badge(id, size)} ${clubName(id)}</button>`;
+const statsText = p => p.stats?.apps ? `${p.stats.apps} app${p.stats.apps > 1 ? 's' : ''} · ${p.stats.goals} goal${p.stats.goals === 1 ? '' : 's'} · ${p.stats.assists} assist${p.stats.assists === 1 ? '' : 's'} · average rating ${(p.stats.rating / p.stats.apps).toFixed(2)}` : 'no matches yet';
+
+// Player profile: a screen of its own, opened from any name. Read-only: actions live on their screens, linked from here.
+// ponytail: season stats only; career totals need a field kept across seasons (a save migration), add if wanted.
+export function playerView(id) {
+  const p = allPlayers().find(x => x.id === id);
+  if (!p) { viewing = null; return '<p class="dim">That player has gone.</p>'; }
+  const c = clubOfPlayer(p), e = estimate(s, p, c), r = e.k < 100 ? ranges(s, p, c) : null, mine = c?.id === s.me;
   const shown = k => r ? span(r[k]) : p.attrs[k], high = k => (r ? r[k][0] : p.attrs[k]) >= 15;
   const group = ([title, keys]) => `<h3>${title}</h3>` + keys.map(k => `<div><span>${label(k)}</span><b class="${high(k) ? 'hi' : ''}">${shown(k)}</b></div>`).join('');
   const known = e.k < 100 ? ` · <span class="dim">known ${e.k}%</span> ${e.ovr[0] < e.ovr[1] && s.scouts.some(x => !x.task) ? `<button data-act="scoutPlayer" data-id="${p.id}">Scout him</button>` : ''}` : '';
-  return `<div class="attrs"><div class="ph">${c?.id === s.me ? '' : star(p.id)}<b class="pname">${esc(p.name)}</b><span class="dim">${p.pos} · age ${p.age}${retires(p) ? ` <span class="oop">⏳ ${retires(p)}</span>` : ''} · ${c ? clubName(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · potential ${potential(p, e)} · ${moneySpan(e.value)}${known}</span>
+  const go = (t, text) => `<button data-act="tab" data-tab="${t}">${text}</button>`;
+  const links = s.youth.includes(p) ? go('Youth', 'Youth squad') : mine ? go('Contracts', 'Contract') + go('Transfers', 'Sell or list') + go('Training', 'Training')
+    : `<button data-act="findPlayer" data-id="${p.id}">${c ? 'Bid on Transfers' : 'Sign on Transfers'}</button>`;
+  return `<div class="attrs"><div class="ph">${mine ? '' : star(p.id)}<b class="pname">${esc(p.name)}</b><span class="dim">${p.pos} · age ${p.age}${retires(p) ? ` <span class="oop">⏳ ${retires(p)}</span>` : ''} · ${c ? clubLink(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · potential ${potential(p, e)} · ${moneySpan(e.value)}${known}</span>
     <button data-act="close">Close</button></div>
-    <p>Condition ${p.cond}% · sharpness ${Math.round(p.sharp)}% · morale ${moraleLabel(p.morale)} · form ${formAvg(p) ?? '–'} · ${p.yc} league yellow${p.yc === 1 ? '' : 's'}${status(p) ? ` · <span class="oop">${status(p)}</span>` : ''}${p.contract ? ` · contract ${perWeek(p.contract.wage)} until season ${p.contract.until}${p.contract.clause ? `, release clause ${money(p.contract.clause)}` : ''}` : ''}</p>${Object.entries(ATTRS).map(group).join('')}</div>`;
+    <p>Condition ${p.cond}% · sharpness ${Math.round(p.sharp)}% · morale ${moraleLabel(p.morale)} · form ${formAvg(p) ?? '–'} · ${p.yc} league yellow${p.yc === 1 ? '' : 's'}${status(p) ? ` · <span class="oop">${status(p)}</span>` : ''}${p.contract ? ` · contract ${perWeek(p.contract.wage)} until season ${p.contract.until}${p.contract.clause ? `, release clause ${money(p.contract.clause)}` : ''}` : ''}</p>
+    <p>This season: ${statsText(p)}</p><div class="bar" style="grid-column:1/-1">${links}</div>${Object.entries(ATTRS).map(group).join('')}</div>`;
+}
+
+// Honours a club has won, from the season history.
+const honoursOf = id => s.history.flatMap(h => [
+  ...h.divs.flatMap((x, d) => [x.champion === id && `${esc(s.divisions[d].name)} champions ${h.season}`, x.playoff === id && `${esc(s.divisions[d].name)} play-off winners ${h.season}`]),
+  h.cup?.winner === id && `${CUP_NAME} winners ${h.season}`]).filter(Boolean);
+
+// Club profile: badge, league record, finances, squad (estimates for other clubs: the fog rule), deals and honours.
+export function clubView(id) {
+  const c = s.clubs[id], t = c.st, mine = id === s.me, pos = table(s, c.div).indexOf(id) + 1;
+  const last = s.last?.find(r => r.h === id || r.a === id);
+  const deals = s.deals.filter(d => d.from === id || d.to === id).slice(-8).reverse().map(d => `<div>${dealText(d)}</div>`).join('');
+  const squad = mine ? squadOrder('club', c.players).map(p => `<tr>${nameBtn(p, 'view')}${cells(p)}</tr>`).join('')
+    : estOrder('club', byPos(c.players).map(p => ({ p, c, e: estimate(s, p, c) }))).map(({ p, e }) => `<tr>${nameBtn(p, 'view')}${estCells(p, e)}</tr>`).join('');
+  const honours = honoursOf(id);
+  return `<div class="ph club">${crestSvg(c, 56)}${kitSvg(c.kit, 56)}<b>${esc(c.name)}</b><button data-act="close" style="margin-left:auto">Close</button></div>
+    <p>${esc(s.divisions[c.div].name)} · ${ordinal(pos)} · P ${t.p} W ${t.w} D ${t.d} L ${t.l} · goals ${t.gf}–${t.ga} · ${t.pts} pts${last ? ` · latest: ${scoreLine(last)}` : ''}</p>
+    <p>Balance ${money(c.fin.balance)} · wage bill ${perWeek(wageBill(c))} · expected income ${money(projection(s, c))} a season · club value ${money(clubValue(s, c))}</p>
+    ${mine ? '' : `<div class="bar"><button data-act="browse" data-id="${id}">Browse their players on Transfers</button></div>`}
+    <h2>Squad (${c.players.length})</h2><div class="wrap"><table><tr>${mine ? squadHead('club') : estHead('club')}</tr>${squad}</table></div>
+    <h2>Honours</h2>${honours.map(x => `<div>🏆 ${x}</div>`).join('') || '<p class="dim">None in this save yet.</p>'}
+    <h2>Deals this season</h2>${deals || '<p class="dim">None yet.</p>'}`;
 }
 
 const views = {
@@ -242,8 +287,8 @@ const views = {
       Hard trains faster, but players recover less between matches and get hurt more often; Light is the reverse. Rest stops improvement and speeds recovery.
       Each player can train at his own intensity; a personal Rest means no improvement and no training injuries.
       Keepers always work on goalkeeping. An individual focus takes half of a player's improvement. Players aged 31 and over slowly lose pace, stamina, strength and agility whatever you do.`)}
-      <div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Gained</th><th>Individual focus</th><th>Intensity</th></tr>
-      ${byPos(myClub(s).players).map(p => `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${p.gain ? '+' + p.gain : ''}</td><td>${focus(p)}</td><td>${load(p)}</td></tr>`).join('')}</table></div>`;
+      <div class="wrap"><table><tr>${sortHead('Name', 'train', 'name', sorts.train)}${sortHead('Pos', 'train', 'pos', sorts.train)}${sortHead('Age', 'train', 'age', sorts.train, 'n')}${sortHead('Ovr', 'train', 'ovr', sorts.train, 'n')}${sortHead('Gained', 'train', 'gain', sorts.train, 'n')}<th>Individual focus</th><th>Intensity</th></tr>
+      ${squadOrder('train', myClub(s).players).map(p => `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${p.gain ? '+' + p.gain : ''}</td><td>${focus(p)}</td><td>${load(p)}</td></tr>`).join('')}</table></div>`;
   },
   Match() {
     if (s.live) return liveView();
@@ -277,9 +322,11 @@ const views = {
   },
   Table() {
     const cols = ['P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts'];
-    const row = (id, k) => { const t = s.clubs[id].st; return `<tr class="${id === s.me ? 'me' : ''} ${zone(s, tableDiv, k) || ''}"><td class="n">${k + 1}</td><td>${badge(id, 18)}${clubName(id)}</td>${[t.p, t.w, t.d, t.l, t.gf, t.ga, t.gf - t.ga, t.pts].map(v => `<td class="n">${v}</td>`).join('')}</tr>`; };
+    // Sorting reorders the rows; # and the zone colours stay the real league position.
+    const st = id => s.clubs[id].st, LEAGUE_COLS = { pos: x => x.k, club: x => s.clubs[x.id].name, p: x => st(x.id).p, w: x => st(x.id).w, d: x => st(x.id).d, l: x => st(x.id).l, gf: x => st(x.id).gf, ga: x => st(x.id).ga, gd: x => st(x.id).gf - st(x.id).ga, pts: x => st(x.id).pts };
+    const row = ({ id, k }) => { const t = s.clubs[id].st; return `<tr class="${id === s.me ? 'me' : ''} ${zone(s, tableDiv, k) || ''}"><td class="n">${k + 1}</td><td>${clubLink(id, 18)}</td>${[t.p, t.w, t.d, t.l, t.gf, t.ga, t.gf - t.ga, t.pts].map(v => `<td class="n">${v}</td>`).join('')}</tr>`; };
     return `<div class="bar">${s.divisions.map((d, i) => `<button data-act="div" data-id="${i}" class="${i === tableDiv ? 'on' : ''}">${esc(d.name)}</button>`).join('')}</div>
-      <h2>Season ${s.season}</h2><div class="wrap"><table><tr><th class="n">#</th><th>Club</th>${cols.map(c => `<th class="n">${c}</th>`).join('')}</tr>${table(s, tableDiv).map(row).join('')}</table></div>
+      <h2>Season ${s.season}</h2><div class="wrap"><table><tr>${heads('league', [['#', 'pos', 'n'], ['Club', 'club'], ...cols.map(c => [c, c.toLowerCase(), 'n'])])}</tr>${order('league', LEAGUE_COLS, table(s, tableDiv).map((id, k) => ({ id, k })), l => l).map(row).join('')}</table></div>
       <p class="dim">${[['up', 'promoted'], ['playoff', 'play-offs'], ['down', 'relegated']].filter(([z]) => s.divisions[tableDiv].clubIds.some((_, k) => zone(s, tableDiv, k) === z)).map(([z, text]) => `<span class="key ${z}"></span>${text}`).join(' ')}</p>
       ${s.playoffs[tableDiv] ? `<h2>Play-offs</h2>${knockout(s.playoffs[tableDiv].rounds.map((rd, k) => [k ? 'Final' : 'Semi-finals', rd.ties]))}` : ''}`;
   },
@@ -324,14 +371,15 @@ const views = {
       const a = askSpan(p, c, e);
       return `${feeBox(p.id, t?.counter ?? Math.round((a[0] + a[1]) / 2e4) * 1e4)} <button data-act="bid" data-id="${p.id}">Bid</button>${t?.counter ? ` <button data-act="counter" data-id="${p.id}">Pay ${money(t.counter)}</button>` : ''}${loanable(s, c, p) ? ` <button data-act="loan" data-id="${p.id}">Loan (${perWeek(loanPay(p.contract.wage))})</button>` : ''}`;
     };
-    const found = searchPlayers(s, filters).map(({ p, c, est: e }) => `<tr><td>${star(p.id)}</td>${nameBtn(p, 'view')}<td>${clubCell(c)}</td>${estCells(p, e)}
+    const found = estOrder('find', searchPlayers(s, filters).map(({ p, c, est: e }) => ({ p, c, e }))).map(({ p, c, e }) => `<tr><td>${star(p.id)}</td>${nameBtn(p, 'view')}<td>${clubCell(c)}</td>${estCells(p, e)}
       <td class="n">${c ? moneySpan(askSpan(p, c, e)) : moneySpan(scale(signingFee(p), e.value, value(p)))}</td><td>${deal(p, c, e)}</td></tr>`);
-    const listed = s.clubs.filter(x => x !== me).flatMap(x => x.players.filter(p => p.listed === 'sale').map(p => { const e = estimate(s, p, x); return `<tr>${nameBtn(p, 'view')}${estCells(p, e)}<td><button class="link" data-act="browse" data-id="${x.id}">${clubName(x.id)}</button></td><td class="n">${moneySpan(askSpan(p, x, e))}</td></tr>`; }));
+    const listed = estOrder('listed', s.clubs.filter(x => x !== me).flatMap(c => c.players.filter(p => p.listed === 'sale').map(p => ({ p, c, e: estimate(s, p, c) }))))
+      .map(({ p, c: x, e }) => `<tr>${nameBtn(p, 'view')}<td>${clubLink(x.id)}</td>${estCells(p, e)}<td class="n">${moneySpan(askSpan(p, x, e))}</td></tr>`);
     const listing = p => `<select data-act="listing" data-id="${p.id}">${options([['', 'Not listed'], ['sale', 'For sale'], ...(p.age <= 23 ? [['loan', 'For loan']] : [])], p.listed ?? '')}</select>`;
-    const mine = byPos(me.players).map(p => `<tr>${nameBtn(p, 'view')}${cells(p)}<td>${p.loan ? `<span class="dim">on loan from ${clubName(p.loan.from)}</span>` : listing(p)}</td>
+    const mine = squadOrder('sell', me.players).map(p => `<tr>${nameBtn(p, 'view')}${cells(p)}<td>${p.loan ? `<span class="dim">on loan from ${clubName(p.loan.from)}</span>` : listing(p)}</td>
       <td>${p.loan || justJoined(s, p) ? '' : `<button data-act="sell" data-id="${p.id}">Quick sale ${money(Math.round(QUICK_SALE * value(p) / 1e4) * 1e4)}</button>`}</td></tr>`);
     const away = s.clubs.flatMap(x => x.players.filter(p => p.loan?.from === s.me).map(p => `<tr>${nameBtn(p, 'view')}${cells(p)}<td>at ${clubName(x.id)} until the end of season ${p.loan.until}</td></tr>`));
-    const free = byPos(s.market).map(p => { const e = estimate(s, p, null); return `<tr><td>${star(p.id)}</td>${nameBtn(p, 'view')}${estCells(p, e)}<td class="n">${moneySpan(scale(signingFee(p), e.value, value(p)))}</td><td class="dim">${termsText(terms(s, p))}</td><td><button data-act="buy" data-id="${p.id}">Sign</button></td></tr>`; });
+    const free = order('free', EST_COLS, s.market.map(p => ({ p, c: null, e: estimate(s, p, null) })), l => [...l].sort((a, b) => POS.indexOf(a.p.pos) - POS.indexOf(b.p.pos) || overall(b.p) - overall(a.p))).map(({ p, e }) => { return `<tr><td>${star(p.id)}</td>${nameBtn(p, 'view')}${estCells(p, e)}<td class="n">${moneySpan(scale(signingFee(p), e.value, value(p)))}</td><td class="dim">${termsText(terms(s, p))}</td><td><button data-act="buy" data-id="${p.id}">Sign</button></td></tr>`; });
     const biggest = s.deals.filter(d => !d.loan && d.from !== null && d.to !== null).sort((a, b) => b.fee - a.fee).slice(0, 10).map(d => `<div>${dealText(d)}</div>`).join('');
     const f = filters, pick = (id, pairs, v) => `<select id="${id}">${options(pairs, v ?? '')}</select>`;
     const divPairs = [['', 'Any division'], ...s.divisions.map((d, i) => [String(i), d.name]), ['free', 'Free agents']];
@@ -346,11 +394,11 @@ const views = {
       ${help(`Bid for players at other clubs while a window is open: a club takes ${Math.round(0.9 * 100)}% of its asking price or counters, and talks stop after three rounds. Players under 24 who are not regulars can come on loan for half their wage. Free agents sign at any time for a signing-on fee of half their value.`)}
       <h2>Offers for your players</h2>${table(`${HEAD}<th>From</th><th class="n">Fee</th><th></th>`, offers)}
       <h2>Find players</h2><p class="dim">Premier League players are well known. Elsewhere you see estimates until your scouts report (Scouting); ☆ adds a player to your shortlist. Best 60 shown.</p>${search}
-      ${table(`<th></th><th>Name</th><th>Club</th>${EST_HEAD.replace('<th>Name</th>', '')}<th class="n">Price</th><th>Deal</th>`, found)}
-      <h2>Transfer list</h2><p class="dim">Clubs in debt put their best-paid players up for sale, cheaper.</p>${table(`${EST_HEAD}<th>Club</th><th class="n">Asking</th>`, listed)}
-      <h2>Your squad (${me.players.length}/${MAX_SQUAD})</h2><p class="dim">List a player and clubs bid for him during a window. A quick sale gets ${QUICK_SALE * 100}% of his value at once.</p>${table(`${HEAD}<th>Listing</th><th></th>`, mine)}
+      ${table(`<th></th>${estHead('find', true)}<th class="n">Price</th><th>Deal</th>`, found)}
+      <h2>Transfer list</h2><p class="dim">Clubs in debt put their best-paid players up for sale, cheaper.</p>${table(`${estHead('listed', true)}<th class="n">Asking</th>`, listed)}
+      <h2>Your squad (${me.players.length}/${MAX_SQUAD})</h2><p class="dim">List a player and clubs bid for him during a window. A quick sale gets ${QUICK_SALE * 100}% of his value at once.</p>${table(`${squadHead('sell')}<th>Listing</th><th></th>`, mine)}
       <h2>Out on loan</h2>${table(`${HEAD}<th></th>`, away)}
-      <h2>Free agents</h2>${table(`<th></th>${EST_HEAD}<th class="n">Signing fee</th><th>Asks</th><th></th>`, free)}
+      <h2>Free agents</h2>${table(`<th></th>${estHead('free')}<th class="n">Signing fee</th><th>Asks</th><th></th>`, free)}
       <h2>Biggest deals this season</h2>${biggest || '<p class="dim">None yet.</p>'}`;
   },
   Contracts() {
@@ -362,7 +410,7 @@ const views = {
     };
     return `<h2>Contracts</h2><p>Wage bill ${perWeek(wageBill(club))}.</p>
       ${help(`A player whose contract ends this season or next names his terms for a new one: accept them, or he leaves when his contract ends. If too many leave, academy players fill the squad.`)}
-      <div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Wage</th><th>Until</th><th class="n">Clause</th><th>New contract</th></tr>${byPos(club.players).map(row).join('')}</table></div>`;
+      <div class="wrap"><table><tr>${sortHead('Name', 'contracts', 'name', sorts.contracts)}${sortHead('Pos', 'contracts', 'pos', sorts.contracts)}${sortHead('Age', 'contracts', 'age', sorts.contracts, 'n')}${sortHead('Ovr', 'contracts', 'ovr', sorts.contracts, 'n')}${sortHead('Wage', 'contracts', 'wage', sorts.contracts, 'n')}${sortHead('Until', 'contracts', 'until', sorts.contracts)}${sortHead('Clause', 'contracts', 'clause', sorts.contracts, 'n')}<th>New contract</th></tr>${squadOrder('contracts', club.players).map(row).join('')}</table></div>`;
   },
   Finances() {
     const c = myClub(s), L = c.fin.season, line = (name, v) => `<tr><td>${name}</td><td class="n">${money(v)}</td></tr>`;
@@ -380,14 +428,13 @@ views.Scouting = () => {
   const taskValue = sc => sc.task ? sc.task.kind === 'free' ? 'free' : `${sc.task.kind}:${sc.task.id}` : '';
   const scouts = s.scouts.map((sc, k) => `<tr><td>Scout ${k + 1}</td><td>${sc.task ? `${taskText(sc.task)} · reports in ${outFor(sc.days)}` : '<span class="dim">idle</span>'}</td>
     <td><select data-act="assign" data-id="${k}">${options(taskPairs.some(([v]) => v === taskValue(sc)) ? taskPairs : [...taskPairs, [taskValue(sc), 'Player: ' + taskText(sc.task)]], taskValue(sc))}</select></td></tr>`).join('');
-  const list = s.shortlist.map(id => allPlayers().find(p => p.id === id)).filter(Boolean).map(p => {
-    const c = clubOfPlayer(p), e = estimate(s, p, c);
+  const list = estOrder('short', s.shortlist.map(id => allPlayers().find(p => p.id === id)).filter(Boolean).map(p => { const c = clubOfPlayer(p); return { p, c, e: estimate(s, p, c) }; })).map(({ p, c, e }) => {
     return `<tr><td>${star(p.id)}</td>${nameBtn(p, 'view')}<td>${clubCell(c)}</td>${estCells(p, e)}<td>${e.ovr[0] < e.ovr[1] && s.scouts.some(x => !x.task) ? `<button data-act="scoutPlayer" data-id="${p.id}">Scout</button>` : ''}</td></tr>`;
   });
   const days = Object.entries(TASKS).map(([k, t]) => `${k === 'free' ? 'the free agents' : 'a ' + k}: ${taskDays(s, k)} days, to ${t.level}%`).join(' · ');
   return `<h2>Scouts</h2>${help(`Send a scout to watch a player, a club, a division or the free agents. When he reports, you know everyone he watched: ${days}. What you know fades over two seasons, and Premier League players are always known. Your scouting staff level (Staff) sets how many scouts you have and how fast they work.`)}
     <div class="wrap"><table>${scouts}</table></div>
-    <h2>Shortlist</h2>${list.length ? `<div class="wrap"><table><tr><th></th><th>Name</th><th>Club</th>${EST_HEAD.replace('<th>Name</th>', '')}<th></th></tr>${list.join('')}</table></div>` : '<p class="dim">Empty: add players with ☆ on Transfers or a profile.</p>'}`;
+    <h2>Shortlist</h2>${list.length ? `<div class="wrap"><table><tr><th></th>${estHead('short', true)}<th></th></tr>${list.join('')}</table></div>` : '<p class="dim">Empty: add players with ☆ on Transfers or a profile.</p>'}`;
 };
 
 views.Staff = () => {
@@ -405,10 +452,10 @@ views.Staff = () => {
 };
 
 views.Youth = () => {
-  const rows = byPos(s.youth).map(p => { const [lo, hi] = ceilingRange(s, p); return `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${lo}–${hi}</td>
+  const rows = squadOrder('youth', s.youth).map(p => { const [lo, hi] = ceilingRange(s, p); return `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${lo}–${hi}</td>
     <td><button data-act="promote" data-id="${p.id}">Promote (${perWeek(wage(p))})</button> <button data-act="releaseYouth" data-id="${p.id}">Release</button></td></tr>`; }).join('');
   return `<h2>Youth squad (${s.youth.length}/${YOUTH_MAX})</h2>${help(`Youngsters train every week but play no matches and earn nothing. A new intake arrives each summer; at ${LEAVE_AGE} those still here leave. Ceiling: the overall your coaches think he can reach (better coaching, a closer guess). When contracts end and the first team runs short, the best youth player in the position steps up.`)}
-    ${rows ? `<div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Ceiling</th><th></th></tr>${rows}</table></div>` : '<p class="dim">Empty until the summer intake.</p>'}`;
+    ${rows ? `<div class="wrap"><table><tr>${heads('youth', [['Name', 'name'], ['Pos', 'pos'], ['Age', 'age', 'n'], ['Ovr', 'ovr', 'n'], ['Ceiling', 'ceil', 'n'], ['']])}</tr>${rows}</table></div>` : '<p class="dim">Empty until the summer intake.</p>'}`;
 };
 
 // When a news item happened: 'Season 2, Sat 8 Aug', or 'Season 2, pre-season'.
@@ -495,10 +542,12 @@ const actions = {
     };
     f.click();
   },
-  tab(_, el) { tab = el.dataset.tab; sel = viewing = null; },
+  tab(_, el) { tab = el.dataset.tab; sel = viewing = clubOpen = null; },
   div(id) { tableDiv = id; },
   view(id) { viewing = id; },
-  close() { viewing = null; },
+  club(id) { clubOpen = id; viewing = null; },
+  close() { if (viewing !== null) viewing = null; else clubOpen = null; }, // a player opened from a club profile closes back to the club
+  findPlayer(id) { const p = allPlayers().find(x => x.id === id); filters = { name: p?.name ?? '' }; tab = 'Transfers'; viewing = clubOpen = null; },
   auto() { autoPick(s); sel = null; },
   formation(_, el) { s.formation = el.value; autoPick(s); sel = null; },
   pick(id) {
@@ -540,7 +589,7 @@ const actions = {
   end() { endSeason(s); tab = s.me === null ? 'Inbox' : 'History'; if (s.me !== null) tableDiv = myClub(s).div; },
   buy(id) { msg = buy(s, id, ownPay) || 'Signed.'; },
   ownPay(_, el) { ownPay = el.checked; },
-  browse(id) { filters = { club: String(id) }; tab = 'Transfers'; },
+  browse(id) { filters = { club: String(id) }; tab = 'Transfers'; viewing = clubOpen = null; },
   search() {
     const v = id => $(id).value, n = id => +v(id) || null;
     filters = { pos: v('f-pos'), div: v('f-div'), club: v('f-club'), maxAge: n('f-age'), minOvr: n('f-ovr'), maxValue: n('f-val') && n('f-val') * 1e6,
@@ -567,13 +616,14 @@ const actions = {
   counterOffer(id) { msg = counterOffer(s, id, feeOf(id)) || 'They agreed: sold.'; },
   renew(id) { msg = renewContract(s, id) || 'Contract agreed.'; },
   sell(id) { msg = sell(s, id) || 'Sold.'; if (viewing === id) viewing = null; },
+  sortBy(_, el) { sorts[el.dataset.table] = nextSort(sorts[el.dataset.table], el.dataset.key); },
 };
 
 function render() {
   if (s.me === null && s.career) {
     if (!UNEMPLOYED.includes(tab)) tab = 'Inbox';
     $('info').textContent = `Out of work · reputation ${s.career.rep} · Season ${s.season}`;
-    const main = `<div class="msg" role="status">${msg}</div>` + outOfWork() + views[tab](); // first: the inbox marks what it shows as read
+    const main = `<div class="msg" role="status">${msg}</div>` + (viewing !== null ? playerView(viewing) : clubOpen !== null ? clubView(clubOpen) : outOfWork() + views[tab]()); // first: the inbox marks what it shows as read
     $('nav').innerHTML = UNEMPLOYED.map(navButton).join('');
     $('sys').innerHTML = NEW_GAME + SAVE_BUTTONS;
     $('main').innerHTML = main;
@@ -590,7 +640,9 @@ function render() {
   $('info').innerHTML = `${badge(s.me, 22)}<b>${clubName(s.me)}</b><span>${esc(s.divisions[myClub(s).div].name)} · Season ${s.season} · ${s.done ? 'season over' : dateLabel(s.days[s.next].day)}</span>
     <span class="chip" title="transfer budget">Transfers ${money(s.budget)}</span><span class="chip" title="wage bill">Wages ${perWeek(wageBill(myClub(s)))}</span>`;
   if (s.live) tab = 'Match'; // the other screens wait for the final whistle
-  const main = `<div class="msg" role="status">${msg}</div>` + profile() + views[tab](); // first: the inbox marks what it shows as read
+  // A profile replaces the screen until closed; never during a live match.
+  const screen = s.live ? views[tab]() : viewing !== null ? playerView(viewing) : clubOpen !== null ? clubView(clubOpen) : views[tab]();
+  const main = `<div class="msg" role="status">${msg}</div>` + screen; // first: the inbox marks what it shows as read
   $('nav').innerHTML = (s.live ? ['Match'] : Object.keys(views)).map(navButton).join('');
   $('sys').innerHTML = NEW_GAME + SAVE_BUTTONS;
   $('main').innerHTML = main;
