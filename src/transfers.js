@@ -1,5 +1,4 @@
 import { value } from './player.js';
-import { wageBill, staffBill } from './finance.js';
 import { terms } from './contracts.js';
 import { MIN_SQUAD, MAX_SQUAD, FLOOR, WALKAWAY, ROUNDS, QUICK_SALE, MAX_LOANS, LOAN_AGE, round10k, eur, windowOpen, windowId, justJoined,
   loanEnd, loanPay, asking, signingFee, refusal, move, lend, loanable } from './market.js';
@@ -16,7 +15,6 @@ function atClub(s, id) {
   for (const c of s.clubs) if (c.id !== s.me) { const p = c.players.find(x => x.id === id); if (p) return { p, c }; }
   return null;
 }
-const overWages = (s, extra) => wageBill(s.clubs[s.me]) + staffBill(s, s.clubs[s.me]) + extra > s.wageBudget; // staff beyond the standard count too
 // Why the human club can't take p on now (any deal), or null.
 function cannotTake(s, p) {
   if (s.clubs[s.me].players.length >= MAX_SQUAD) return `Squad is full (${MAX_SQUAD}).`;
@@ -33,7 +31,7 @@ function cannotLose(s, p) {
   return null;
 }
 
-// Free agents: a signing-on fee (half his value) from the transfer budget, his terms within the wage budget.
+// Free agents: a signing-on fee (half his value) from the transfer budget.
 // own: the manager pays from his own money (s.career.money) and owns the player; the club still pays his wages.
 const cannotPay = (s, fee, own) => own ? (!s.career ? 'You have no money of your own.' : fee > s.career.money ? 'You cannot afford that yourself.' : null)
   : fee > s.budget ? 'Not enough transfer budget.' : null;
@@ -45,7 +43,6 @@ export function buy(s, id, own = false) {
   if (no) return no;
   const no2 = cannotPay(s, signingFee(p), own);
   if (no2) return no2;
-  if (overWages(s, terms(s, p).wage)) return 'Over the wage budget.';
   move(s, p, null, club, signingFee(p), own);
   return null;
 }
@@ -74,7 +71,6 @@ export function bid(s, id, fee, own = false) {
   if (c.players.length <= MIN_SQUAD) return `${c.name} won't sell: they need every player.`;
   const broke = cannotPay(s, fee, own);
   if (broke) return broke;
-  if (overWages(s, terms(s, p).wage)) return 'Over the wage budget.';
   const t = talks(s, id), ask = asking(s, c, p);
   if ((p.contract.clause && fee >= p.contract.clause) || fee >= round10k(FLOOR * ask) || (t.counter && fee >= t.counter)) {
     move(s, p, c, me, fee, own);
@@ -101,7 +97,6 @@ export function loanIn(s, id) {
   const no = cannotTake(s, p) ?? (loanable(s, c, p) ? refusal(c, me, p, s.career?.rep) : `${c.name} won't lend ${p.name}.`);
   if (no) return no;
   if (me.players.filter(x => x.loan).length >= MAX_LOANS) return `You can have at most ${MAX_LOANS} players on loan.`;
-  if (overWages(s, loanPay(p.contract.wage))) return 'Over the wage budget.';
   lend(s, p, c, me);
   return null;
 }

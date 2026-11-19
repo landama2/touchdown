@@ -1,4 +1,4 @@
-import { wageBill, staffBill, STANDARD } from './finance.js';
+import { STANDARD } from './finance.js';
 
 // Backroom staff as levels 1-5 in three areas, for every club: c.staff = { coaching, scouting, medical }.
 // Level 3 changes nothing (the game was calibrated without staff); each step up or down moves:
@@ -34,13 +34,10 @@ export function aiStaff(s) {
   }
 }
 
-// Sets the human club's level in one area. Going up must fit the wage budget together with the wage
-// bill (staff costs count against it). Error message or null.
+// Sets the human club's level in one area; the cost is paid weekly (payWeeks). Error message or null.
 export function setStaff(s, area, level) {
   const c = s.clubs[s.me];
   if (!AREAS.includes(area) || !Number.isInteger(level) || level < 1 || level > 5) return 'Unknown staff level.';
-  const old = c.staff[area];
   c.staff[area] = level;
-  if (level > old && wageBill(c) + staffBill(s, c) > s.wageBudget) { c.staff[area] = old; return 'Over the wage budget.'; }
   return null;
 }

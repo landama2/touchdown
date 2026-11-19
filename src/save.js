@@ -6,12 +6,12 @@ import { blankRecords } from './awards.js';
 import { freshState } from './player.js';
 import { defaultTraining } from './training.js';
 import { startContract } from './contracts.js';
-import { newBooks, seasonBudgets } from './finance.js';
+import { newBooks, seasonBudgets, WAGE_CUT } from './finance.js';
 import { staffScouts } from './scouting.js';
 import { aiStaff, standardStaff } from './staff.js';
 import { BOARD_START, REP_START } from './world.js';
 
-export const SAVE_VERSION = 12; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad. 11: boards, the manager's career, the inbox. 12: per-player training intensity, the manager's money
+export const SAVE_VERSION = 13; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad. 11: boards, the manager's career, the inbox. 12: per-player training intensity, the manager's money. 13: no wage budget, wages cut to a fifth
 export const KEY = 'touchline.save';
 
 export const serialize = state => JSON.stringify(state);
@@ -23,7 +23,7 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
   && Array.isArray(s.bench) && !!s.tactics && Array.isArray(s.tactics.slots) && !!s.fam && typeof s.fam === 'object'
   && Array.isArray(s.days) && Number.isInteger(s.next) && Array.isArray(s.playoffs) && Array.isArray(s.records) && (s.cup === null || typeof s.cup === 'object')
   && !!s.training && !!s.training.ind && typeof s.training.ind === 'object' && !!s.training.load && typeof s.training.load === 'object' && Array.isArray(s.news)
-  && Number.isFinite(s.wageBudget) && s.clubs.every(c => c.fin && Number.isFinite(c.fin.balance) && !!c.fin.season)
+  && s.clubs.every(c => c.fin && Number.isFinite(c.fin.balance) && !!c.fin.season)
   && Array.isArray(s.offers) && !!s.talks && Array.isArray(s.deals) && s.clubs.every(c => Number.isFinite(c.lentPay))
   && !!s.known && typeof s.known === 'object' && Array.isArray(s.scouts) && Array.isArray(s.shortlist)
   && Array.isArray(s.youth) && s.clubs.every(c => c.staff && Number.isInteger(c.staff.coaching))
@@ -56,9 +56,8 @@ const MIGRATIONS = {
     s.training = defaultTraining(); s.news = [];
   },
   6: s => { // contracts from this season, opening books, budgets (money in History stays in the old scale)
-    for (const c of s.clubs) { for (const p of c.players) p.contract = startContract(p, s.season); c.fin = newBooks(s, c); }
+    for (const c of s.clubs) { for (const p of c.players) { p.contract = startContract(p, s.season); p.contract.wage *= WAGE_CUT; } c.fin = newBooks(s, c); } // Phase 6 wages: migration 12 cuts them
     for (const p of s.market) p.contract = null;
-    s.wageBudget = 0;
     if (s.me !== null) seasonBudgets(s);
   },
   7: s => { s.offers = []; s.talks = { win: null, by: {} }; s.deals = []; for (const c of s.clubs) c.lentPay = 0; }, // the market opens
@@ -76,6 +75,12 @@ const MIGRATIONS = {
     s.training.load = {};
     for (const c of s.clubs) c.fin.season.dividends = 0;
     if (s.career) Object.assign(s.career, { money: 0, shares: {} }); // the current spell's salary is set when first paid (career.js)
+  },
+  12: s => { // no wage budget; every wage (contracts, the part still paid for loans) falls to a fifth
+    delete s.wageBudget;
+    const cut = w => Math.max(100, Math.round(w / WAGE_CUT / 100) * 100);
+    for (const p of [...s.clubs.flatMap(c => c.players), ...s.youth]) if (p.contract) p.contract.wage = cut(p.contract.wage);
+    for (const c of s.clubs) c.lentPay = Math.round(c.lentPay / WAGE_CUT);
   },
 };
 

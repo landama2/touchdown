@@ -411,7 +411,7 @@ test('budgets: set when you take a club and again each season from the books', (
   const s = world(20);
   takeClub(s, 6);
   assert.equal(s.budget, Math.max(0, Math.round(0.75 * myClub(s).fin.balance / 1e5) * 1e5));
-  assert.ok(s.wageBudget >= wageBill(myClub(s)));
+  assert.equal(s.wageBudget, undefined);
   while (!s.done) playDay(s);
   endSeason(s);
   assert.equal(s.budget, Math.max(0, Math.round(0.75 * myClub(s).fin.balance / 1e5) * 1e5));

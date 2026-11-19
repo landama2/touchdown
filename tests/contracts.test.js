@@ -8,7 +8,7 @@ import { yearsFor, startContract, terms, canRenew, renew, expireContracts, acade
 import { MINI } from './fixtures/mini.js';
 
 // A mini world managed from club 6 with a wage budget that never gets in the way.
-const fresh = seed => { const s = createWorld(seed, MINI); s.me = 6; s.wageBudget = 1e12; return s; };
+const fresh = seed => { const s = createWorld(seed, MINI); s.me = 6; return s; };
 
 test('a new world: every squad player on his going rate, contracts ending over the next four seasons; free agents have none', () => {
   const s = createWorld(1, MINI);
@@ -17,7 +17,6 @@ test('a new world: every squad player on his going rate, contracts ending over t
     for (const p of c.players) assert.deepEqual(p.contract, { wage: wage(p), until: 1 + p.id % 4, clause: null });
   }
   assert.ok(s.market.every(p => p.contract === null));
-  assert.equal(s.wageBudget, 0);
   assert.deepEqual(startContract({ id: 7, age: 25, attrs: s.clubs[0].players[0].attrs, pos: 'MF' }, 3).until, 6);
 });
 
@@ -38,25 +37,21 @@ test('terms: the going rate moved by morale, never a pay cut, years by age, a re
   assert.equal(terms(s, s.market[0]).wage >= 500, true); // a free agent has no contract yet
 });
 
-test('renew: only in the last two seasons of a contract and within the wage budget; the new deal starts next season', () => {
+test('renew: only in the last two seasons of a contract, whatever the raise; the new deal starts next season', () => {
   const s = fresh(2), club = s.clubs[6];
   const long = club.players.find(p => p.contract.until >= s.season + 2), soon = club.players.find(p => p.contract.until === s.season);
   assert.ok(!canRenew(s, long) && canRenew(s, soon));
   assert.ok(renew(s, long.id));
-  soon.contract.wage = Math.max(0, terms(s, soon).wage - 1000); // so the renewal is a raise
-  s.wageBudget = wageBill(club) - 1;
-  assert.equal(renew(s, soon.id), 'Over the wage budget.');
-  s.wageBudget = 1e12;
+  soon.contract.wage = Math.max(0, terms(s, soon).wage - 200); // so the renewal is a raise
   const t = terms(s, soon);
   assert.equal(renew(s, soon.id), null);
   assert.deepEqual(soon.contract, { wage: t.wage, until: s.season + t.years, clause: t.clause });
   assert.ok(renew(s, s.clubs[0].players[0].id)); // not your player
 });
 
-test('renew: a renewal at the same wage always fits, even with no wage budget', () => {
+test('renew: a renewal at the same wage works', () => {
   const s = fresh(2), soon = s.clubs[6].players.find(p => p.contract.until === s.season);
   soon.contract.wage = terms(s, soon).wage;
-  s.wageBudget = 0;
   assert.equal(renew(s, soon.id), null);
 });
 

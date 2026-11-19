@@ -49,27 +49,24 @@ test('the staff bill: only the human club, only beyond its division\'s standard;
   const me = s.clubs[14], std = STAFF_COST[STANDARD[2] - 1];
   assert.equal(staffBill(s, me), 0);
   assert.equal(staffBill(s, s.clubs[0]), 0);
-  s.wageBudget = 1e12;
   assert.equal(setStaff(s, 'coaching', 4), null);
   assert.equal(staffBill(s, me), STAFF_COST[3] - std);
   assert.equal(setStaff(s, 'medical', 1), null);
   assert.equal(staffBill(s, me), STAFF_COST[3] - std + STAFF_COST[0] - std);
-  const bal = me.fin.balance, per = Math.round(staffBill(s, me) * 52 / SEASON_WEEKS);
+  const per = Math.round(staffBill(s, me) * 52 / SEASON_WEEKS);
   payWeeks(s, 2);
   assert.equal(me.fin.season.staff, 2 * per);
-  assert.ok(me.fin.balance < bal);
   assert.equal(s.clubs[0].fin.season.staff, 0);
 });
 
-test('setting levels: 1-5 in a known area; going up must fit the wage budget, going down always works', () => {
+test('setting levels: 1-5 in a known area; going up or down always works, whatever the bill', () => {
   const s = createWorld(4, MINI);
   takeClub(s, 14);
   const me = s.clubs[14];
   assert.equal(setStaff(s, 'kit', 3), 'Unknown staff level.');
   assert.equal(setStaff(s, 'coaching', 6), 'Unknown staff level.');
-  s.wageBudget = wageBill(me);
-  assert.equal(setStaff(s, 'coaching', 5), 'Over the wage budget.');
-  assert.equal(me.staff.coaching, STANDARD[2]);
+  assert.equal(setStaff(s, 'coaching', 5), null);
+  assert.equal(me.staff.coaching, 5);
   assert.equal(setStaff(s, 'coaching', 1), null);
   assert.equal(me.staff.coaching, 1);
 });

@@ -1,5 +1,5 @@
 import { createPlayer, overall, WEIGHTS } from './player.js';
-import { wage, wageBill, staffBill } from './finance.js';
+import { wage } from './finance.js';
 import { coachScale } from './staff.js';
 
 // The human club's youth squad, s.youth: players aged 15-18 outside the first team, on no contract
@@ -51,7 +51,6 @@ export function promote(s, id, maxSquad) {
   const p = s.youth.find(x => x.id === id), c = s.clubs[s.me];
   if (!p) return 'Not in your youth squad.';
   if (c.players.length >= maxSquad) return `Squad is full (${maxSquad}).`;
-  if (wageBill(c) + staffBill(s, c) + wage(p) > s.wageBudget) return 'Over the wage budget.';
   take(s, p).contract = starter(s, p);
   c.players.push(p);
   return null;

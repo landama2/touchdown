@@ -41,7 +41,8 @@ test('deserialize returns null for missing, corrupt or wrong-version saves', () 
   assert.equal(deserialize('{"version":1}'), null); // right version, wrong shape
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), me: 999 })), null); // dangling club index
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), training: { ...defaultTraining(), ind: null } })), null); // null is not an object here
-  assert.equal(deserialize(serialize({ ...createWorld(1, MINI), wageBudget: undefined })), null); // books missing
+  const nobooks = createWorld(1, MINI); delete nobooks.clubs[0].fin;
+  assert.equal(deserialize(serialize(nobooks)), null); // books missing
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), offers: undefined })), null); // market missing
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), known: undefined })), null); // scouting missing
   assert.equal(deserialize(serialize({ ...createWorld(1, MINI), youth: undefined })), null); // staff and youth missing
@@ -176,7 +177,7 @@ test('a version 6 save gets contracts, books and budgets, and plays on', () => {
     for (const p of c.players) assert.ok(p.contract.wage > 0 && p.contract.until >= b.season && p.contract.until <= b.season + 3);
   }
   assert.ok(b.market.every(p => p.contract === null));
-  assert.ok(b.wageBudget > 0 && b.budget >= 0);
+  assert.ok(b.wageBudget === undefined && b.budget >= 0);
   assert.ok(playDay(b).length);
 });
 
@@ -277,4 +278,21 @@ test('a version 11 save gets team intensity for all, a manager with no money yet
   assert.ok(b.clubs.every(c => c.fin.season.dividends === 0));
   while (b.day < 7) playDay(b);
   assert.ok(b.career.money > 0 && b.career.spells[0].salary > 0); // the salary is set when first paid
+});
+
+// A save as Phase 10b (version 12) wrote it: a wage budget, and wages five times today's.
+test('a version 12 save loses its wage budget and its wages fall to a fifth', () => {
+  const a = createWorld(25, MINI);
+  takeClub(a, 3);
+  const o = JSON.parse(serialize(a));
+  o.version = 12; o.wageBudget = 1e6;
+  for (const c of o.clubs) { c.lentPay = 5000; for (const p of c.players) p.contract.wage *= 5; }
+  const b = deserialize(JSON.stringify(o));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.equal(b.wageBudget, undefined);
+  for (const [k, c] of b.clubs.entries()) {
+    assert.equal(c.lentPay, 1000);
+    c.players.forEach((p, i) => assert.equal(p.contract.wage, a.clubs[k].players[i].contract.wage));
+  }
+  assert.ok(playDay(b).length);
 });
