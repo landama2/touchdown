@@ -49,7 +49,7 @@ export function injure(rng, p, scale = 1) {
 export function passDays(players, days, perDay) {
   for (const p of players) {
     if (p.inj && (p.inj.days -= days) <= 0) p.inj = null;
-    p.cond = Math.min(100, p.cond + (typeof perDay === 'function' ? perDay(p) : perDay) * days); // perDay: a rate, or p => his rate
+    p.cond = Math.min(100, Math.round(p.cond + (typeof perDay === 'function' ? perDay(p) : perDay) * days)); // perDay: a rate, or p => his rate
     p.sharp = r1(Math.max(SHARP_MIN, p.sharp - SHARP_LOSS * days));
     p.morale = r1(p.morale + clamp(MORALE_MID - p.morale, -MORALE_DRIFT * days, MORALE_DRIFT * days));
   }

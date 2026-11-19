@@ -4,19 +4,21 @@ import { STANDARD } from './finance.js';
 // Level 3 changes nothing (the game was calibrated without staff); each step up or down moves:
 //   coaching: training growth (and the youth intake: src/youth.js)
 //   scouting: how many scouts the human club has and how fast they report (src/scouting.js)
-//   medical:  how long injuries last
+//   medical:  how long injuries last, and how fast condition comes back between matches
 // AI clubs get their division's standard level (STANDARD in finance.js), one higher or lower when
 // their squad quality is a point or more above or below the division's median. The human club picks
 // its own levels and pays for them: see staffBill() in finance.js.
 export const AREAS = ['coaching', 'scouting', 'medical'];
 export const COACHING = [0.7, 0.85, 1, 1.15, 1.3];     // × growth chance, by level 1-5
 export const MEDICAL = [1.25, 1.1, 1, 0.9, 0.8];       // × injury length
+export const RECOVERY = [0.8, 0.9, 1, 1.15, 1.3];       // × condition regained per day
 export const SCOUTS = [1, 2, 2, 3, 3];                 // the human club's scouts
 export const SCOUT_SPEED = [1.4, 1.2, 1, 0.85, 0.7];   // × days to report
 
 const at = (list, level) => list[Math.max(1, Math.min(5, level)) - 1];
 export const coachScale = c => at(COACHING, c.staff?.coaching ?? 3);
 export const medicalScale = c => at(MEDICAL, c.staff?.medical ?? 3);
+export const recoveryScale = c => at(RECOVERY, c.staff?.medical ?? 3);
 export const scoutsFor = c => at(SCOUTS, c.staff?.scouting ?? 3);
 export const scoutSpeed = c => at(SCOUT_SPEED, c.staff?.scouting ?? 3);
 const standard = div => STANDARD[Math.min(div, STANDARD.length - 1)];

@@ -4,9 +4,10 @@ import { makeRng } from '../src/rng.js';
 import { createWorld } from '../src/world.js';
 import { takeClub } from '../src/season.js';
 import { injure } from '../src/squad.js';
-import { trainWeek, defaultTraining } from '../src/training.js';
+import { trainWeek, defaultTraining, recoverRate } from '../src/training.js';
+import { passDays } from '../src/squad.js';
 import { wageBill, staffBill, payWeeks, STANDARD, STAFF_COST, SEASON_WEEKS } from '../src/finance.js';
-import { AREAS, COACHING, MEDICAL, coachScale, medicalScale, aiStaff, standardStaff, setStaff } from '../src/staff.js';
+import { AREAS, COACHING, MEDICAL, RECOVERY, coachScale, medicalScale, recoveryScale, aiStaff, standardStaff, setStaff } from '../src/staff.js';
 import { MINI } from './fixtures/mini.js';
 
 const median = list => [...list].sort((a, b) => a - b)[list.length >> 1];
@@ -69,4 +70,18 @@ test('setting levels: 1-5 in a known area; going up or down always works, whatev
   assert.equal(me.staff.coaching, 5);
   assert.equal(setStaff(s, 'coaching', 1), null);
   assert.equal(me.staff.coaching, 1);
+});
+
+test('medical staff speed up the return of condition between matches; level 3 changes nothing', () => {
+  assert.equal(RECOVERY[2], 1);
+  assert.equal(recoveryScale({}), 1);
+  const rested = level => {
+    const s = createWorld(2, MINI), c = s.clubs[4], p = c.players[0];
+    c.staff.medical = level; p.cond = 20; p.inj = null;
+    passDays([p], 3, recoverRate(defaultTraining(), p) * recoveryScale(c));
+    return p.cond;
+  };
+  assert.ok(rested(5) > rested(3) && rested(3) > rested(1), `${rested(1)} ${rested(3)} ${rested(5)}`);
+  assert.equal(rested(3), 20 + 3 * recoverRate(defaultTraining(), null)); // the Normal rate, untouched
+  assert.ok(Number.isInteger(rested(4)));
 });

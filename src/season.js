@@ -12,7 +12,7 @@ import { payWeeks, payGate, payPrizes, seasonBudgets, blankLedger } from './fina
 import { expireContracts, academy } from './contracts.js';
 import { MIN_SQUAD, inWindow, windowId, marketDay, returnLoans } from './market.js';
 import { scoutDays, staffScouts, prune } from './scouting.js';
-import { aiStaff, standardStaff } from './staff.js';
+import { aiStaff, standardStaff, recoveryScale } from './staff.js';
 import { intake, trainYouth, ageYouth } from './youth.js';
 import { afterLeague, afterCup, boardWeeks, boardDay, seasonReview, seasonStart, file, payManager } from './career.js';
 
@@ -134,7 +134,8 @@ function between(s, rng, from, to) {
     const t = trainingOf(s, c);
     const hurt = [];
     for (let w = 0; w < weeks; w++) hurt.push(...trainWeek(rng, c, t));
-    passDays(c.players, to - from, p => recoverRate(t, p));
+    const rec = recoveryScale(c); // medical staff speed up (or slow) the return of condition
+    passDays(c.players, to - from, p => recoverRate(t, p) * rec);
     if (c.id === s.me) for (const p of hurt) if (p.inj) // only those still hurt when the next match day comes
       s.news.push({ type: 'injury', club: c.id, id: p.id, name: p.name, injury: p.inj.name, days: p.inj.days, training: true });
   }

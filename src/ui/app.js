@@ -13,7 +13,7 @@ import { buy, sell, bid, acceptCounter, talksOn, loanIn, setListing, acceptOffer
 import { SUMMER_END, JANUARY, QUICK_SALE, inWindow, windowOpen, justJoined, asking, signingFee, refusal, loanable, loanPay } from '../market.js';
 import { KEY, serialize, deserialize } from '../save.js';
 import { TASKS, taskDays, estimate, ranges, assign, recall, toggleShortlist, searchPlayers } from '../scouting.js';
-import { AREAS, COACHING, MEDICAL, SCOUTS, SCOUT_SPEED, setStaff } from '../staff.js';
+import { AREAS, COACHING, MEDICAL, RECOVERY, SCOUTS, SCOUT_SPEED, setStaff } from '../staff.js';
 import { YOUTH_MAX, LEAVE_AGE, ceilingRange, promote, release } from '../youth.js';
 import { wage, wageBill, projection, staffBill, STAFF_COST, STANDARD, SHARE, clubValue, stake } from '../finance.js';
 import { terms, canRenew, renew as renewContract } from '../contracts.js';
@@ -378,7 +378,7 @@ views.Staff = () => {
   const effect = {
     coaching: l => `young players grow ×${COACHING[l - 1]} as fast; youth intake ${2 + l} a year`,
     scouting: l => `${SCOUTS[l - 1]} scout${SCOUTS[l - 1] > 1 ? 's' : ''}, reports in ×${SCOUT_SPEED[l - 1]} the time`,
-    medical: l => `injuries last ×${MEDICAL[l - 1]} as long`,
+    medical: l => `injuries last ×${MEDICAL[l - 1]} as long, condition returns ×${RECOVERY[l - 1]} as fast`,
   };
   const row = a => `<tr><td>${a[0].toUpperCase() + a.slice(1)}</td><td><select data-act="staff" data-field="${a}">${options([1, 2, 3, 4, 5].map(l => [String(l), `Level ${l} · ${perWeek(STAFF_COST[l - 1])}`]), String(c.staff[a]))}</select></td><td class="dim">${effect[a](c.staff[a])}</td></tr>`;
   const extra = staffBill(s, c);
