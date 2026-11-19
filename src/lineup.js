@@ -89,13 +89,14 @@ export function formationBonus(formation) {
 }
 
 // Matchday bench, from the available squad players (all: everyone) not in `taken`, to join `have`
-// (already on the bench): the best of each position missing from it first, then the best of the
-// rest, never a second keeper.
+// (already on the bench): the best players to fill BENCH_MIX first (1 GK, 2 DF, 2 MF, 2 FW), then
+// the best of the rest if a position runs short, never a second keeper.
 export const BENCH = 7;
+export const BENCH_MIX = { GK: 1, DF: 2, MF: 2, FW: 2 };
 export function autoBench(club, taken, have = [], all = false) {
   const posOf = id => club.players.find(p => p.id === id)?.pos;
   const rest = club.players.filter(p => !taken.includes(p.id) && !have.includes(p.id) && (all || available(p))).sort((a, b) => overall(b) - overall(a) || a.id - b.id);
-  const first = POS.filter(x => !have.some(id => posOf(id) === x)).map(x => rest.find(p => p.pos === x)).filter(Boolean);
+  const first = POS.flatMap(x => rest.filter(p => p.pos === x).slice(0, Math.max(0, BENCH_MIX[x] - have.filter(id => posOf(id) === x).length)));
   const keeper = have.some(id => posOf(id) === 'GK') || first.some(p => p.pos === 'GK');
   return [...first, ...rest.filter(p => !first.includes(p) && !(keeper && p.pos === 'GK'))].slice(0, BENCH - have.length).map(p => p.id);
 }

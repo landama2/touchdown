@@ -246,6 +246,8 @@ test('autoBench picks seven squad players outside the XI, a keeper first', () =>
   assert.equal(new Set(bench).size, BENCH);
   assert.ok(bench.every(id => !ids.includes(id) && club.players.some(p => p.id === id)));
   assert.equal(club.players.find(p => p.id === bench[0]).pos, 'GK');
+  const n = pos => bench.filter(id => club.players.find(p => p.id === id).pos === pos).length;
+  assert.deepEqual([n('GK'), n('DF'), n('MF'), n('FW')], [1, 2, 2, 2]);
 });
 
 test('fixLineup repairs the bench and the slot tactics', () => {
