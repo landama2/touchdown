@@ -1,10 +1,17 @@
 # Touchline Phase 10d: top scorers and top assists, with prize money
 
-Status: proposal, waiting for the owner's answers (open questions at the end). Base: main @ 91567f4.
+Status: approved 2026-11-19 with the answers below; ready to implement. Base: main @ 91567f4.
 Independent of Phase 10c (Star points); either can go first. One save bump (the next free version number).
 
 ## The owner's request (2026-11-19)
 Seasonal rankings of top scorers and top assists, and a cash bonus for winning them.
+
+## Owner's answers (2026-11-19)
+1. The cash goes to **both** the club and the manager.
+2. Ties: today's rule (fewer games wins, then the lower id). No shared awards.
+3. League goals only.
+4. Prizes for the **top 3**.
+5. Amounts as proposed.
 
 ## What the code does today
 
@@ -47,35 +54,42 @@ Records (`noteSeason`):
 - per division: **most assists in a season** (`s.records[d].assists`), next to most goals;
 - per club: best assister in a season (`c.rec.assists`), next to its best scorer.
 
-## 3. Prize money for winning
+## 3. Prize money for the top 3
 
 Paid in `payPrizes()` at the season's end, booked as `prize` in the club's ledger, so it appears in the club's books
-and in History's prize line for your club.
+and in History's prize line for your club. Places 2 and 3 get half and a quarter of the winner's amount.
 
-| Division | Top scorer | Top assists |
-|----------|-----------|-------------|
-| Premier League | €1.0M | €0.75M |
-| Championship | €250k | €200k |
-| League One | €100k | €75k |
+| Division | Top scorer 1st / 2nd / 3rd | Top assists 1st / 2nd / 3rd |
+|----------|----------------------------|-----------------------------|
+| Premier League | €1.0M / €500k / €250k | €750k / €375k / €190k |
+| Championship | €250k / €125k / €60k | €200k / €100k / €50k |
+| League One | €100k / €50k / €25k | €75k / €40k / €20k |
 
-For scale: one league place is worth €2.5M in the Premier League (`MERIT`), so the bonus is about half a league place.
-A nice extra, not a reason to field a weaker team. In League One €100k is a decent signing.
+For scale: one league place is worth €2.5M in the Premier League (`MERIT`), so the winner's bonus is about half a
+league place: a nice extra, not a reason to field a weaker team. A club with two players in the top 3 gets both.
 
-Kept in `finance.js` as `SCORER_PRIZE` / `ASSIST_PRIZE` by division (`byDiv`), like `MERIT`.
+Kept in `finance.js` as `SCORER_PRIZE` / `ASSIST_PRIZE` by division (`byDiv`, like `MERIT`) and `PLACE_SHARE = [1, 0.5, 0.25]`
+(amounts rounded to €10k).
 
-The winner himself:
-- morale +15 (capped at 100), which by fun surprise #15 makes him cheaper to renew in the summer;
-- his transfer value is unchanged (it comes from overall and age only).
+**The manager's bonus.** When one of your players makes a top 3, you get a personal bonus too, in `s.career.money`
+next to the season bonuses in `src/career.js`: 2% of your salary for a win, 1% for 2nd, 0.5% for 3rd, per ranking.
+Tied to your salary like the trophy bonus, so it scales with the job, not the division.
 
-The inbox gets a message when your player wins: "Erling Haaland is the Premier League's top scorer with 27 goals.
-The club receives €1.0M."
+The top 3 come from `ranking(s, d, key, 3)`, the same list the Table view shows, so the order on the last day is the
+order paid. The award in history is still the winner only (plus `assists`).
+
+The winner himself: morale +15 (capped at 100), which by fun surprise #15 makes him cheaper to renew in the summer;
+2nd and 3rd +5. His transfer value is unchanged (it comes from overall and age only).
+
+The inbox gets a message for each of your players in a top 3: "Erling Haaland is the Premier League's top scorer with
+27 goals. The club receives €1.0M; your bonus is €40k."
 
 ## Files
 
 - `src/awards.js`: `ranking()`, the `assists` award, assists records.
-- `src/finance.js`: `SCORER_PRIZE`, `ASSIST_PRIZE`; `payPrizes(s, tables, cup, me, awards)` pays them.
+- `src/finance.js`: `SCORER_PRIZE`, `ASSIST_PRIZE`, `PLACE_SHARE`; `payPrizes(s, tables, cup, me)` pays the top 3 of each ranking.
 - `src/season.js` `endSeason()`: pass `awards` to `payPrizes` (awards are computed before it already); morale boost.
-- `src/career.js`: inbox post type `goldenBoot` (scorer or assists, with amount).
+- `src/career.js`: the manager's ranking bonus (`BONUS.ranking`) in the season review; inbox post type `ranking` (which, place, club amount, bonus).
 - `src/ui/app.js`: Table sub-views, Squad top-3 markers, History "Top assists" and the assists records.
 - `src/save.js`: migration `s.records[d].assists = null`, `c.rec.assists = null`; `valid()` checks them.
 
@@ -83,8 +97,9 @@ The club receives €1.0M."
 
 - `ranking()` orders by goals, then fewer games, then id; leaves out players with none; respects `n`.
 - After a full simulated season the ranking's leader is the `scorer` award's winner, and likewise for assists.
-- `payPrizes` pays the top scorer's and top assister's clubs the right amount by division, booked as `prize`; a club
-  with both gets both.
+- `payPrizes` pays the top 3 scorers' and assisters' clubs the right amounts by division and place, booked as
+  `prize`; a club with several places gets them all; a tie on goals is decided by fewer games.
+- The manager gets the salary-based bonus for each of his players in a top 3, and nothing for other clubs' players.
 - Records: most assists per division and per club update only on a higher number.
 - A v-old save migrates and plays a season; old history entries without an assists award render.
 
@@ -95,17 +110,6 @@ The club receives €1.0M."
 - **Change the division, change the race.** A striker sold to a club in another division takes his goals into that
   division's race.
 
-## Open questions for the owner
-
-1. **Who gets the cash: the club or you?** As planned the club gets it (prize money in its books). Alternative or as
-   well: the manager gets a personal bonus (`s.career.money`) when his player wins, like the trophy bonus.
-2. **Ties: shared or decided?** As planned, fewer games wins (today's rule). Real leagues share the award: shared,
-   with the money split?
-3. **League only, or the cup too?** Today only league goals are counted. A separate cup top-scorer ranking needs cup
-   stats (`addMatch` only runs for league matches); no prize planned for it.
-4. **Places 2 and 3:** prize only for the winner, or smaller amounts for 2nd and 3rd?
-5. **Amounts:** happy with the table above, or bigger so it changes how you pick the team (e.g. ×3)?
-
 ## Order of work if approved
-1 (ranking + Table sub-views) → 2 (assists award, records) → 3 (prize money, morale, inbox) → save bump.
+1 (ranking + Table sub-views) → 2 (assists award, records) → 3 (top-3 prize money, manager bonus, morale, inbox) → save bump.
 Each with tests, `npm test` green, fun-surprises updated, roadmap row 10d.

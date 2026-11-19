@@ -86,20 +86,45 @@ New file `src/data/legends.js`, hand-made, about 40 entries:
 ['Peter Crouch', 'FW', 'star', ['heading', 'firstTouch', 'composure']],
 ```
 
-Tiers set the cost and the ceiling:
+**Why the ceiling alone can't make a legend special** (owner's point, 2026-11-19). Attributes stop at 20, so the
+best possible ceiling is overall 100. A top club's free youth intake already reaches it. Measured over 30 seeds, at the
+strongest club of each division:
 
-| Tier | Potential (`pot`) | Peak overall, roughly | Cost |
-|------|-------------------|-----------------------|------|
-| Star | 18 | ~86 | 4 |
-| Great | 19 | ~91 | 7 |
-| Icon | 20 | ~95 | 10 |
+| Division | Youth with `pot` 20 | Median ceiling | Median overall at 15–16 |
+|----------|---------------------|----------------|-------------------------|
+| Premier League | 73% | 100 | 70 |
+| Championship | 17% | 90 | 55 |
+| League One | 0% | 70 | 35 |
 
-**How a legend is built** (`makeLegend()` in new `src/legends.js`): `createPlayer(rng, id, pos, quality, 17)` at
-`pot − 7` quality, then the signature attributes +3 (never above `pot`), then `p.pot` set by tier.
-At 17 he is about overall 62–68 (a League One starter, a Premier League squad kid). Phase 10b training gives about
-4 key-attribute points a season to 23, so with Normal training he reaches ~85+ around 22–23; with Hard and good
-coaching, sooner. A legend left on the bench at a club with level-1 coaching never gets there: no flops in the
-ceiling, but the manager can still waste him.
+The first draft (`pot` 18–20, overall 62–68 at 17) was worse than a free kid at a Premier League club. Revised:
+**every legend gets `pot` 20**, and the tiers differ in how good he is **now** and how fast he grows. A legend
+should be the best youngster in the country the day he arrives, at any club.
+
+| Tier | `pot` | Overall at 17 | Growth | Peak, roughly | Cost |
+|------|-------|---------------|--------|---------------|------|
+| Star | 20 | ~76 | ×1.5 | 95+ by 21 | 4 |
+| Great | 20 | ~82 | ×2 | 97+ by 20 | 7 |
+| Icon | 20 | ~88 | ×2 | 99–100 by 19–20 | 10 |
+
+What else sets them apart from a free youth:
+- **Ready now.** An Icon at 17 starts for most Premier League clubs; a free top-club kid at 70 does not.
+- **Faster growth** (`LEGEND_GROW` by tier): a factor on the growth chance in `trainYouth` and `trainWeek`, on top of
+  coaching and age. A free kid takes about six seasons from 70 to the 90s; an Icon is there in two.
+- **Late decline.** Physical decline starts at 33 instead of 31 (`DECLINE_AGE` per player via `p.legend`): two more
+  seasons at the peak.
+- **A rounded player.** The signature attributes start at 17–18 and every non-key attribute sits only 2 below the key
+  ones (a free player's sit 4 below), so his overall holds up in a second position.
+- **Known for sure.** His ceiling is shown exactly (100), not as a coaching-dependent range.
+
+For a League One or Championship club, where free youth rarely pass 70–90, a legend is the only way to get a
+100-ceiling player at all.
+
+**How a legend is built** (`makeLegend()` in new `src/legends.js`): `createPlayer(rng, id, pos, quality, 17)` at the
+tier's start quality (Star 14, Great 15, Icon 16), non-key attributes raised to key − 2, the signature attributes set
+to 17 (Icon 18), `p.pot = 20`. Tests check every list entry lands within ±3 of the tier's overall at 17.
+
+A legend left on the bench at a club with level-1 coaching still grows slowly: no flops in the ceiling, but the
+manager can still waste him.
 
 Legends carry `p.legend = 'icon' | 'great' | 'star'`; the UI writes the name with a ★ ("Thierry Henry ★") everywhere
 it shows a player (squad, youth, profile, match, commentary, tables), via one `pname(p)` helper. Their
@@ -173,7 +198,10 @@ The inbox gets a message on each retirement: "Virgil van Dijk retires. 8 seasons
 - A top-10% player retiring from your club makes a hall row and the right points (tenure cap, award cap, Premier
   League bonus); a non-star gives none; a star retiring at an AI club gives you nothing.
 - A loaned-out star of yours retiring counts for you.
-- `makeLegend`: age 17, `pot` by tier, signature attributes above the rest, overall in 60–70 for every list entry.
+- `makeLegend`: age 17, `pot` 20, overall within ±3 of the tier's start (76 / 82 / 88) for every list entry;
+  signature attributes at 17–18; non-key attributes key − 2.
+- A legend grows faster than a free youth with the same attributes (tier factor), and declines from 33, not 31.
+- At the strongest Premier League club, a Star-tier legend at 17 is better than every player in the free intake.
 - `signLegend`: rejects no points, full youth squad, unknown or used legend, no job; takes points, puts him in
   `s.youth` with no contract; two in one season both work.
 - A legend in the youth squad survives a job change and a sacking (via `waiting`); one left there at 19 leaves.
@@ -181,7 +209,7 @@ The inbox gets a message on each retirement: "Virgil van Dijk retires. 8 seasons
 - Namesake still in the world → hidden; after he retires → offered next summer.
 - AI legends: the world's own RNG sequence is unchanged by the AI roll (same world after a season with and without it).
 - Save: a v13 save migrates and plays a season.
-- A legend trained at Normal for 6 seasons ends within 4 of his ceiling (guards the "no flops" promise).
+- An Icon trained at Normal reaches overall 95 by 20 (guards the "no flops" promise).
 
 ## Fun surprises to record (candidates)
 
@@ -189,6 +217,10 @@ The inbox gets a message on each retirement: "Virgil van Dijk retires. 8 seasons
   year later, whatever he cost.
 - **Lend him, keep him.** A star you loaned out still retires from your club: his points come home with him.
 - **The race for Henry.** Legends are once per world. An AI club can draw the one you were saving for.
+
+## Owner's follow-up (2026-11-19)
+Legend potential capped around the first draft's 86–95 was too low next to free top-club youth. Revised above: `pot`
+20 for all, tiers by starting level and growth speed, late decline.
 
 ## Fun surprises to add if they survive
 
