@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRng } from '../src/rng.js';
-import { createPlayer, WEIGHTS, ATTRS } from '../src/player.js';
+import { createPlayer, WEIGHTS, ATTRS, overall } from '../src/player.js';
+import { playDay } from '../src/season.js';
 import { createWorld } from '../src/world.js';
-import { FOCUS, defaultTraining, trainWeek, recoverRate, setTraining, setFocus } from '../src/training.js';
+import { FOCUS, defaultTraining, trainWeek, recoverRate, setTraining, setFocus, setLoad } from '../src/training.js';
 import { MINI } from './fixtures/mini.js';
 
 const WEEKS = 42; // training weeks from the first match day (day 0) to the play-off finals (day 294)
@@ -19,13 +20,13 @@ function season(club, t, seed = 1) {
 }
 const plan = changes => ({ ...defaultTraining(), ...changes });
 
-test('young players gain about four attributes a season at Normal; Hard more, Light less, Rest none, adults none', () => {
+test('young players gain about four attributes a season at Normal; Hard more, Light less, Rest none', () => {
   const normal = season(squad(1, 300, 19), plan({}));
   const hard = season(squad(1, 300, 19), plan({ intensity: 'Hard' })), light = season(squad(1, 300, 19), plan({ intensity: 'Light' }));
   assert.ok(normal > 3.4 && normal < 4.8, `normal ${normal}`);
   assert.ok(hard > normal && normal > light, `${hard} ${normal} ${light}`);
   assert.equal(season(squad(1, 300, 19), plan({ focus: 'Rest' })), 0);
-  assert.equal(season(squad(1, 300, 26), plan({})), 0);
+
 });
 
 test('the team focus decides which attributes grow; keepers always train as keepers', () => {
@@ -81,4 +82,48 @@ test('training setters check what they are given', () => {
   assert.equal(s.training.ind[id], undefined);
   assert.ok(setFocus(s, id, 'luck'));
   assert.ok(setFocus(s, s.clubs[1].players[0].id, 'pace')); // not your player
+});
+
+test('older players still improve, less with every year; Hard is faster for them too', () => {
+  const at = (age, intensity = 'Normal') => season(squad(1, 300, age), plan({ intensity }));
+  const [young, mid, late, old] = [19, 26, 29, 32].map(a => at(a));
+  assert.ok(young > mid && mid > late && late > old && old > 0, `${young} ${mid} ${late} ${old}`);
+  assert.ok(mid > 1.2 && mid < 2.6, `26: ${mid}`);
+  assert.ok(old < 0.8, `32: ${old}`);
+  assert.ok(at(28, 'Hard') > at(28, 'Light'));
+});
+
+test('a personal intensity overrides the team: Hard injures more, Rest never grows or gets hurt and recovers fastest', () => {
+  const run = load => {
+    const club = squad(8, 400, 25), t = plan({ load: {} }), rng = makeRng(8);
+    for (const p of club.players) if (load) t.load[p.id] = load;
+    let hurt = 0;
+    for (let w = 0; w < WEEKS; w++) { hurt += trainWeek(rng, club, t).length; for (const p of club.players) p.inj = null; }
+    return { hurt, gain: club.players.reduce((n, p) => n + p.gain, 0), rate: recoverRate(t, club.players[0]) };
+  };
+  const team = run(null), hard = run('Hard'), rest = run('Rest');
+  assert.ok(hard.hurt > 1.5 * team.hurt, `${hard.hurt} ${team.hurt}`);
+  assert.deepEqual([rest.hurt, rest.gain], [0, 0]);
+  assert.deepEqual([team.rate, hard.rate, rest.rate], [5, 3, 8]);
+});
+
+test('setLoad checks the player and the value', () => {
+  const s = createWorld(1, MINI);
+  s.me = 0; s.training = defaultTraining();
+  const id = s.clubs[0].players[0].id;
+  assert.equal(setLoad(s, id, 'Rest'), null);
+  assert.equal(s.training.load[id], 'Rest');
+  assert.equal(setLoad(s, id, null), null);
+  assert.equal(s.training.load[id], undefined);
+  assert.ok(setLoad(s, id, 'Extreme'));
+  assert.ok(setLoad(s, s.clubs[1].players[0].id, 'Hard'));
+});
+
+test('a season in a whole world raises players aged 24-30 by a little, not a lot', () => {
+  const s = createWorld(3, MINI), prime = () => s.clubs.flatMap(c => c.players).filter(p => p.age >= 24 && p.age <= 30);
+  const avg = ps => ps.reduce((t, p) => t + overall(p), 0) / ps.length, ids = new Set(prime().map(p => p.id));
+  const before = avg(prime());
+  while (!s.done) playDay(s);
+  const after = avg(s.clubs.flatMap(c => c.players).filter(p => ids.has(p.id)));
+  assert.ok(after - before > 0 && after - before < 3, `${before} -> ${after}`);
 });

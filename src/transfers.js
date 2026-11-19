@@ -34,14 +34,19 @@ function cannotLose(s, p) {
 }
 
 // Free agents: a signing-on fee (half his value) from the transfer budget, his terms within the wage budget.
-export function buy(s, id) {
+// own: the manager pays from his own money (s.career.money) and owns the player; the club still pays his wages.
+const cannotPay = (s, fee, own) => own ? (!s.career ? 'You have no money of your own.' : fee > s.career.money ? 'You cannot afford that yourself.' : null)
+  : fee > s.budget ? 'Not enough transfer budget.' : null;
+
+export function buy(s, id, own = false) {
   const p = s.market.find(x => x.id === id), club = s.clubs[s.me];
   if (!p) return 'Player not available.';
   const no = cannotTake(s, p);
   if (no) return no;
-  if (signingFee(p) > s.budget) return 'Not enough transfer budget.';
+  const no2 = cannotPay(s, signingFee(p), own);
+  if (no2) return no2;
   if (overWages(s, terms(s, p).wage)) return 'Over the wage budget.';
-  move(s, p, null, club, signingFee(p));
+  move(s, p, null, club, signingFee(p), own);
   return null;
 }
 
@@ -58,7 +63,7 @@ export const talksOn = (s, id) => s.talks.win === windowId(s) ? s.talks.by[id] ?
 // round of talks: from WALKAWAY of the asking price up the club counters halfway between bid and
 // asking price (never below FLOOR), lower bids are rejected. After ROUNDS rounds talks stop until
 // the next window. Returns null when he signs, else a message.
-export function bid(s, id, fee) {
+export function bid(s, id, fee, own = false) {
   if (!windowOpen(s)) return CLOSED;
   const at = atClub(s, id);
   if (!at) return 'Player not available.';
@@ -67,11 +72,12 @@ export function bid(s, id, fee) {
   const no = cannotTake(s, p) ?? refusal(c, me, p, s.career?.rep);
   if (no) return no;
   if (c.players.length <= MIN_SQUAD) return `${c.name} won't sell: they need every player.`;
-  if (fee > s.budget) return 'Not enough transfer budget.';
+  const broke = cannotPay(s, fee, own);
+  if (broke) return broke;
   if (overWages(s, terms(s, p).wage)) return 'Over the wage budget.';
   const t = talks(s, id), ask = asking(s, c, p);
   if ((p.contract.clause && fee >= p.contract.clause) || fee >= round10k(FLOOR * ask) || (t.counter && fee >= t.counter)) {
-    move(s, p, c, me, fee);
+    move(s, p, c, me, fee, own);
     return null;
   }
   if (t.rounds >= ROUNDS) return `${c.name} have stopped talking about ${p.name} until the next window.`;
@@ -81,9 +87,9 @@ export function bid(s, id, fee) {
   return (fee >= WALKAWAY * ask ? `${c.name} want ${eur(t.counter)} for ${p.name}.` : `${c.name} rejected the bid.`) + more;
 }
 // Pays the club's last counter-offer.
-export function acceptCounter(s, id) {
+export function acceptCounter(s, id, own = false) {
   const t = talksOn(s, id);
-  return t?.counter ? bid(s, id, t.counter) : 'There is no counter-offer.';
+  return t?.counter ? bid(s, id, t.counter, own) : 'There is no counter-offer.';
 }
 
 // A season-long loan from an AI club: a young player who is not one of his club's regulars; you pay half his wage.

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, BOARD_START, REP_START } from '../src/world.js';
 import { MINI } from './fixtures/mini.js';
+import { startCareer } from '../src/career.js';
 import { takeClub, kickOff, playDay, endSeason, table } from '../src/season.js';
 // A save as Phase 3 (version 4) wrote it: league rounds instead of a calendar; no cup, play-offs or records.
 function asV4(s, round) {
@@ -255,9 +256,25 @@ test('a version 10 save gets boards, a career at its club and an empty inbox, an
   const b = deserialize(JSON.stringify(asV10(a)));
   assert.equal(b.version, SAVE_VERSION);
   assert.ok(b.clubs.every(c => c.conf === BOARD_START && c.games === c.st.p));
-  assert.deepEqual(b.career, { rep: REP_START, asked: null, warned: null, spells: [{ club: 9, from: a.season, to: null, how: null }] });
+  assert.deepEqual(b.career, { rep: REP_START, asked: null, warned: null, spells: [{ club: 9, from: a.season, to: null, how: null }], money: 0, shares: {} });
   assert.deepEqual([b.jobs, b.inbox], [[], []]);
   assert.ok(playDay(b).length);
   const picker = deserialize(JSON.stringify(asV10(createWorld(28, MINI))));
   assert.equal(picker.career, null); // no club picked yet: the club picker, not a career
+});
+
+// A save as Phase 10 (version 11) wrote it: no per-player intensity, no manager's money, no dividends in the books.
+test('a version 11 save gets team intensity for all, a manager with no money yet, and plays on', () => {
+  const a = createWorld(28, MINI);
+  startCareer(a, 9);
+  const o = JSON.parse(serialize(a));
+  o.version = 11;
+  delete o.training.load; delete o.career.money; delete o.career.shares; delete o.career.spells[0].salary;
+  for (const c of o.clubs) delete c.fin.season.dividends;
+  const b = deserialize(JSON.stringify(o));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.deepEqual([b.training.load, b.career.money, b.career.shares], [{}, 0, {}]);
+  assert.ok(b.clubs.every(c => c.fin.season.dividends === 0));
+  while (b.day < 7) playDay(b);
+  assert.ok(b.career.money > 0 && b.career.spells[0].salary > 0); // the salary is set when first paid
 });

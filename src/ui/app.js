@@ -1,6 +1,6 @@
 import { POS, ATTRS, ALL_ATTRS, overall, value } from '../player.js';
 import { available, formAvg, moraleLabel, YELLOW_LIMIT } from '../squad.js';
-import { FOCUS, INTENSITY, setTraining, setFocus } from '../training.js';
+import { FOCUS, INTENSITY, LOADS, setTraining, setFocus, setLoad } from '../training.js';
 import { createWorld } from '../world.js';
 import { FORMATIONS, BENCH, slots, autoPick, fixLineup, swap } from '../lineup.js';
 import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason } from '../season.js';
@@ -15,9 +15,9 @@ import { KEY, serialize, deserialize } from '../save.js';
 import { TASKS, taskDays, estimate, ranges, assign, recall, toggleShortlist, searchPlayers } from '../scouting.js';
 import { AREAS, COACHING, MEDICAL, SCOUTS, SCOUT_SPEED, setStaff } from '../staff.js';
 import { YOUTH_MAX, LEAVE_AGE, ceilingRange, promote, release } from '../youth.js';
-import { wage, wageBill, projection, staffBill, STAFF_COST, STANDARD } from '../finance.js';
+import { wage, wageBill, projection, staffBill, STAFF_COST, STANDARD, SHARE, clubValue, stake } from '../finance.js';
 import { terms, canRenew, renew as renewContract } from '../contracts.js';
-import { SACK, MIN_GAMES, ASK, REP, bands, leagueTarget, cupTarget, level, startCareer, acceptJob, declineJob, openOffer, askBoard } from '../career.js';
+import { MIN_GAMES, ASK, REP, BONUS, SEVERANCE, bands, leagueTarget, cupTarget, level, startCareer, acceptJob, declineJob, openOffer, askBoard, sackLine, salaryFor, trade } from '../career.js';
 import { crestSvg, kitSvg } from './art.js';
 
 // The UI is the only place allowed to touch Date, localStorage and the DOM.
@@ -27,6 +27,7 @@ const save = () => { try { localStorage.setItem(KEY, serialize(s)); } catch {} }
 
 let s = load() || newWorld();
 let tab = 'Squad', sel = null, viewing = null, tableDiv = s.me === null ? 0 : s.clubs[s.me].div, msg = '', filters = {}; // filters: the player search on Transfers
+let ownPay = false; // Transfers: pay fees from the manager's own money
 let timer = null, speed = 400, subOut = null, subIn = null; // live match: clock, ms per match minute, player picked to come off / to come on
 const SPEEDS = [['Slow', 1000], ['Normal', 400], ['Fast', 100], ['Very fast', 25]];
 
@@ -44,7 +45,7 @@ const clubName = id => esc(s.clubs[id].name);
 const badge = (id, size = 20) => crestSvg(s.clubs[id], size);
 const HEAD = '<th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Value</th>';
 const cells = p => `<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${overall(p)}</td><td class="n">${money(value(p))}</td>`;
-const nameBtn = (p, act) => `<td><button class="link" data-act="${act}" data-id="${p.id}">${esc(p.name)}</button></td>`;
+const nameBtn = (p, act) => `<td><button class="link" data-act="${act}" data-id="${p.id}">${esc(p.name)}</button>${p.mine ? ' <span title="yours: bought with your own money">💼</span>' : ''}</td>`;
 const outFor = d => d === 1 ? '1 day' : d < 14 ? `${d} days` : `${Math.round(d / 7)} weeks`;
 const status = p => p.inj ? `${esc(p.inj.name)}, ${outFor(p.inj.days)}` : p.ban ? `banned for ${p.ban} match${p.ban > 1 ? 'es' : ''}`
   : p.yc % YELLOW_LIMIT === YELLOW_LIMIT - 1 ? '🟨 one more yellow is a ban' : '';
@@ -62,7 +63,9 @@ const NEWS = {
   vacancy: n => `📰 ${clubName(n.club)} have sacked their manager.`,
   job: n => `📨 ${clubName(n.club)} offer you their job (see Inbox).`,
   warning: n => `⚠️ The ${clubName(n.club)} board is losing patience (confidence ${n.conf}).`,
-  sacked: n => `❌ ${clubName(n.club)} have sacked you.`,
+  sacked: n => `❌ ${clubName(n.club)} have sacked you.${n.pay ? ` Severance: ${money(n.pay)}.` : ''}`,
+  bonus: n => `💰 Season bonus from ${clubName(n.club)}: ${money(n.amount)}.`,
+  dividend: n => `📈 Your ${n.pct}% of ${clubName(n.club)} paid a dividend of ${money(n.amount)}.`,
   target: n => `🎯 The ${clubName(n.club)} board wants you to ${n.league} and reach ${cupGoal(n.cup)}.`,
   review: n => `📋 Season review: you finished ${ordinal(n.pos)}; the board wanted you to ${n.target}${n.met ? ' — target met' : ' — target missed'}. Reputation ${n.was} → ${n.rep}.`,
   request: n => `🏦 You asked the board for more ${n.kind} budget: ${n.yes ? 'agreed' : 'refused'}.`,
@@ -215,13 +218,15 @@ const views = {
   Training() {
     const t = s.training, pairs = o => Object.keys(o).map(k => [k, k]);
     const focus = p => fieldSelect('focus', 'attr', [['', 'With the team'], ...ALL_ATTRS.map(k => [k, label(k)])], t.ind[p.id] ?? '', p.id);
+    const load = p => fieldSelect('load', 'load', [['', 'With the team'], ...LOADS.map(k => [k, k])], t.load[p.id] ?? '', p.id);
     return `<h2>Weekly schedule</h2><div class="bar"><label>Focus ${fieldSelect('trainField', 'focus', pairs(FOCUS), t.focus)}</label>
       <label>Intensity ${fieldSelect('trainField', 'intensity', pairs(INTENSITY), t.intensity)}</label></div>
-      <p class="dim">Each week, players aged 23 or under may improve one attribute, never beyond their hidden potential: about four a season at Normal.
+      <p class="dim">Each week a player may improve one attribute, never beyond his hidden potential: about four a season at Normal for players aged 23 or under, less with every year after that (about two at 26, one at 29, almost nothing from 31).
       Hard trains faster, but players recover less between matches and get hurt more often; Light is the reverse. Rest stops improvement and speeds recovery.
+      Each player can train at his own intensity; a personal Rest means no improvement and no training injuries.
       Keepers always work on goalkeeping. An individual focus takes half of a player's improvement. Players aged 31 and over slowly lose pace, stamina, strength and agility whatever you do.</p>
-      <div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Gained</th><th>Individual focus</th></tr>
-      ${byPos(myClub(s).players).map(p => `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${overall(p)}</td><td class="n">${p.gain ? '+' + p.gain : ''}</td><td>${focus(p)}</td></tr>`).join('')}</table></div>`;
+      <div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Gained</th><th>Individual focus</th><th>Intensity</th></tr>
+      ${byPos(myClub(s).players).map(p => `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${p.age}</td><td class="n">${overall(p)}</td><td class="n">${p.gain ? '+' + p.gain : ''}</td><td>${focus(p)}</td><td>${load(p)}</td></tr>`).join('')}</table></div>`;
   },
   Match() {
     if (s.live) return liveView();
@@ -320,6 +325,7 @@ const views = {
       <label><input type="checkbox" id="f-listed"${f.listed ? ' checked' : ''}> listed</label><label><input type="checkbox" id="f-loan"${f.loan ? ' checked' : ''}> loan</label>
       <input type="text" id="f-name" placeholder="name" value="${esc(f.name ?? '')}" style="width:9em"><button class="primary" data-act="search">Search</button> <button data-act="clearSearch">Clear</button></div>`;
     return `<p><b>${windowText()}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(me))} of ${perWeek(s.wageBudget)}</p>
+      <p><label><input type="checkbox" data-act="ownPay"${ownPay ? ' checked' : ''}> Pay fees from your own money (${money(s.career?.money ?? 0)})</label> <span class="dim">A player you pay for is yours 💼: the club pays his wages, he follows you to every new job, and when he is sold the fee is yours.</span></p>
       <p class="dim">Bid for players at other clubs while a window is open: a club takes ${Math.round(0.9 * 100)}% of its asking price or counters, and talks stop after three rounds. Players under 24 who are not regulars can come on loan for half their wage. Free agents sign at any time for a signing-on fee of half their value.</p>
       <h2>Offers for your players</h2>${table(`${HEAD}<th>From</th><th class="n">Fee</th><th></th>`, offers)}
       <h2>Find players</h2><p class="dim">Premier League players are well known. Elsewhere you see estimates until your scouts report (Scouting); ☆ adds a player to your shortlist. Best 60 shown.</p>${search}
@@ -347,7 +353,7 @@ const views = {
       <p>Balance <b>${money(c.fin.balance)}</b> · transfer budget ${money(s.budget)} · wage bill ${perWeek(wageBill(c))} of ${perWeek(s.wageBudget)}</p>
       <div class="wrap"><table><tr><th>Income this season</th><th></th></tr>${line('Broadcasting', L.broadcast)}${line('Sponsorship', L.sponsor)}${line('Gate receipts', L.gate)}${line('Prize money', L.prize)}${line('Player sales', L.sales)}
       <tr><th>Costs this season</th><th></th></tr>${line('Wages', L.wages)}${line('Transfer fees', L.fees)}${line('Staff beyond the standard', L.staff)}</table></div>
-      <p class="dim">Expected income for a mid-table season: ${money(projection(s, c))}. The board sets each season's budgets: half the balance for transfers (none in debt); for wages and staff, 70% of the expected income or what you pay now, whichever is more, plus what your savings can carry over two years. In debt there is no extra, so wages are frozen. Renewing a player at the same wage always fits. You may ask the board for more once a season (Board).</p>`;
+      <p class="dim">Expected income for a mid-table season: ${money(projection(s, c))}. The board sets each season's budgets: three quarters of the balance for transfers (none in debt); for wages and staff, 55% of the expected income or what you pay now, whichever is more, plus what the other quarter of your savings can carry over two years. In debt there is no extra, so wages are frozen. Renewing a player at the same wage always fits. You may ask the board for more once a season (Board).</p>`;
   },
 };
 
@@ -394,8 +400,8 @@ const unread = () => s.inbox.filter(n => !n.read).length;
 const confText = c => `<meter min="0" max="100" low="35" high="60" optimum="100" value="${c.conf}"></meter> ${Math.round(c.conf)}`;
 
 views.Board = () => {
-  const c = myClub(s), b = bands(s, c.div), k = leagueTarget(s, c.id), pos = table(s, c.div).indexOf(c.id) + 1, line = Math.max(0, SACK - s.career.rep / REP.patience);
-  const spell = x => `<tr><td>${clubName(x.club)}</td><td>season ${x.from}${x.to === null ? ' – now' : x.to === x.from ? '' : ` – ${x.to}`}</td><td class="dim">${x.how === 'sacked' ? 'sacked' : x.how === 'left' ? 'left for another job' : ''}</td></tr>`;
+  const c = myClub(s), b = bands(s, c.div), k = leagueTarget(s, c.id), pos = table(s, c.div).indexOf(c.id) + 1, line = Math.max(0, sackLine(s));
+  const spell = x => `<tr><td>${clubName(x.club)}</td><td>season ${x.from}${x.to === null ? ' – now' : x.to === x.from ? '' : ` – ${x.to}`}</td><td class="n">${x.salary ? money(x.salary) + ' a year' : ''}</td><td class="dim">${x.how === 'sacked' ? 'sacked' : x.how === 'left' ? 'left for another job' : ''}</td></tr>`;
   const asked = s.career.asked === s.season;
   return `<h2>The board</h2><p>Confidence ${confText(c)} <span class="dim">· below ${Math.round(line)} you are sacked (after ${MIN_GAMES} league games)</span></p>
     <div class="wrap"><table><tr><th>Target</th><th>Now</th></tr>
@@ -403,10 +409,30 @@ views.Board = () => {
     <tr><td>Cup: reach ${cupGoal(cupTarget(s, c.id))}</td><td></td></tr></table></div>
     <p class="dim">Every league result is weighed against what a squad like yours should get; the board also watches the table each week and does not like debt or a wage bill over budget. Going out of the cup early costs, cup wins from the target round on help. At the end of the season the target is judged, and promotion and relegation count.</p>
     <h2>Budgets</h2><p>Transfer budget ${money(s.budget)} · wage budget ${perWeek(s.wageBudget)} (wages and staff ${perWeek(wageBill(c) + staffBill(s, c))})</p>
-    <p class="dim">Once a season you may ask for more. The board agrees while its confidence is ${ASK.conf} or more and the club is out of debt; otherwise it says no and thinks less of you for asking.</p>
+    <p class="dim">Once a season you may ask for more. The board agrees while its confidence is ${ASK.conf} or more and the club is out of debt (always, if you own ${SHARE.say}% of the club); otherwise it says no and thinks less of you for asking.</p>
     <div class="bar">${asked ? '<span class="dim">You have asked this season.</span>' : `<button data-act="ask" data-field="transfer">Ask for ${Math.round((ASK.transfer - 1) * 100)}% more transfer budget</button> <button data-act="ask" data-field="wage">Ask for ${Math.round((ASK.wage - 1) * 100)}% more wage budget</button>`}</div>
     <h2>Your reputation: ${s.career.rep}</h2><p class="dim">Your club's size is ${level(s, c.id)} on the same scale. Reputation follows where you finish and the trophies you win, and drops when you are sacked. Clubs up to ${REP.gate} above it may offer you their job when they sack their manager; it buys a little patience from the board and persuades players to join.</p>
     <h2>Career</h2><div class="wrap"><table>${s.career.spells.map(spell).join('')}</table></div>`;
+};
+
+// The manager's own money: salary, bonuses, severance; players of his own; shares in clubs.
+views.Money = () => {
+  const spell = s.career.spells.at(-1), own = s.me !== null && spell.to === null;
+  const pay = own ? spell.salary ?? salaryFor(s, s.me) : 0;
+  const rows = Object.entries(s.career.shares).map(([id, pct]) => { const c = s.clubs[id], v = clubValue(s, c);
+    return `<tr><td>${clubName(c.id)}</td><td class="n">${pct}%</td><td class="n">${money(v)}</td><td class="n">${money(pct * v / 100)}</td></tr>`; }).join('');
+  const mine = s.clubs.flatMap(c => c.players.filter(p => p.mine).map(p => `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${p.age}</td><td>${clubName(c.id)}</td><td class="n">${money(value(p))}</td></tr>`)).join('');
+  const clubs = [...s.clubs].sort((a, b) => a.div - b.div || a.name.localeCompare(b.name)).map(c => [String(c.id), `${c.name} · ${money(clubValue(s, c) / 100)} per 1%${stake(s, c.id) ? ` · you own ${stake(s, c.id)}%` : ''}`]);
+  return `<h2>Your money: ${money(s.career.money)}</h2>
+    <p>${own ? `Salary at ${clubName(s.me)}: ${money(pay)} a year, paid week by week through the season.` : 'Out of work: no salary.'}</p>
+    <p class="dim">The salary is set by the size of the club when you take the job. Each season the club pays a bonus of ${BONUS.target * 100}% of a year's salary for meeting the board's target, ${BONUS.up * 100}% for promotion and ${BONUS.trophy * 100}% for each trophy. If you are sacked you get a quarter's salary (${SEVERANCE * 100}%); if you leave for another job, nothing.</p>
+    <h2>Your players</h2>${mine ? `<div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th>At</th><th class="n">Value</th></tr>${mine}</table></div>` : '<p class="dim">None. Tick "Pay fees from your own money" on Transfers to buy one.</p>'}
+    <h2>Shares</h2>${rows ? `<div class="wrap"><table><tr><th>Club</th><th class="n">Stake</th><th class="n">Club value</th><th class="n">Your part</th></tr>${rows}</table></div>` : '<p class="dim">You own no shares.</p>'}
+    <div class="bar"><select id="share-club" aria-label="club">${options(clubs, String(s.me ?? clubs[0][0]))}</select>
+      <label><input type="number" id="pct" min="1" max="${SHARE.max}" value="1" style="width:4em" aria-label="percent"> %</label>
+      <button data-act="shares" data-field="buy">Buy</button> <button data-act="shares" data-field="sell">Sell</button></div>
+    <p class="dim">A club is worth ${SHARE.value}× its expected season income, so promotion raises its value. You can own up to ${SHARE.max}% of a club; selling costs ${SHARE.sellCut * 100}%.
+    Each summer every club you own part of pays you your share of half its season's profit. In your own club, ${SHARE.patient}% makes the board more patient (the sacking line drops by ${SHARE.patience}), and ${SHARE.say}% gives you a say: every budget request is granted and the transfer budget is ${Math.round(SHARE.sayTransfer * 100)} points more of the balance.</p>`;
 };
 
 views.Inbox = () => {
@@ -422,7 +448,8 @@ function outOfWork() {
   return `<h2>Out of work</h2><p>Reputation ${s.career.rep}. Clubs that sack their manager may offer you the job: watch the inbox.</p>
     <div class="bar">${s.done ? '<button class="primary" data-act="end">Start next season</button>' : `<button class="primary" data-act="play">Continue</button> <span class="dim">${dateLabel(s.days[s.next].day)}</span>`}</div>`;
 }
-const UNEMPLOYED = ['Inbox', 'Table', 'Cup'];
+const UNEMPLOYED = ['Inbox', 'Money', 'Table', 'Cup'];
+const SAVE_BUTTONS = '<button data-act="exportSave">Export save</button><button data-act="importSave">Import save</button>';
 const navButton = t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}">${t === 'Inbox' && unread() ? `Inbox (${unread()})` : t}</button>`;
 
 const actions = {
@@ -431,6 +458,25 @@ const actions = {
   declineJob(id) { declineJob(s, id); msg = 'Offer declined.'; },
   ask(_, el) { msg = askBoard(s, el.dataset.field); },
   reset() { if ((s.me === null && !s.career) || confirm('Abandon this career and start a new game?')) { stopClock(); s = newWorld(); sel = viewing = null; tableDiv = 0; } },
+  exportSave() {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([serialize(s)], { type: 'application/json' }));
+    a.download = `touchline-${s.me === null ? 'career' : s.clubs[s.me].short}-season-${s.season}.json`.replace(/[^\w.-]+/g, '_');
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  },
+  importSave() {
+    const f = document.createElement('input');
+    f.type = 'file'; f.accept = '.json,application/json';
+    f.onchange = async () => {
+      const next = deserialize(await f.files[0]?.text());
+      if (!next) msg = 'That file is not a Touchline save.';
+      else if ((s.me !== null || s.career) && !confirm('Replace the current game with this save?')) return;
+      else { stopClock(); s = next; tab = s.live ? 'Match' : s.me === null ? 'Inbox' : 'Squad'; sel = viewing = null; tableDiv = s.me === null ? 0 : s.clubs[s.me].div; msg = 'Save imported.'; }
+      render(); save();
+    };
+    f.click();
+  },
   tab(_, el) { tab = el.dataset.tab; sel = viewing = null; },
   div(id) { tableDiv = id; },
   view(id) { viewing = id; },
@@ -449,6 +495,7 @@ const actions = {
   play() { stopClock(); playDay(s); subOut = subIn = null; msg = newsText(); },
   trainField(_, el) { msg = setTraining(s, el.dataset.field, el.value) || ''; },
   focus(id, el) { msg = setFocus(s, id, el.value || null) || ''; },
+  load(id, el) { msg = setLoad(s, id, el.value || null) || ''; },
   live() { kickOff(s); subOut = subIn = null; },
   go() { startClock(); },
   pause() { stopClock(); },
@@ -468,7 +515,8 @@ const actions = {
     subOut = subIn = null;
   },
   end() { endSeason(s); tab = s.me === null ? 'Inbox' : 'History'; if (s.me !== null) tableDiv = myClub(s).div; },
-  buy(id) { msg = buy(s, id) || 'Signed.'; },
+  buy(id) { msg = buy(s, id, ownPay) || 'Signed.'; },
+  ownPay(_, el) { ownPay = el.checked; },
   browse(id) { filters = { club: String(id) }; tab = 'Transfers'; },
   search() {
     const v = id => $(id).value, n = id => +v(id) || null;
@@ -486,8 +534,9 @@ const actions = {
   promote(id) { msg = promote(s, id, MAX_SQUAD) || 'Promoted to the first team.'; },
   releaseYouth(id) { msg = release(s, id) || 'Released.'; if (viewing === id) viewing = null; },
   scoutPlayer(id) { const k = s.scouts.findIndex(x => !x.task); msg = k < 0 ? 'Every scout is busy.' : assign(s, k, { kind: 'player', id }) || `Scout ${k + 1} sent: report in ${TASKS.player.days} days.`; },
-  bid(id) { msg = bid(s, id, feeOf(id)) || 'Bid accepted: he has signed.'; },
-  counter(id) { msg = acceptCounter(s, id) || 'Deal done: he has signed.'; },
+  bid(id) { msg = bid(s, id, feeOf(id), ownPay) || 'Bid accepted: he has signed.'; },
+  counter(id) { msg = acceptCounter(s, id, ownPay) || 'Deal done: he has signed.'; },
+  shares(id, el) { const n = Math.round(+$('pct').value) || 0; msg = trade(s, +$('share-club').value, el.dataset.field === 'sell' ? -n : n) || 'Done.'; },
   loan(id) { msg = loanIn(s, id) || 'He joins on loan.'; },
   listing(id, el) { msg = setListing(s, id, el.value || null) || (el.value ? 'Listed.' : 'Taken off the list.'); },
   acceptOffer(id) { msg = acceptOffer(s, id) || 'Sold.'; },
@@ -502,21 +551,21 @@ function render() {
     if (!UNEMPLOYED.includes(tab)) tab = 'Inbox';
     $('info').textContent = `Out of work · reputation ${s.career.rep} · Season ${s.season}`;
     const main = `<div class="msg" role="status">${msg}</div>` + outOfWork() + views[tab](); // first: the inbox marks what it shows as read
-    $('nav').innerHTML = UNEMPLOYED.map(navButton).join('') + '<button data-act="reset">New game</button>';
+    $('nav').innerHTML = UNEMPLOYED.map(navButton).join('') + '<button data-act="reset">New game</button>' + SAVE_BUTTONS;
     $('main').innerHTML = main;
     msg = '';
     return;
   }
   if (s.me === null) {
     $('info').textContent = 'Pick a club to manage';
-    $('nav').innerHTML = '';
+    $('nav').innerHTML = '<button data-act="importSave">Import save</button>';
     $('main').innerHTML = s.divisions.map(d => `<h2>${esc(d.name)}</h2><div class="grid">${d.clubIds.map(id => `<button data-act="start" data-id="${id}">${badge(id, 24)}${clubName(id)}</button>`).join('')}</div>`).join('');
     return;
   }
   $('info').innerHTML = `${badge(s.me, 22)}${clubName(s.me)} · ${esc(s.divisions[myClub(s).div].name)} · Season ${s.season} · ${s.done ? 'season over' : dateLabel(s.days[s.next].day)} · Transfers ${money(s.budget)} · Wages ${perWeek(wageBill(myClub(s)))} of ${perWeek(s.wageBudget)}`;
   if (s.live) tab = 'Match'; // the other screens wait for the final whistle
   const main = `<div class="msg" role="status">${msg}</div>` + profile() + views[tab](); // first: the inbox marks what it shows as read
-  $('nav').innerHTML = (s.live ? ['Match'] : Object.keys(views)).map(navButton).join('') + '<button data-act="reset">New game</button>';
+  $('nav').innerHTML = (s.live ? ['Match'] : Object.keys(views)).map(navButton).join('') + '<button data-act="reset">New game</button>' + SAVE_BUTTONS;
   $('main').innerHTML = main;
   msg = '';
 }

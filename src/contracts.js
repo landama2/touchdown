@@ -57,7 +57,7 @@ export function expireContracts(s, rng, minSquad) {
     if (!p.contract || p.contract.until > s.season) continue;
     if (c.id !== s.me) { p.contract = { wage: wage(p), until: s.season + yearsFor(p.age), clause: null }; continue; }
     c.players.splice(c.players.indexOf(p), 1);
-    p.contract = null;
+    p.contract = null; delete p.mine; // released: no longer the manager's
     s.market.push(p);
     left.push(p);
   }
