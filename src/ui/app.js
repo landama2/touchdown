@@ -179,6 +179,13 @@ const knockout = rounds => rounds.map(([title, ties]) => `<h3>${esc(title)}</h3>
   <td class="${t.w === t.h ? 'win' : ''}">${clubName(t.h)}</td><td class="n">${t.legs.length ? aggregate(t).join(' – ') : 'v'}</td><td class="${t.w === t.a ? 'win' : ''}">${clubName(t.a)}</td>
   <td class="dim">${t.pens ? `${t.pens[0]}–${t.pens[1]} pens` : t.legs.length > 1 ? 'agg.' : ''}</td></tr>`).join('')}</table></div>`).join('');
 
+// Potential: the overall he could reach (see ceiling in youth.js), as your coaches judge it; only for
+// players you know fully, and never below what he is now.
+const potential = (p, e) => {
+  if (e.k < 100 || s.me === null) return '?';
+  const [lo, hi] = ceilingRange(s, p), now = overall(p);
+  return span([Math.max(lo, now), Math.max(hi, now)]);
+};
 function profile() {
   const p = allPlayers().find(x => x.id === viewing);
   if (!p) return '';
@@ -186,7 +193,7 @@ function profile() {
   const shown = k => r ? span(r[k]) : p.attrs[k], high = k => (r ? r[k][0] : p.attrs[k]) >= 15;
   const group = ([title, keys]) => `<h3>${title}</h3>` + keys.map(k => `<div><span>${label(k)}</span><b class="${high(k) ? 'hi' : ''}">${shown(k)}</b></div>`).join('');
   const known = e.k < 100 ? ` · <span class="dim">known ${e.k}%</span> ${e.ovr[0] < e.ovr[1] && s.scouts.some(x => !x.task) ? `<button data-act="scoutPlayer" data-id="${p.id}">Scout him</button>` : ''}` : '';
-  return `<div class="attrs"><div class="ph">${c?.id === s.me ? '' : star(p.id)}<b class="pname">${esc(p.name)}</b><span class="dim">${p.pos} · age ${p.age} · ${c ? clubName(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · ${moneySpan(e.value)}${known}</span>
+  return `<div class="attrs"><div class="ph">${c?.id === s.me ? '' : star(p.id)}<b class="pname">${esc(p.name)}</b><span class="dim">${p.pos} · age ${p.age} · ${c ? clubName(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · potential <b>${potential(p, e)}</b> · ${moneySpan(e.value)}${known}</span>
     <button data-act="close">Close</button></div>
     <p>Condition ${p.cond}% · sharpness ${Math.round(p.sharp)}% · morale ${moraleLabel(p.morale)} · form ${formAvg(p) ?? '–'} · ${p.yc} league yellow${p.yc === 1 ? '' : 's'}${status(p) ? ` · <span class="oop">${status(p)}</span>` : ''}${p.contract ? ` · contract ${perWeek(p.contract.wage)} until season ${p.contract.until}${p.contract.clause ? `, release clause ${money(p.contract.clause)}` : ''}` : ''}</p>${Object.entries(ATTRS).map(group).join('')}</div>`;
 }
