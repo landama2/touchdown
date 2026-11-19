@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-Status: in progress. Decisions accepted by the owner 2026-11-19 (decision 1 changed to five seasons; decision 6 added at the owner's request). Base: main @ 85a3315.
+Status: done 2026-11-20. Decisions accepted by the owner 2026-11-19 (decision 1 changed to five seasons; decision 6 added at the owner's request); three targets and the block pooling changed by the owner 2026-11-20 (see Results). Tasks 4 and 5 were committed together (both touch `src/finance.js`). Base: main @ 85a3315.
 
 **Goal:** Prove that a 20-season career stays plausible, and fix whatever drifts: a soak script plays whole seasons with no input and checks the world against statistical targets, a performance budget and a save-size budget.
 
@@ -645,6 +645,30 @@ git commit -m "docs: Phase 12 done: soak results and notes"
 Result (seeds 1–3 × 20 seasons, 43 misses): goals per match 2.50–2.85 in every block (late blocks 2.56, 2.53, 2.50; were 2.47–2.53); keepers no longer pull away in the long run (seed 1 × 40 seasons: positions within 1.5 of each other from season 20 on, goals 2.53–2.64). Sackings in range everywhere (block averages 12.6–19.6), so Task 7 needs no change. `tests/england.test.js` (season 1 calibration) still passes.
 
 Still missing, all owner decisions on targets: median wage (31 seasons), average overall (66.0–66.3 in seasons 4–6, 60.9 once), best player value (€209–236M, 2 seasons), home wins in seasons 16–20 of seed 3 (0.419).
+
+### Targets changed by the owner (2026-11-20)
+
+After Task 6 the remaining misses were targets the data showed to be set wrongly, not drift. The owner chose to adjust them:
+- Median wage €800–3,000 a week (was €1,500–3,000): it follows the under-21 share in the generational wave.
+- Average overall 60.5–66.5 (was 61–66): the Phase 10b lift peaks at 66.3; the wave dips to 60.9.
+- Best player value up to €250M (was €200M): a young star reaches €236M.
+- Goals, home wins and sackings are judged per five-season block pooled over the seeds (decision 4 said per seed): one seed's block of about 7,400 matches still wanders about ±1.2 points of home wins.
+
+### Final soak (Task 8, seeds 1–3 × 20 seasons: all targets and budgets met, exit 0)
+
+| Seasons | Goals per match | Home wins | AI sackings a season |
+|---|---|---|---|
+| 1–5 | 2.82 | 44.7% | 13.9 |
+| 6–10 | 2.84 | 45.0% | 19.1 |
+| 11–15 | 2.69 | 44.2% | 16.2 |
+| 16–20 | 2.53 | 43.2% | 15.7 |
+
+Levels over all 60 seasons: average overall 60.9–66.3; median PL balance at most €678M; best player €236M at most; median wage €900–2,400; slowest season 1.3 s; gzipped save 101–119 KB, every one loads back. The autopilot manager was employed 12, 7 and 12 seasons of 20.
+
+Notes:
+- Early goals rose from about 2.72 to 2.83 (seasons 1–10): the real squads have many keepers over 31, who now age. Still inside 2.5–2.9; season 1 of `tests/england.test.js` passes.
+- Goals still fall about 0.3 over 20 seasons and home wins about 1.5 points, with the generational wave (late blocks 2.53 and 43.2%, near the bottom of their bands). Watch these if academy or ageing rules change.
+- No new fun surprise. The stadium's share-price edge (#30, #32) is about €1.5M of your money for €12M of the club's at 49%: noted, not worth an entry.
 
 ### Fun surprises at risk (Task 3)
 

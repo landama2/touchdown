@@ -12,16 +12,17 @@ import { overall, value } from '../src/player.js';
 const median = l => [...l].sort((a, b) => a - b)[l.length >> 1];
 const mean = l => l.reduce((t, x) => t + x, 0) / l.length;
 
-// Plausible ranges (Phase 12 decisions). Rates are judged per block of BLOCK seasons: one season's home-win
-// share wanders by ±3 points on its own. Levels are judged every season.
+// Plausible ranges (Phase 12 decisions; the owner widened three of them after the soak, 2026-11-20). Rates are judged
+// per block of BLOCK seasons pooled over all seeds (one seed's block still wanders about ±1.2 points of home wins).
+// Levels are judged every season of every seed.
 export const TARGETS = {
   goals: [2.5, 2.9],             // per league match (roadmap)
   homeWins: [0.43, 0.47],        // share of league matches (roadmap)
   sackings: [10, 20],            // AI sackings a season (roadmap, Phase 10 note)
-  avgOvr: [61, 66],              // club players; 63.3 at the start of the real data
+  avgOvr: [60.5, 66.5],          // club players: 63.3 at the start, the Phase 10b lift to 66.3, then a generational wave of about ±1.5 around 62.5
   plBalance: [-Infinity, 800e6], // median Premier League balance (Phase 7 and 10 notes); the owners' cap holds it near 5 × €135M
-  bestValue: [50e6, 200e6],      // the most valuable player
-  medianWage: [1500, 3000],      // a week, club players; €1,900 at the start
+  bestValue: [50e6, 250e6],      // the most valuable player: a young star reaches €236M
+  medianWage: [800, 3000],       // a week, club players: €1,900 at the start; €900 when a quarter of players are academy teenagers (×0.6)
 };
 export const BUDGET = { ms: 3000, slowestDayMs: 150, saveBytes: 1.2e6, gzBytes: 200e3 }; // Node on the owner's machine; JSON characters; gzip bytes
 export const BLOCK = 5;
@@ -29,17 +30,19 @@ export const BLOCK = 5;
 const LEVELS = { avgOvr: 'average overall', plBalance: 'median PL balance', bestValue: 'best player value', medianWage: 'median wage' };
 const COSTS = { ms: 'season ms', slowestDayMs: 'slowest day ms', saveBytes: 'save size', gzBytes: 'gzipped save' };
 
-// The misses in one seed's rows, as text.
+// The misses in the rows of one or more seeds (a row's `seed` only labels it), as text.
 export function check(rows) {
   const out = [], miss = (where, what, v, [lo, hi]) => { if (!(v >= lo && v <= hi)) out.push(`${where}: ${what} ${+v.toFixed(3)} outside ${lo}–${hi}`); };
-  for (let k = 0; k < rows.length; k += BLOCK) {
-    const b = rows.slice(k, k + BLOCK), sum = f => b.reduce((t, r) => t + r[f], 0), where = `seasons ${b[0].season}–${b.at(-1).season}`;
+  const blocks = Map.groupBy(rows, r => Math.floor((r.season - 1) / BLOCK));
+  for (const b of blocks.values()) {
+    const sum = f => b.reduce((t, r) => t + r[f], 0), seasons = b.map(r => r.season);
+    const where = `seasons ${Math.min(...seasons)}–${Math.max(...seasons)}`;
     miss(where, 'goals per match', sum('goals') / sum('matches'), TARGETS.goals);
     miss(where, 'home wins', sum('homeWins') / sum('matches'), TARGETS.homeWins);
-    miss(where, 'AI sackings a season', sum('sackings') / b.length, TARGETS.sackings);
+    miss(where, 'AI sackings a season', sum('sackings') / b.length, TARGETS.sackings); // per seed-season
   }
   for (const r of rows) {
-    const where = `season ${r.season}`;
+    const where = `${r.seed == null ? '' : `seed ${r.seed}, `}season ${r.season}`;
     for (const [f, what] of Object.entries(LEVELS)) miss(where, what, r[f], TARGETS[f]);
     for (const [f, what] of Object.entries(COSTS)) miss(where, what, r[f], [0, BUDGET[f]]);
     if (!r.loads) out.push(`${where}: the save does not load back`);
@@ -89,18 +92,19 @@ const line = r => [r.season, Math.round(r.ms), (r.goals / r.matches).toFixed(2),
 
 function main() {
   const [seeds = '1,2,3', seasons = '20'] = process.argv.slice(2);
-  let misses = 0;
+  const all = [];
   for (const seed of seeds.split(',').map(Number)) {
     const s = createWorld(seed), rows = [];
     startCareer(s, 0);
     console.log(`\nseed ${seed}\n${HEAD}`);
-    for (let y = 0; y < +seasons; y++) { rows.push(soakSeason(s)); console.log(line(rows.at(-1))); }
-    const found = check(rows);
-    for (const m of found) console.log(`MISS seed ${seed}, ${m}`);
+    for (let y = 0; y < +seasons; y++) { rows.push({ seed, ...soakSeason(s) }); console.log(line(rows.at(-1))); }
     console.log(`employed ${rows.filter(r => r.employed).length} of ${rows.length} seasons`);
-    misses += found.length;
+    all.push(...rows);
   }
-  console.log(misses ? `\n${misses} misses` : '\nall targets and budgets met');
-  process.exitCode = misses ? 1 : 0;
+  const misses = check(all);
+  console.log('');
+  for (const m of misses) console.log(`MISS ${m}`);
+  console.log(misses.length ? `${misses.length} misses` : 'all targets and budgets met');
+  process.exitCode = misses.length ? 1 : 0;
 }
 if (import.meta.url === pathToFileURL(process.argv[1]).href) main();

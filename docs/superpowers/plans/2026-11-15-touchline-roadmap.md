@@ -25,7 +25,7 @@
 | 10 | Manager career | Board expectations and confidence, job security, sackings, job offers at other clubs, manager reputation, inbox with news and decisions | 6, 7 | `2026-11-16-touchline-phase-10-manager-career.md` (done 2026-11-16) |
 | 10b | Training & money | Training for every age, per-player intensity, budgets favour transfers, the manager's own money: salary, own players, club shares | 5, 6, 10 | `2026-11-17-touchline-phase-10b-training-money.md` (done 2026-11-17) |
 | 11 | Interface | Touchline's own visual identity, player and club profile screens, 2D pitch match view, sortable/filterable tables, save slots with export/import, keyboard and screen-reader support | 2–10 | `2026-11-19-touchline-phase-11-interface.md` (done 2026-11-19) |
-| 12 | Balance & soak | 20-season automated runs checked against statistical targets (goals per match 2.5–2.9, home wins 43–47%, plausible wage/value curves), performance budget, save-size budget; owners take a club's surplus above five seasons of income; your club can build up its stadium | all | `2026-11-19-touchline-phase-12-balance-soak.md` (in progress) |
+| 12 | Balance & soak | 20-season automated runs checked against statistical targets (goals per match 2.5–2.9, home wins 43–47%, plausible wage/value curves), performance budget, save-size budget; owners take a club's surplus above five seasons of income; your club can build up its stadium | all | `2026-11-19-touchline-phase-12-balance-soak.md` (done 2026-11-20) |
 
 ## Real-world data (decided 2026-11-15, planned as Phase 1b)
 
@@ -66,6 +66,13 @@ Phase 10b notes (decided 2026-11-17, plan `2026-11-17-touchline-phase-10b-traini
 - Training now develops players of every age, tapering from 1× at 23 to 0.1× from 31 (`ageGrow()` in `src/training.js`); still capped by the hidden potential. Over 3 seasons of the real data the average overall rises by about 3.2 instead of 1.75 before. Phase 12's soak should check that this levels off.
 - Budgets favour transfers: 75% of the balance for fees, wages from 55% of projected income (was 50% / 70%).
 - The manager has money of his own: a salary, bonuses and severance; players of his own (`p.mine`); shares in clubs up to 49%. Buying a whole club (majority ownership) and Star points (young versions of past legends, earned when your own star players retire) are later phases. Star points decisions: only stars retiring from your club count; current stars can be legends too; real names; potential always high; AI clubs get legends at a much smaller chance.
+
+Phase 12 notes (done 2026-11-20, plan `2026-11-19-touchline-phase-12-balance-soak.md`):
+- `npm run soak` plays seeds 1–3 for 20 seasons (about 80 s) with the career on autopilot and exits 1 on any missed target or budget. Run it after any change to money, training, ageing, the academy or the match engine.
+- Owners take each club's balance above five seasons of projected income every summer (`ownerTake()` in `src/finance.js`): the median Premier League balance levels off at about €650M.
+- Your club can build its stadium: five levels, +15% gate each, eight seasons' payback, from the transfer budget (save version 14). AI clubs building with their surplus, a training ground and an academy building are candidates for a later phase.
+- Keepers age through reflexes and agility, and training gains are scaled by key attributes / 6 so every position gains the same overall. Before, keepers outgrew forwards and goals fell to about 2.47 by season 20.
+- The squads go through a generational wave: the real players retire over seasons 8–16 and academy players replace them, so the overall swings about ±1.5 around 62.5 and the median wage halves in the troughs. The owner widened the wage, overall and best-value targets to match, and rates are judged on blocks pooled over seeds.
 
 ## Architecture decisions that hold for every phase
 

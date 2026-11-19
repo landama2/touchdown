@@ -19,6 +19,14 @@ test('check: rates are judged per block of five seasons, levels and budgets ever
   assert.deepEqual(check(rows).map(m => m.split(':')[0]), ['seasons 1–5', 'season 8', 'season 8']);
 });
 
+test('check: rates are pooled over seeds; levels are judged per seed and season', () => {
+  const seed = (n, goals) => Array.from({ length: 5 }, (_, k) => ({ ...good(k + 1), seed: n, goals: 1484 * goals }));
+  assert.deepEqual(check([...seed(1, 2.42), ...seed(2, 2.7)]), []);          // pooled 2.56
+  const both = [...seed(1, 2.42), ...seed(2, 2.5)];                            // pooled 2.46
+  both[6].medianWage = 500;
+  assert.deepEqual(check(both).map(m => m.split(':')[0]), ['seasons 1–5', 'seed 2, season 2']);
+});
+
 test('soakSeason: one season of the real world, the career on autopilot', () => {
   const s = createWorld(1);
   startCareer(s, 0);
