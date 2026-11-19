@@ -20,6 +20,7 @@ import { terms, canRenew, renew as renewContract } from '../contracts.js';
 import { MIN_GAMES, ASK, REP, BONUS, SEVERANCE, bands, leagueTarget, cupTarget, level, startCareer, acceptJob, declineJob, openOffer, askBoard, sackLine, salaryFor, trade } from '../career.js';
 import { crestSvg, kitSvg } from './art.js';
 import { sortRows, nextSort, sortHead } from './table.js';
+import { pitchLayout, ballAt, awayKit, W as PW, H as PH } from './pitch.js';
 
 // The UI is the only place allowed to touch Date, localStorage and the DOM.
 const newWorld = () => createWorld(Date.now() >>> 0);
@@ -134,6 +135,22 @@ const formationSelect = (act, current) => `<select data-act="${act}">${Object.ke
 
 // Live feed: what matters stands out (goals, cards, injuries, substitutions); shots are background.
 const FEED = { goal: ['⚽', 'goal'], yellow: ['🟨', 'big'], red: ['🟥', 'big sent'], injury: ['🚑', 'big'], sub: ['🔁', 'big'], save: ['🧤', 'dim'], miss: ['💨', 'dim'] };
+// The live pitch: both teams in their shape, the ball with the player in the latest event. Club colours come
+// from the data; the away side wears its second colour when the first looks like the home side's.
+// ponytail: redrawn each minute, so the ball jumps rather than glides; dots are not clickable (the table below is).
+function pitchSvg(m, i) {
+  const dots = pitchLayout(m.sides), ball = ballAt(dots, m.ev, m.min);
+  const [hc, ac] = m.sides.map(S => s.clubs[S.club].colours), kit = [hc, awayKit(hc, ac)];
+  const box = x => `<rect x="${x}" y="${(PH - 40.3) / 2}" width="16.5" height="40.3"/><rect x="${x ? x + 11 : 0}" y="${(PH - 18.3) / 2}" width="5.5" height="18.3"/>`;
+  const dot = d => { const p = m.pl[d.id], [fill, rim] = kit[d.side];
+    return `<g><circle cx="${d.x}" cy="${d.y}" r="2.4" fill="${fill}" stroke="${d.id === subOut ? 'var(--accent)' : rim}" stroke-width="${d.id === subOut ? 0.9 : 0.5}"/>
+      <text x="${d.x}" y="${d.y + 4.8}" class="pn${d.side === i ? ' mine' : ''}">${esc(p.name.split(' ').at(-1))}</text><title>${esc(p.name)} (${d.pos})</title></g>`; };
+  const holder = ball.id === null ? 'the centre spot' : esc(m.pl[ball.id].name);
+  return `<svg class="pitch" viewBox="-2 -2 ${PW + 4} ${PH + 4}" role="img" aria-label="Pitch. Ball: ${holder}">
+    <g class="lines"><rect x="0" y="0" width="${PW}" height="${PH}"/><line x1="${PW / 2}" y1="0" x2="${PW / 2}" y2="${PH}"/><circle cx="${PW / 2}" cy="${PH / 2}" r="9.15"/>${box(0)}${box(PW - 16.5)}</g>
+    ${dots.map(dot).join('')}<circle class="ball" cx="${ball.x + (ball.id === null ? 0 : 2)}" cy="${ball.y - (ball.id === null ? 0 : 2)}" r="1.1"/></svg>`;
+}
+
 function liveView() {
   const m = s.live, i = mySide(), S = m.sides[i], [H, A] = m.sides;
   const feed = [...m.ev].reverse().map(e => { const [icon, cls] = FEED[e.type] ?? ['', 'dim'], mine = e.side === i ? ' mine' : '';
@@ -154,7 +171,7 @@ function liveView() {
       <label>Formation ${formationSelect('liveFormation', S.formation)}</label>
       <button data-act="play">Skip to result</button></div><div class="bar">${teamSelects('liveTeam', S.tac)}`;
   return `${scoreboard(H.club, A.club, `${H.st.goals} – ${A.st.goals}`, m.done ? 'Full time' : m.min ? `${m.min}'` : 'Kick-off')}<div class="bar">${controls}</div>
-    <div class="live"><div class="feed" aria-live="polite">${feed || '<div class="dim">The teams are walking out.</div>'}</div>
+    <div class="live"><div>${pitchSvg(m, i)}<div class="feed" aria-live="polite">${feed || '<div class="dim">The teams are walking out.</div>'}</div></div>
     <div>${m.done ? '' : `<p class="dim">${hint}</p>`}<div class="wrap"><table><tr><th>Pos</th><th>On the pitch</th><th class="n">Ovr</th><th class="n">Fit</th><th class="n">Rating</th><th></th></tr>${S.on.map(onRow).join('')}${emptySlots(m, i).map(emptyRow).join('')}${(S.sent ?? []).map(sentRow).join('')}
     <tr><th colspan="6">Bench · substitutions ${S.subs}/${MAX_SUBS}</th></tr>${S.bench.map(benchRow).join('')}</table></div></div></div>`;
 }

@@ -1,6 +1,6 @@
 # Touchline Phase 11: interface
 
-Status: in progress. Order-of-work steps 1–4 done 2026-11-19 (tokens, sortable tables, profiles, save slots). Base: main @ d4da319.
+Status: in progress. Order-of-work steps 1–5 done 2026-11-19 (tokens, sortable tables, profiles, save slots, pitch view). The formation table lives in `src/lineup.js`, not `tactics.js`. Base: main @ d4da319.
 No save bump planned: this phase changes screens and storage access, not the shape of the career state. If a view needs a new field, that field goes through a migration in `src/save.js` as in earlier phases.
 
 ## Goal

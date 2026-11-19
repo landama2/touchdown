@@ -63,6 +63,11 @@
   .fixture { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .live { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
   .live > * { min-width:0; }
+  .pitch { display:block; width:100%; height:auto; background:var(--pitch); border-radius:8px; margin-bottom:10px; }
+  .pitch .lines { fill:none; stroke:var(--chalk); stroke-opacity:.55; stroke-width:.3; }
+  .pitch .pn { font-size:2.6px; fill:var(--chalk); text-anchor:middle; opacity:.8; }
+  .pitch .pn.mine { font-weight:700; opacity:1; }
+  .pitch .ball { fill:var(--chalk); stroke:var(--on-accent); stroke-width:.3; }
   .feed { max-height:460px; overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
   .feed .goal { color:var(--accent); font-weight:700; font-size:1.1em; padding:4px 0; }
   .feed .big { font-weight:600; }
