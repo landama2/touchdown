@@ -612,4 +612,19 @@ git commit -m "docs: Phase 12 done: soak results and notes"
 
 ## Results
 
-(filled in during the phase)
+### Baseline (Task 2, 2026-11-19, main @ e6ece56: seeds 1–3, 20 seasons, 85 misses)
+
+- **Median PL balance** over €800M from season 7–10 on every seed, about €2.0–2.3B by season 20.
+- **Median wage** under €1,500 from season 10–11 on every seed (lowest €900, seasons 14–16), recovering to €1,300 by season 20.
+- **Average overall** above 66 in seasons 4–7 (peak 66.6) and just under 61 in season 15 on seed 1. Same shape on all seeds: up about 3 by season 5, down about 5 by season 15, back up about 2.5 by season 20.
+- **Goals per match**, seasons 16–20: 2.496 and 2.497 on seeds 2 and 3 (2.52 on seed 1). **Home wins**, seasons 16–20: 0.419 on seed 1. Both fall in the same late seasons.
+- **Best player value** €209M in seasons 8–9 (seeds 2 and 3), just over €200M.
+- In range everywhere: AI sackings (every block 13.6–19.8 a season), season time (1.2–1.6 s), slowest day, save size (101–119 KB gzipped, shrinking slowly), every save loads back.
+- The autopilot manager was employed 11, 11 and 12 seasons of 20.
+
+### Fun surprises at risk (Task 3)
+
+- #30 (buy low before promotion) and #32 (shares outlive the job): share prices are 2 × projected income, which the stadium raises. A €12M Premier League stand adds about €1.5M of income, so about €3M of club value; with a 49% stake that is about €1.5M of your own money for €12M of the club's. A small edge, not a shortcut; keep it if it holds.
+- #25 (ask at the right time) and #32's 25% say: the transfer budget is 75% (85% with a say) of the balance, so the owners' cap limits what a yes is worth to 3.75–4.25 seasons of income. The quirk itself is unchanged.
+- #18 (fire sales) and #31 (bring your own squad): no change expected; the cap only touches clubs far above their income.
+- #1 (the formation edge) and #5 (re-slotting): only at risk if Task 6 changes the match engine.
