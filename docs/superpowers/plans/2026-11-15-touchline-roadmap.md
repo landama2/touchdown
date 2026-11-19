@@ -25,7 +25,7 @@
 | 10 | Manager career | Board expectations and confidence, job security, sackings, job offers at other clubs, manager reputation, inbox with news and decisions | 6, 7 | `2026-11-16-touchline-phase-10-manager-career.md` (done 2026-11-16) |
 | 10b | Training & money | Training for every age, per-player intensity, budgets favour transfers, the manager's own money: salary, own players, club shares | 5, 6, 10 | `2026-11-17-touchline-phase-10b-training-money.md` (done 2026-11-17) |
 | 11 | Interface | Touchline's own visual identity, player and club profile screens, 2D pitch match view, sortable/filterable tables, save slots with export/import, keyboard and screen-reader support | 2–10 | `2026-11-19-touchline-phase-11-interface.md` (done 2026-11-19) |
-| 12 | Balance & soak | 20-season automated runs checked against statistical targets (goals per match 2.5–2.9, home wins 43–47%, plausible wage/value curves), performance budget, save-size budget | all | to write |
+| 12 | Balance & soak | 20-season automated runs checked against statistical targets (goals per match 2.5–2.9, home wins 43–47%, plausible wage/value curves), performance budget, save-size budget; owners take a club's surplus above five seasons of income; your club can build up its stadium | all | `2026-11-19-touchline-phase-12-balance-soak.md` (in progress) |
 
 ## Real-world data (decided 2026-11-15, planned as Phase 1b)
 
