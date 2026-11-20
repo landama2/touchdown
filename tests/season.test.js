@@ -359,7 +359,7 @@ test('play-offs: 3rd-6th, two legs with the higher seed at home second, a final;
       if (t.pens) assert.ok(t.aet && x === y);
       if (!t.aet) assert.notEqual(x, y);
     }
-    assert.ok(legs.filter(r => r.item.div === d && r.item.leg === 0).every(r => !r.aet), 'no extra time in a first leg');
+    assert.ok(legs.filter(r => r.item.div === d && r.item.leg === 0 && r.item.round === 0).every(r => !r.aet), 'no extra time in a first leg');
   }
   const tables = s.divisions.map((_, d) => table(s, d));
   assert.deepEqual(s.playoffs[1].rounds[0].ties.map(t => [t.h, t.a]), [[tables[1][2], tables[1][5]], [tables[1][3], tables[1][4]]]);
