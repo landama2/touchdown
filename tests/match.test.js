@@ -201,6 +201,7 @@ test('aggression strengthens pressing: a pressing side of aggressive players win
   assert.equal(ctrl(0, 2), ctrl(0, 20), 'Normal pressing: aggression adds no control');
   assert.ok(ctrl(1, 20) > ctrl(1, 2), 'it strengthens a High press');
   assert.equal(ctrl(-1, 20), ctrl(-1, 2), 'a Low press is not made worse by it');
+  assert.equal(ctrl(1, 2), ctrl(1, 10), 'nor is a High press by low aggression');
 });
 
 test('the matchday bench is seven players, a keeper among them; only they are in the match', () => {

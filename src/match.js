@@ -51,8 +51,8 @@ const keeperOf = (m, i) => { const k = active(m, i).find(o => o.pos === 'GK'); r
 const role = o => ROLES[o.pos][o.role];
 const avg = (list, f) => list.length ? list.reduce((t, x) => t + f(x), 0) / list.length : 0;
 // Side i's pressing instruction as it plays out: a High press grows with the outfield's average aggression
-// (x1 at AGG0, x1.5 at twice it, x0.5 at none); Normal and Low are never changed by it.
-const pressing = (m, i) => { const p = m.sides[i].tac.pressing; return p > 0 ? p * (1 + K.PRESS_AGG * (avg(active(m, i).filter(o => o.pos !== 'GK'), o => m.pl[o.id].attrs.aggression) / K.AGG0 - 1)) : p; };
+// (x1 up to AGG0, x1.5 at twice it); Normal and Low are never changed by it, and it never weakens a High press.
+const pressing = (m, i) => { const p = m.sides[i].tac.pressing; return p > 0 ? p * (1 + K.PRESS_AGG * Math.max(0, avg(active(m, i).filter(o => o.pos !== 'GK'), o => m.pl[o.id].attrs.aggression) / K.AGG0 - 1)) : p; };
 
 // home/away: { club, ids, formation, bench, tactics, fam } as built by entry() in season.js. AI sides
 // leave out the last three: the best bench, default tactics, and full familiarity with every formation.
