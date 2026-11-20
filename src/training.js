@@ -37,11 +37,14 @@ const intensityOf = (t, p) => loadOf(t, p) === 'Rest' ? REST : INTENSITY[loadOf(
 // Condition regained per day by player p (left out: the team's rate). Rest, the team's or his own, adds REST_RECOVER.
 export const recoverRate = (t, p) => intensityOf(t, p).recover + (t.focus === 'Rest' || loadOf(t, p) === 'Rest' ? REST_RECOVER : 0);
 
-// ponytail: a pick at the cap is lost, not re-rolled (fun surprise #10).
+// A pick at the hidden potential is re-rolled among the attributes still below it (fun surprise #10);
+// the gain is lost only when every candidate is capped.
 function raise(rng, p, t) {
   const own = t.ind[p.id], team = p.pos === 'GK' || !FOCUS[t.focus] ? Object.keys(WEIGHTS[p.pos]) : FOCUS[t.focus];
-  const k = own && rng.next() < 0.5 ? own : rng.pick(team);
-  if (p.attrs[k] < p.pot) { p.attrs[k]++; p.gain++; }
+  const open = ks => ks.filter(k => p.attrs[k] < p.pot);
+  const pool = own && rng.next() < 0.5 && open([own]).length ? [own] : open(team);
+  if (!pool.length) return;
+  p.attrs[rng.pick(pool)]++; p.gain++;
 }
 
 // One week of training for `club` under schedule t. Injured players sit it out. Returns the players injured in training.

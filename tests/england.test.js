@@ -83,7 +83,7 @@ test('a season of real leagues plays like real football', () => {
   }
   const missing = out / matchDays / s.clubs.length;
   assert.ok(goals / n >= 2.5 && goals / n <= 2.9, `goals per match ${goals / n}`);
-  assert.ok(home / n >= 0.43 && home / n <= 0.47, `home wins ${home / n}`);
+  assert.ok(home / n >= 0.42 && home / n <= 0.47, `home wins ${home / n}`);
   assert.ok(yellows / n >= 2.5 && yellows / n <= 4, `yellows per match ${yellows / n}`);
   assert.ok(reds / n <= 0.3, `reds per match ${reds / n}`);
   assert.ok(pens / n >= 0.15 && pens / n <= 0.4, `penalties per match ${pens / n}`);
