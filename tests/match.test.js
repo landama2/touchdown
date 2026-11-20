@@ -346,3 +346,12 @@ test('extra time: a knockout match level after 90 plays on to 120, with one more
   assert.ok(went > 5 && decided > 5, `${went} to extra time, ${decided} decided in 90`);
   assert.equal(play(1, side(4), side(5)).min, 90); // no extra time unless asked
 });
+
+test('extra time in a second leg: level on aggregate, not on the day', () => {
+  for (let seed = 1; seed <= 40; seed++) {
+    const m = startMatch(seed, side(4), side(5), false, [1, 0]); // first-leg goals [this home side, this away side]: 1-0
+    while (m.min < 90) stepMinute(m);
+    const [h, a] = m.sides.map(S => S.st.goals);
+    assert.equal(m.done, h + 1 !== a);
+  }
+});

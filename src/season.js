@@ -39,8 +39,9 @@ function fixtures(s, it) {
   if (!round) return [];
   const legs = it.comp === 'playoff' && it.round === 0 ? 2 : 1;
   const neutral = it.comp === 'cup' ? it.round === cupRounds(s.clubs.length) - 1 : it.round === 1;
-  const extra = it.comp === 'cup'; // extra time before penalties (only the cup so far)
-  return round.ties.map(t => legs === 2 && it.leg === 0 ? { h: t.a, a: t.h, tie: t, legs, neutral, extra } : { h: t.h, a: t.a, tie: t, legs, neutral, extra });
+  // Extra time before penalties in a tie's last match; a second leg (at the tie's h) carries the first leg's score.
+  return round.ties.map(t => legs === 2 && it.leg === 0 ? { h: t.a, a: t.h, tie: t, legs, neutral, extra: false }
+    : { h: t.h, a: t.a, tie: t, legs, neutral, extra: legs === 2 ? [...(t.legs[0] ?? [0, 0])] : true }); // no first leg yet: only listed in upcoming()
 }
 
 // The human club's match on the next calendar day, with its calendar item, or null.
@@ -112,8 +113,7 @@ function play(rng, s, f) {
   return m;
 }
 
-// Adds a finished knockout match to its tie; a tie level after its last leg (and extra time, in the
-// cup) goes to penalties.
+// Adds a finished knockout match to its tie; a tie level after its last leg and extra time goes to penalties.
 function settle(f, m) {
   const t = f.tie, flip = f.h !== t.h, g = [m.sides[0].st.goals, m.sides[1].st.goals];
   if (m.extra && m.min > 90) t.aet = true;

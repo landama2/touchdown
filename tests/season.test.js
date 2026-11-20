@@ -7,7 +7,7 @@ import { setTraining } from '../src/training.js';
 import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason } from '../src/season.js';
 import { ranking } from '../src/awards.js';
 import { serialize, deserialize } from '../src/save.js';
-import { cupRounds } from '../src/cup.js';
+import { cupRounds, aggregate } from '../src/cup.js';
 import { stepMinute, matchResult } from '../src/match.js';
 import { SEASON_WEEKS, BROADCAST, MERIT, CUP_PRIZE, rankPrize, sponsorship, gate, wageBill } from '../src/finance.js';
 import { MIN_SQUAD, MAX_SQUAD, buy } from '../src/transfers.js';
@@ -354,6 +354,12 @@ test('play-offs: 3rd-6th, two legs with the higher seed at home second, a final;
     const second = legs.find(r => r.item.div === d && r.item.round === 0 && r.item.leg === 1 && r.h === semi1.h);
     assert.deepEqual([second.a, semi1.legs[1]], [semi1.a, [second.hg, second.ag]]);
     assert.deepEqual([final.h, final.a], [semi1.w, semi2.w]);
+    for (const t of [semi1, semi2, final]) { // extra time only when level after the last leg's 90 minutes, then penalties if still level
+      const [x, y] = aggregate(t);
+      if (t.pens) assert.ok(t.aet && x === y);
+      if (!t.aet) assert.notEqual(x, y);
+    }
+    assert.ok(legs.filter(r => r.item.div === d && r.item.leg === 0).every(r => !r.aet), 'no extra time in a first leg');
   }
   const tables = s.divisions.map((_, d) => table(s, d));
   assert.deepEqual(s.playoffs[1].rounds[0].ties.map(t => [t.h, t.a]), [[tables[1][2], tables[1][5]], [tables[1][3], tables[1][4]]]);

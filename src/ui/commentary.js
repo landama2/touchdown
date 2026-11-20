@@ -9,7 +9,7 @@ const T = {
   second: ['Second yellow for {name}, and that is an early bath.'],
   injury: ['{name} is down injured and cannot continue.', '{name} pulls up injured.'],
   sub: ['Substitution: {in} replaces {name}.'],
-  extra: ['Level after 90 minutes: we go to extra time.'],
+  extra: ['All square after 90 minutes: we go to extra time.'],
   goal_pen: ['GOAL! {name} sends the keeper the wrong way from the spot.', 'GOAL! {name} converts the penalty.'],
   save_pen: ['Penalty saved! {name} is denied from the spot.'],
   miss_pen: ['{name} misses the penalty!'],

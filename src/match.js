@@ -70,11 +70,13 @@ function makeSide({ club, ids, formation, bench = autoBench(club, ids), tactics 
 }
 
 // neutral: a final at a neutral ground, where side 0 has no home edge. extra: a knockout match that
-// goes to 30 minutes of extra time when level after 90 (penalties after that are the caller's).
+// goes to 30 minutes of extra time when level after 90 (penalties after that are the caller's);
+// for a second leg, extra = [home, away] goals from the first leg, and level means on aggregate.
 export function startMatch(seed, home, away, neutral = false, extra = false) {
   const pl = {}, m = { seed, min: 0, done: false, pl, sides: [makeSide(home, 0, pl), makeSide(away, 1, pl)], ev: [] };
   if (neutral) m.neutral = true;
   if (extra) m.extra = true;
+  if (Array.isArray(extra)) m.carry = [...extra];
   return m;
 }
 
@@ -300,7 +302,7 @@ function finish(m) {
   }
 }
 
-// ponytail: no stoppage time. A level match with m.extra goes on to 120 minutes.
+// ponytail: no stoppage time. A level match (tie) with m.extra goes on to 120 minutes.
 export function stepMinute(m) {
   if (m.done) return;
   const rng = makeRng(m.seed);
@@ -315,7 +317,7 @@ export function stepMinute(m) {
   if (rng.next() < K.INJURY_RATE) injury(m, rng, rng.int(0, 1));
   tire(m);
   for (const i of [0, 1]) if (m.sides[i].auto) autoSubs(m, i);
-  const level = m.sides[0].st.goals === m.sides[1].st.goals;
+  const c = m.carry ?? [0, 0], level = m.sides[0].st.goals + c[0] === m.sides[1].st.goals + c[1];
   if (m.min === MINUTES && m.extra && level) m.ev.push({ min: m.min, side: 0, type: 'extra', id: 0, name: '' });
   else if (m.min === MINUTES || m.min === MINUTES + EXTRA) finish(m);
   m.seed = rng.seed;

@@ -178,7 +178,7 @@ function tick() {
   if (subIn !== null && !m.sides[i].bench.includes(subIn)) subIn = null;
   if (m.done) stopClock();
   if (m.ev.slice(seen).some(e => e.side === i && (e.type === 'injury' || e.type === 'red'))) { stopClock(); msg = 'Play paused: make a change if you need one.'; }
-  if (m.ev.slice(seen).some(e => e.type === 'extra')) { stopClock(); msg = 'Level after 90 minutes: extra time, with one more substitution.'; }
+  if (m.ev.slice(seen).some(e => e.type === 'extra')) { stopClock(); msg = 'All square after 90 minutes: extra time, with one more substitution.'; }
   if (!timer || m.min % 5 === 0) save();
   if (!timer || document.activeElement?.tagName !== 'SELECT') render(); // ponytail: routine ticks skip a redraw so an open dropdown survives; a tick that stopped the clock (full time, pause) always renders
 }
