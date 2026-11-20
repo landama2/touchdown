@@ -48,6 +48,15 @@ test('an individual focus takes about half the gains; nothing grows past the hid
   assert.equal(season(capped, plan({})), 0);
 });
 
+test('a pick at the hidden potential is re-rolled, not lost', () => {
+  const club = squad(7, 50, 19), t = plan({ ind: {} });
+  for (const p of club.players) { p.attrs.pace = p.pot; t.ind[p.id] = 'pace'; }
+  const before = club.players.map(p => ({ ...p.attrs })), base = season(squad(7, 50, 19), plan({}));
+  const gained = season(club, t);
+  assert.ok(Math.abs(gained - base) / base < 0.15, `gain ${gained} vs ${base}`);
+  club.players.forEach((p, i) => assert.equal(p.attrs.pace, before[i].pace));
+});
+
 test('veterans lose about two physical points a season whatever the schedule', () => {
   const club = squad(6, 300, 32), sum = () => club.players.reduce((n, p) => n + ATTRS.physical.reduce((t, k) => t + p.attrs[k], 0), 0);
   const before = sum();
