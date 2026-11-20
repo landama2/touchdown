@@ -136,7 +136,7 @@ const targets = (s, id) => ({ type: 'target', club: id, league: bands(s, s.clubs
 
 // A new career at club id (the club picker).
 export function startCareer(s, id) {
-  s.career = { rep: REP_START, asked: null, warned: null, spells: [], money: 0, shares: {} };
+  s.career = { rep: REP_START, asked: null, warned: null, spells: [], money: 0, shares: {}, stars: 0, hall: [], waiting: [] };
   hire(s, id);
 }
 function hire(s, id) {
@@ -168,6 +168,7 @@ function leave(s, how) {
   c.conf = START; c.games = 0;
   Object.assign(s.career.spells.at(-1), { to: ended(s), how });
   s.jobs.push({ club: c.id, season: s.season, until: s.day + VACANCY_DAYS, offered: false });
+  s.career.waiting.push(...s.youth.filter(p => p.legend)); // legends wait for the next job (takeClub)
   s.me = null; s.live = null; s.youth = []; s.scouts = []; s.offers = []; s.talks = { win: null, by: {} }; s.budget = 0;
 }
 // Whether club id would offer the human manager its job: the manager's reputation reaches its size less REP.gate

@@ -257,7 +257,7 @@ test('a version 10 save gets boards, a career at its club and an empty inbox, an
   const b = deserialize(JSON.stringify(asV10(a)));
   assert.equal(b.version, SAVE_VERSION);
   assert.ok(b.clubs.every(c => c.conf === BOARD_START && c.games === c.st.p));
-  assert.deepEqual(b.career, { rep: REP_START, asked: null, warned: null, spells: [{ club: 9, from: a.season, to: null, how: null }], money: 0, shares: {} });
+  assert.deepEqual(b.career, { rep: REP_START, asked: null, warned: null, spells: [{ club: 9, from: a.season, to: null, how: null }], money: 0, shares: {}, stars: 0, hall: [], waiting: [] });
   assert.deepEqual([b.jobs, b.inbox], [[], []]);
   assert.ok(playDay(b).length);
   const picker = deserialize(JSON.stringify(asV10(createWorld(28, MINI))));

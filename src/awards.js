@@ -1,3 +1,4 @@
+import { displayName } from './player.js';
 // Players' season statistics, the season awards and the records. League matches only.
 // p.stats = { apps, goals, assists, rating } (rating = sum of match ratings) exists once a player has
 // played a league match this season; endSeason removes it.
@@ -8,7 +9,7 @@ export const blankRecords = () => ({ points: null, goals: null, assists: null, w
 // Players with none are left out. Ties: fewer games first, then the lower id. The season's winner of each
 // ranking is its award, and the top 3 are paid prize money (payPrizes in src/finance.js).
 export function ranking(s, d, key, n = 20) {
-  const all = s.divisions[d].clubIds.flatMap(club => s.clubs[club].players.filter(p => p.stats?.[key]).map(p => ({ id: p.id, name: p.name, club, apps: p.stats.apps, v: p.stats[key] })));
+  const all = s.divisions[d].clubIds.flatMap(club => s.clubs[club].players.filter(p => p.stats?.[key]).map(p => ({ id: p.id, name: displayName(p), club, apps: p.stats.apps, v: p.stats[key] })));
   return all.sort((a, b) => b.v - a.v || a.apps - b.apps || a.id - b.id).slice(0, n);
 }
 const top = r => r[0] ? { id: r[0].id, name: r[0].name, club: r[0].club, v: r[0].v } : null;
@@ -39,7 +40,7 @@ export function seasonAwards(s, d) {
   const all = s.divisions[d].clubIds.flatMap(club => s.clubs[club].players.filter(p => p.stats).map(p => ({ p, club })));
   const avg = x => x.p.stats.rating / x.p.stats.apps;
   const best = (list, f) => list.reduce((b, x) => b === null || f(x) > f(b) ? x : b, null);
-  const pack = (x, f) => x && { id: x.p.id, name: x.p.name, club: x.club, v: Math.round(f(x) * 100) / 100 };
+  const pack = (x, f) => x && { id: x.p.id, name: displayName(x.p), club: x.club, v: Math.round(f(x) * 100) / 100 };
   return {
     player: pack(best(all.filter(x => x.p.stats.apps >= games / 2), avg), avg),
     scorer: top(ranking(s, d, 'goals', 1)),

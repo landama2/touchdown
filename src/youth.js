@@ -1,4 +1,4 @@
-import { createPlayer, overall, WEIGHTS } from './player.js';
+import { createPlayer, overall, WEIGHTS, growFactor, joinSeason } from './player.js';
 import { wage } from './finance.js';
 import { coachScale } from './staff.js';
 
@@ -29,7 +29,7 @@ export function trainYouth(s, rng, weeks) {
   if (s.me === null) return;
   const chance = GROWTH * coachScale(s.clubs[s.me]);
   for (let w = 0; w < weeks; w++) for (const p of s.youth) {
-    if (rng.next() >= chance) continue;
+    if (rng.next() >= chance * growFactor(p)) continue;
     const k = rng.pick(Object.keys(WEIGHTS[p.pos]));
     if (p.attrs[k] < p.pot) p.attrs[k]++;
   }
@@ -39,6 +39,7 @@ export function trainYouth(s, rng, weeks) {
 export const ceiling = p => overall({ ...p, attrs: Object.fromEntries(Object.entries(p.attrs).map(([k, v]) => [k, WEIGHTS[p.pos][k] ? Math.max(v, p.pot) : v])) });
 // What your coaches can tell of it: a range as wide as your coaching level allows, holding the truth.
 export function ceilingRange(s, p) {
+  if (p.legend) return [ceiling(p), ceiling(p)]; // a legend's ceiling is known: you paid for it
   const w = CEILING_WIDTH[s.clubs[s.me].staff.coaching - 1], o = ceiling(p), off = ((p.id * 2654435761) >>> 0) % (w + 1);
   return [o - off, o - off + w];
 }
@@ -52,6 +53,7 @@ export function promote(s, id, maxSquad) {
   if (!p) return 'Not in your youth squad.';
   if (c.players.length >= maxSquad) return `Squad is full (${maxSquad}).`;
   take(s, p).contract = starter(s, p);
+  p.since = joinSeason(s);
   c.players.push(p);
   return null;
 }
@@ -66,6 +68,7 @@ export function fromYouth(s, pos) {
   const p = s.youth.filter(x => x.pos === pos).sort((a, b) => overall(b) - overall(a) || a.id - b.id)[0];
   if (!p) return null;
   take(s, p).contract = starter(s, p);
+  p.since = joinSeason(s);
   return p;
 }
 // End of season: everyone a year older; those reaching LEAVE_AGE leave. Returns their names.

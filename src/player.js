@@ -2,6 +2,14 @@ import { FIRST, LAST } from './data/names.js';
 
 export const POS = ['GK', 'DF', 'MF', 'FW'];
 export const RETIRE_AGE = 35; // a player this old or older retires when the season ends
+
+// Legends (src/legends.js): p.legend = 'star' | 'great' | 'icon'. They grow faster and decline later.
+export const LEGEND_GROW = { star: 2, great: 2, icon: 2 };
+export const growFactor = p => p.legend ? LEGEND_GROW[p.legend] : 1;
+export const declineAge = p => p.legend ? 33 : 31; // physical decline from this age
+export const displayName = p => p.legend ? `${p.name} ★` : p.name;
+// The season a player joining a club now first plays for it (after the last match day: next season's).
+export const joinSeason = s => s.season + (s.done ? 1 : 0);
 export const ATTRS = {
   technical: ['passing', 'dribbling', 'finishing', 'tackling', 'heading', 'firstTouch', 'crossing'],
   mental: ['vision', 'positioning', 'composure', 'workRate', 'decisions', 'aggression'],
@@ -56,9 +64,9 @@ export function ageOneYear(rng, p) {
   p.age++;
   if (p.age <= 23) {
     const keys = Object.keys(WEIGHTS[p.pos]);
-    for (let i = 0; i < 4; i++) { const k = rng.pick(keys); if (p.attrs[k] < p.pot) p.attrs[k]++; }
+    for (let i = 0; i < Math.round(4 * growFactor(p)); i++) { const k = rng.pick(keys); if (p.attrs[k] < p.pot) p.attrs[k]++; }
   }
-  if (p.age >= 31) {
+  if (p.age >= declineAge(p)) {
     for (let i = 0; i < 2; i++) { const k = rng.pick(ATTRS.physical); p.attrs[k] = Math.max(1, p.attrs[k] - 1); }
   }
 }

@@ -1,7 +1,6 @@
 # Touchline Phase 10c: Star points, young legends and a hall of fame
 
-Status: approved 2026-11-19 with the answers below; ready to implement. Base: main @ 91567f4.
-One save bump (13 → 14) covers everything below.
+Status: done 2026-11-20 (save version 15; Phase 10d took 14). Base: main @ 91567f4. See "As built" at the end.
 
 ## Decisions already made (2026-11-17, Phase 10b discussion)
 1. Only stars retiring **from your club** earn Star points.
@@ -230,3 +229,27 @@ Legend potential capped around the first draft's 86–95 was too low next to fre
 ## Order of work if approved
 1 (stars, `p.since`) → 2 (points, hall, inbox) → 3 (legend list and builder) → 4 (Legends tab, signing) →
 5 (AI legends) → save v14. Each with tests, `npm test` green, fun-surprises updated, roadmap row 10c.
+
+## As built (2026-11-20)
+
+- **Starting levels raised again.** Free youth at the strongest Premier League club peak at overall 73–79 (20 seeds, usually
+  75–76), so the tiers start at **80 / 85 / 90** (Star / Great / Icon), not 76 / 82 / 88. `makeLegend` nudges the
+  non-signature key attributes until the overall is the tier's ±1 (every list entry checked in tests).
+- **Growth ×2 for every tier** (`LEGEND_GROW` in `src/player.js`); Star was ×1.5 and too slow. Measured at Arsenal,
+  promoted at once: Icons 89 → 99 by 20, Stars 75 → 94–98 by 20 (with the old start levels).
+- **AI chance 1 in 30**, not 1 in 20: award winners count as stars too, so 1 in 20 gave 0.69 AI legends a season
+  (4 seeds × 4 seasons); 1 in 30 gives about one every two seasons.
+- **Your retirees are counted before contracts end.** A 35-year-old's contract always ends in his last season, so at
+  your club he leaves through `expireContracts` (to the free-agent list, where he retires), never through the AI
+  retirement swap. `retireStars` therefore runs right after loans come home and before contracts expire, with each
+  club's division from before promotion and relegation.
+- **Seasons at the club start at the world's start** (`p.since = 1`): the data has no join dates, so Van Dijk retiring
+  from Liverpool after season 1 counts one season (3 points).
+- An AI legend takes the academy youngster's id and contract and arrives at 17 straight into the first team; the
+  inbox reports it ("⭐ Burnley have signed a young Didier Drogba ★"). The world's random sequence and ids are
+  unchanged (tested).
+- The ★ comes from `displayName()` in `src/player.js`: squad lists, profile, youth, match screen and commentary, the
+  scorer/assist rankings and the awards. Free youth ceilings above 100 on the Youth screen are a range artefact from
+  before this phase (left as it is).
+- Disabled buttons are now greyed out (`index.html`), so unaffordable legends show it.
+- Fun surprises #36–#39 recorded.

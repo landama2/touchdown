@@ -1,4 +1,5 @@
-import { POS, ATTRS, ALL_ATTRS, overall, value, RETIRE_AGE } from '../player.js';
+import { POS, ATTRS, ALL_ATTRS, overall, value, RETIRE_AGE, displayName, declineAge } from '../player.js';
+import { TIERS, OWN_DISCOUNT, available as legendsOnOffer, signLegend } from '../legends.js';
 import { available, formAvg, moraleLabel, YELLOW_LIMIT } from '../squad.js';
 import { FOCUS, INTENSITY, LOADS, setTraining, setFocus, setLoad } from '../training.js';
 import { createWorld } from '../world.js';
@@ -27,7 +28,7 @@ const load = () => { try { return deserialize(localStorage.getItem(KEY)); } catc
 const save = () => { try { localStorage.setItem(KEY, serialize(s)); } catch {} };
 
 let s = load() || newWorld();
-let tab = 'Squad', tableView = 'Table', sel = null, viewing = null, tableDiv = s.me === null ? 0 : s.clubs[s.me].div, msg = '', filters = {}; // filters: the player search on Transfers
+let tab = 'Squad', tableView = 'Table', legendPos = 'All', sel = null, viewing = null, tableDiv = s.me === null ? 0 : s.clubs[s.me].div, msg = '', filters = {}; // filters: the player search on Transfers
 let ownPay = false; // Transfers: pay fees from the manager's own money
 let timer = null, speed = 400, subOut = null, subIn = null; // live match: clock, ms per match minute, player picked to come off / to come on
 const SPEEDS = [['Slow', 1000], ['Normal', 400], ['Fast', 100], ['Very fast', 25]];
@@ -49,7 +50,7 @@ const HEAD = '<th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</
 const retires = p => p.age >= RETIRE_AGE ? 'retires at the end of this season' : p.age === RETIRE_AGE - 1 ? 'retires at the end of next season' : '';
 const ageCell = p => retires(p) ? `<span class="${p.age >= RETIRE_AGE ? 'oop' : 'dim'}" title="${retires(p)}">${p.age} ⏳</span>` : p.age;
 const cells = p => `<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${money(value(p))}</td>`;
-const nameBtn = (p, act) => `<td><button class="link" data-act="${act}" data-id="${p.id}">${esc(p.name)}</button>${p.mine ? ' <span title="yours: bought with your own money">💼</span>' : ''}</td>`;
+const nameBtn = (p, act) => `<td><button class="link" data-act="${act}" data-id="${p.id}">${esc(displayName(p))}</button>${p.mine ? ' <span title="yours: bought with your own money">💼</span>' : ''}</td>`;
 const outFor = d => d === 1 ? '1 day' : d < 14 ? `${d} days` : `${Math.round(d / 7)} weeks`;
 const status = p => p.inj ? `${esc(p.inj.name)}, ${outFor(p.inj.days)}` : p.ban ? `banned for ${p.ban} match${p.ban > 1 ? 'es' : ''}`
   : p.yc % YELLOW_LIMIT === YELLOW_LIMIT - 1 ? '🟨 one more yellow is a ban' : '';
@@ -73,6 +74,8 @@ const NEWS = {
   target: n => `🎯 The ${clubName(n.club)} board wants you to ${n.league} and reach ${cupGoal(n.cup)}.`,
   review: n => `📋 Season review: you finished ${ordinal(n.pos)}; the board wanted you to ${n.target}${n.met ? ' — target met' : ' — target missed'}. Reputation ${n.was} → ${n.rep}.`,
   ranking: n => `${n.place ? '🥈' : '🏆'} ${esc(n.name)} finished ${ordinal(n.place + 1)} in the ${esc(s.divisions[n.div]?.name ?? '')} ${n.key === 'goals' ? 'scorers' : 'assists'} ranking (${n.v}). ${clubName(n.club)} receive ${money(n.amount)}; your bonus is ${money(n.bonus)}.`,
+  retired: n => `🎖️ ${esc(n.name)} retires from ${clubName(n.club)}: ${n.seasons} season${n.seasons === 1 ? '' : 's'} at the club, ${n.awards} award${n.awards === 1 ? '' : 's'}. +${n.points} Star points (see Legends).`,
+  aiLegend: n => `⭐ ${clubName(n.club)} have signed a young ${esc(n.name)} ★ from their academy.`,
   request: n => `🏦 You asked the board for more ${n.kind} budget: ${n.yes ? 'agreed' : 'refused'}.`,
 };
 const newsText = () => s.news.map(n => NEWS[n.type](n)).join('<br>');
@@ -186,12 +189,11 @@ const knockout = rounds => rounds.map(([title, ties]) => `<h3>${esc(title)}</h3>
 
 // Potential: the overall he could reach (see ceiling in youth.js), as your coaches judge it; only for
 // players you know fully, and never below what he is now.
-const DECLINE_AGE = 31; // from here age takes more than training gives (training.js, player.js)
 const potential = (p, e) => {
   if (e.k < 100 || s.me === null) return '<b>?</b>';
   const [lo, hi] = ceilingRange(s, p), now = overall(p);
   const txt = span([Math.max(lo, now), Math.max(hi, now)]);
-  return p.age >= DECLINE_AGE ? `<s style="opacity:.6" title="past his peak: he declines from here, so this is out of reach">${txt}</s>` : `<b>${txt}</b>`;
+  return p.age >= declineAge(p) ? `<s style="opacity:.6" title="past his peak: he declines from here, so this is out of reach">${txt}</s>` : `<b>${txt}</b>`;
 };
 // The player's league season so far, with his place in his division's top 20 of scorers and assists.
 function seasonLine(p, c) {
@@ -206,7 +208,7 @@ function profile() {
   const shown = k => r ? span(r[k]) : p.attrs[k], high = k => (r ? r[k][0] : p.attrs[k]) >= 15;
   const group = ([title, keys]) => `<h3>${title}</h3>` + keys.map(k => `<div><span>${label(k)}</span><b class="${high(k) ? 'hi' : ''}">${shown(k)}</b></div>`).join('');
   const known = e.k < 100 ? ` · <span class="dim">known ${e.k}%</span> ${e.ovr[0] < e.ovr[1] && s.scouts.some(x => !x.task) ? `<button data-act="scoutPlayer" data-id="${p.id}">Scout him</button>` : ''}` : '';
-  return `<div class="attrs"><div class="ph">${c?.id === s.me ? '' : star(p.id)}<b class="pname">${esc(p.name)}</b><span class="dim">${p.pos} · age ${p.age}${retires(p) ? ` <span class="oop">⏳ ${retires(p)}</span>` : ''} · ${c ? clubName(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · potential ${potential(p, e)} · ${moneySpan(e.value)}${known}</span>
+  return `<div class="attrs"><div class="ph">${c?.id === s.me ? '' : star(p.id)}<b class="pname">${esc(displayName(p))}</b><span class="dim">${p.pos} · age ${p.age}${retires(p) ? ` <span class="oop">⏳ ${retires(p)}</span>` : ''} · ${c ? clubName(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · potential ${potential(p, e)} · ${moneySpan(e.value)}${known}</span>
     <button data-act="close">Close</button></div>
     ${seasonLine(p, c)}<p>Condition ${p.cond}% · sharpness ${Math.round(p.sharp)}% · morale ${moraleLabel(p.morale)} · form ${formAvg(p) ?? '–'} · ${p.yc} league yellow${p.yc === 1 ? '' : 's'}${status(p) ? ` · <span class="oop">${status(p)}</span>` : ''}${p.contract ? ` · contract ${perWeek(p.contract.wage)} until season ${p.contract.until}${p.contract.clause ? `, release clause ${money(p.contract.clause)}` : ''}` : ''}</p>${Object.entries(ATTRS).map(group).join('')}</div>`;
 }
@@ -423,9 +425,10 @@ views.Staff = () => {
 };
 
 views.Youth = () => {
-  const rows = byPos(s.youth).map(p => { const [lo, hi] = ceilingRange(s, p); return `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${lo}–${hi}</td>
+  const leaving = p => p.legend && p.age >= LEAVE_AGE - 1 ? ` <span class="oop" title="leaves the youth squad at ${LEAVE_AGE} when the season ends">⏳ promote him this season</span>` : '';
+  const rows = byPos(s.youth).map(p => { const [lo, hi] = ceilingRange(s, p); return `<tr>${nameBtn(p, 'view')}<td>${p.pos}</td><td class="n">${ageCell(p)}${leaving(p)}</td><td class="n">${overall(p)}</td><td class="n">${span([lo, hi])}</td>
     <td><button data-act="promote" data-id="${p.id}">Promote (${perWeek(wage(p))})</button> <button data-act="releaseYouth" data-id="${p.id}">Release</button></td></tr>`; }).join('');
-  return `<h2>Youth squad (${s.youth.length}/${YOUTH_MAX})</h2>${help(`Youngsters train every week but play no matches and earn nothing. A new intake arrives each summer; at ${LEAVE_AGE} those still here leave. Ceiling: the overall your coaches think he can reach (better coaching, a closer guess). When contracts end and the first team runs short, the best youth player in the position steps up.`)}
+  return `<h2>Youth squad (${s.youth.length}/${YOUTH_MAX})</h2>${help(`Youngsters train every week but play no matches and earn nothing. A new intake arrives each summer; at ${LEAVE_AGE} those still here leave. Ceiling: the overall your coaches think he can reach (better coaching, a closer guess). When contracts end and the first team runs short, the best youth player in the position steps up. Legends ★ (bought with Star points on Legends) know their ceiling and come with you when you change club.`)}
     ${rows ? `<div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Ceiling</th><th></th></tr>${rows}</table></div>` : '<p class="dim">Empty until the summer intake.</p>'}`;
 };
 
@@ -433,6 +436,23 @@ views.Youth = () => {
 const when = n => `Season ${n.season}, ${n.day < 0 ? 'pre-season' : dateLabel(n.day)}`;
 const unread = () => s.inbox.filter(n => !n.read).length;
 const confText = c => `<meter min="0" max="100" low="35" high="60" optimum="100" value="${c.conf}"></meter> ${Math.round(c.conf)}`;
+
+const TIER_NAME = { icon: 'Icon', great: 'Great', star: 'Star' };
+views.Legends = () => {
+  const c = s.career, pts = c?.stars ?? 0, list = legendsOnOffer(s).filter(e => legendPos === 'All' || e.pos === legendPos)
+    .sort((a, b) => TIERS[b.tier].ovr - TIERS[a.tier].ovr || a.cost - b.cost || a.name.localeCompare(b.name));
+  const sign = e => s.me === null ? '' : `<button data-act="signLegend" data-name="${esc(e.name)}" ${e.cost > pts || s.youth.length >= YOUTH_MAX ? 'disabled' : ''}>Sign (${e.cost})</button>`;
+  const rows = list.map(e => `<tr><td><b>${esc(e.name)} ★</b>${e.own ? ` <span class="dim" title="retired from your club: ${OWN_DISCOUNT} points off">yours</span>` : ''}</td><td>${e.pos}</td><td>${TIER_NAME[e.tier]}</td><td class="dim">${e.sig.map(label).join(', ')}</td><td class="n">${TIERS[e.tier].ovr}</td><td class="n">${e.cost}</td><td>${sign(e)}</td></tr>`).join('');
+  const hall = c?.hall?.length ? `<div class="wrap"><table><tr><th>Season</th><th>Name</th><th>Pos</th><th>Club</th><th class="n">Seasons</th><th class="n">Games</th><th class="n">Goals</th><th class="n">Awards</th><th class="n">Ovr</th><th class="n">Points</th></tr>
+    ${[...c.hall].reverse().map(h => `<tr><td>${h.season}</td><td><b>${esc(h.name)}</b></td><td>${h.pos}</td><td>${badge(h.club, 18)}${clubName(h.club)}</td><td class="n">${h.seasons}</td><td class="n">${h.apps}</td><td class="n">${h.goals}</td><td class="n">${h.awards}</td><td class="n">${h.ovr}</td><td class="n">+${h.points}</td></tr>`).join('')}</table></div>`
+    : '<p class="dim">Nobody yet. When a star retires from a club you manage, he goes in here.</p>';
+  return `<h2>Legends · ${pts} Star point${pts === 1 ? '' : 's'}</h2>
+    ${help(`A star who retires from your club earns Star points: 2, plus 1 for each season at the club after his first, 1 for each season award he ever won and 1 for retiring in the Premier League. A star: the top 10% of his division by overall, or any award winner. Points stay with you from job to job. Spend them on a 17-year-old young version of a legend: he joins your youth squad with a ceiling of 100, grows twice as fast as anyone else and declines two years later. Promote him before ${LEAVE_AGE} or he leaves. Each legend exists once: AI clubs now and then sign one too.`)}
+    <div class="bar">${['All', ...POS].map(x => `<button data-act="legendPos" data-v="${x}" class="${x === legendPos ? 'on' : ''}">${x}</button>`).join('')}</div>
+    ${s.me === null ? '<p class="dim">You can sign legends again once you have a club.</p>' : s.youth.length >= YOUTH_MAX ? `<p class="oop">The youth squad is full (${YOUTH_MAX}).</p>` : ''}
+    <div class="wrap"><table><tr><th>Legend</th><th>Pos</th><th>Tier</th><th>Signature</th><th class="n">Ovr at 17</th><th class="n">Cost</th><th></th></tr>${rows || '<tr><td colspan="7" class="dim">None on offer.</td></tr>'}</table></div>
+    <h2>Hall of fame</h2>${hall}`;
+};
 
 views.Board = () => {
   const c = myClub(s), b = bands(s, c.div), k = leagueTarget(s, c.id), pos = table(s, c.div).indexOf(c.id) + 1, line = Math.max(0, sackLine(s));
@@ -483,7 +503,7 @@ function outOfWork() {
   return `<h2>Out of work</h2><p>Reputation ${s.career.rep}. Clubs that sack their manager may offer you the job: watch the inbox.</p>
     <div class="bar">${s.done ? '<button class="primary" data-act="end">Start next season</button>' : `<button class="primary" data-act="play">Continue</button> <span class="dim">${dateLabel(s.days[s.next].day)}</span>`}</div>`;
 }
-const UNEMPLOYED = ['Inbox', 'Money', 'Table', 'Cup'];
+const UNEMPLOYED = ['Inbox', 'Money', 'Legends', 'Table', 'Cup'];
 const NEW_GAME = '<button data-act="reset">New game</button>';
 const SAVE_BUTTONS = '<button data-act="exportSave">Export save</button><button data-act="importSave">Import save</button>';
 const navButton = t => `<button data-act="tab" data-tab="${t}" class="${t === tab ? 'on' : ''}">${t === 'Inbox' && unread() ? `Inbox (${unread()})` : t}</button>`;
@@ -574,6 +594,8 @@ const actions = {
   },
   staff(_, el) { msg = setStaff(s, el.dataset.field, +el.value) || 'Staff changed.'; },
   promote(id) { msg = promote(s, id, MAX_SQUAD) || 'Promoted to the first team.'; },
+  signLegend(_, el) { const n = el.dataset.name; msg = signLegend(s, n) || `${esc(n)} ★ joins your youth squad.`; },
+  legendPos(_, el) { legendPos = el.dataset.v; },
   releaseYouth(id) { msg = release(s, id) || 'Released.'; if (viewing === id) viewing = null; },
   scoutPlayer(id) { const k = s.scouts.findIndex(x => !x.task); msg = k < 0 ? 'Every scout is busy.' : assign(s, k, { kind: 'player', id }) || `Scout ${k + 1} sent: report in ${TASKS.player.days} days.`; },
   bid(id) { msg = bid(s, id, feeOf(id), ownPay) || 'Bid accepted: he has signed.'; },

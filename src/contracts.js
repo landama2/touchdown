@@ -1,4 +1,4 @@
-import { createPlayer, overall, value, RETIRE_AGE } from './player.js';
+import { createPlayer, overall, value, RETIRE_AGE, joinSeason } from './player.js';
 import { wage } from './finance.js';
 import { fromYouth } from './youth.js';
 
@@ -46,6 +46,7 @@ export function renew(s, id) {
 export function academy(s, rng, c, pos) {
   const p = createPlayer(rng, s.nid++, pos, c.quality - 2, rng.int(17, 19));
   p.contract = { wage: wage(p), until: s.season + ACADEMY_YEARS, clause: null };
+  p.since = joinSeason(s);
   return p;
 }
 

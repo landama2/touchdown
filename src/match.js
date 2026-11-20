@@ -1,5 +1,5 @@
 import { makeRng } from './rng.js';
-import { POS } from './player.js';
+import { POS, displayName } from './player.js';
 import { FORMATIONS, slots, eff, SLOT_WEIGHT, formationBonus, autoBench } from './lineup.js';
 import { ROLES, DUTIES, TEAM_KEYS, defaultSlot, defaultTactics, setTeam, has } from './tactics.js';
 import { readiness } from './squad.js';
@@ -56,7 +56,7 @@ function makeSide({ club, ids, formation, bench = autoBench(club, ids), tactics 
   const pos = slots(formation);
   for (const id of [...ids, ...bench]) {
     const p = club.players.find(x => x.id === id);
-    pl[id] = { name: p.name, pos: p.pos, attrs: p.attrs, side, fit: p.cond, edge: readiness(p), rt: 6, yc: 0, inj: false, played: ids.includes(id) };
+    pl[id] = { name: displayName(p), pos: p.pos, attrs: p.attrs, side, fit: p.cond, edge: readiness(p), rt: 6, yc: 0, inj: false, played: ids.includes(id) };
   }
   return {
     club: club.id, formation, auto: true, subs: 0,

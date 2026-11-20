@@ -11,6 +11,7 @@ import { defaultTraining } from './training.js';
 import { newBooks } from './finance.js';
 import { startContract } from './contracts.js';
 import { aiStaff } from './staff.js';
+import { blankLegends } from './legends.js';
 import { LEAGUES } from './data/england.js';
 import STATS, { CALIBRATION } from './data/england-stats.js';
 
@@ -49,7 +50,7 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
   const rng = makeRng(seed);
   const s = {
     version: SAVE_VERSION, seed, nid: 1,
-    me: null, formation: '4-4-2', lineup: [], bench: [], tactics: defaultTactics(slots('4-4-2')), fam: newFam(), budget: 0, training: defaultTraining(), news: [], offers: [], talks: { win: null, by: {} }, deals: [], known: {}, scouts: [], shortlist: [], youth: [], career: null, jobs: [], inbox: [],
+    me: null, formation: '4-4-2', lineup: [], bench: [], tactics: defaultTactics(slots('4-4-2')), fam: newFam(), budget: 0, training: defaultTraining(), news: [], offers: [], talks: { win: null, by: {} }, deals: [], known: {}, scouts: [], shortlist: [], youth: [], career: null, jobs: [], inbox: [], legends: blankLegends(),
     season: 1, day: -1, next: 0, days: [], done: false, cup: null, playoffs: [],
     clubs: [], divisions: [], market: [], history: [], records: [], last: null, live: null,
   };
@@ -69,7 +70,7 @@ export function createWorld(seed, leagues = LEAGUES, stats = STATS, calibration 
     s.divisions.push({ name: league.name, clubIds, fixtures: [] });
     s.records.push(blankRecords());
   });
-  for (const c of s.clubs) { for (const p of c.players) p.contract = startContract(p, s.season); c.fin = newBooks(s, c); c.lentPay = 0; }
+  for (const c of s.clubs) { for (const p of c.players) { p.contract = startContract(p, s.season); p.since = s.season; } c.fin = newBooks(s, c); c.lentPay = 0; }
   aiStaff(s);
   for (let i = 0; i < MARKET_SIZE; i++) s.market.push(newFreeAgent(rng, s.nid++));
   scheduleSeason(s, rng);

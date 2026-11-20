@@ -1,4 +1,4 @@
-import { ATTRS, ALL_ATTRS, WEIGHTS } from './player.js';
+import { ATTRS, ALL_ATTRS, WEIGHTS, growFactor, declineAge } from './player.js';
 import { injure } from './squad.js';
 import { has } from './tactics.js';
 import { coachScale, medicalScale } from './staff.js';
@@ -10,7 +10,7 @@ import { coachScale, medicalScale } from './staff.js';
 // ageGrow(age): about 4 a season at Normal for 23 and under, tapering to about 0.4 from 31. Never above
 // his hidden potential `pot`: half the time his individual focus, otherwise one from the team focus
 // (keepers: always their position's key attributes). Players aged 31 and over lose a physical point
-// now and then, whatever the schedule. Training can injure, Hard more often, Light less, a personal
+// now and then, whatever the schedule (legends from 33, and they grow faster: growFactor in player.js). Training can injure, Hard more often, Light less, a personal
 // Rest never. The club's coaching staff scale growth, its medical staff the length of injuries (src/staff.js).
 export const FOCUS = {
   Balanced: null, // the position's key attributes (WEIGHTS in player.js)
@@ -51,8 +51,8 @@ export function trainWeek(rng, club, t) {
     if (p.inj) continue;
     const I = intensityOf(t, p);
     if (rng.next() < INJURY * I.injury) { injure(rng, p, heal); hurt.push(p); continue; }
-    if (t.focus !== 'Rest' && rng.next() < grow * I.grow * ageGrow(p.age)) raise(rng, p, t);
-    if (p.age >= 31 && rng.next() < DECLINE) { const k = rng.pick(ATTRS.physical); p.attrs[k] = Math.max(1, p.attrs[k] - 1); }
+    if (t.focus !== 'Rest' && rng.next() < grow * I.grow * ageGrow(p.age) * growFactor(p)) raise(rng, p, t);
+    if (p.age >= declineAge(p) && rng.next() < DECLINE) { const k = rng.pick(ATTRS.physical); p.attrs[k] = Math.max(1, p.attrs[k] - 1); }
   }
   return hurt;
 }

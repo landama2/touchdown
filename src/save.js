@@ -3,7 +3,8 @@ import { slots, newFam } from './lineup.js';
 import { TEAM_KEYS, defaultSlot, defaultTactics } from './tactics.js';
 import { buildCalendar } from './calendar.js';
 import { blankRecords } from './awards.js';
-import { freshState } from './player.js';
+import { freshState, joinSeason } from './player.js';
+import { blankLegends } from './legends.js';
 import { defaultTraining } from './training.js';
 import { startContract } from './contracts.js';
 import { newBooks, seasonBudgets, WAGE_CUT } from './finance.js';
@@ -11,7 +12,7 @@ import { staffScouts } from './scouting.js';
 import { aiStaff, standardStaff } from './staff.js';
 import { BOARD_START, REP_START } from './world.js';
 
-export const SAVE_VERSION = 14; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad. 11: boards, the manager's career, the inbox. 12: per-player training intensity, the manager's money. 13: no wage budget, wages cut to a fifth. 14: assists records
+export const SAVE_VERSION = 15; // 2: clubs from real data with short, colours, kit. 3: live match, richer results. 4: tactics. 5: calendar, cup, play-offs, records. 6: squad dynamics, training. 7: contracts, club books, budgets. 8: transfer market, loans. 9: scouting, shortlist. 10: staff levels, youth squad. 11: boards, the manager's career, the inbox. 12: per-player training intensity, the manager's money. 13: no wage budget, wages cut to a fifth. 14: assists records. 15: Star points, legends, the Hall of fame, players' seasons at their club
 export const KEY = 'touchline.save';
 
 export const serialize = state => JSON.stringify(state);
@@ -27,7 +28,8 @@ const valid = s => s && typeof s === 'object' && s.version === SAVE_VERSION
   && Array.isArray(s.offers) && !!s.talks && Array.isArray(s.deals) && s.clubs.every(c => Number.isFinite(c.lentPay))
   && !!s.known && typeof s.known === 'object' && Array.isArray(s.scouts) && Array.isArray(s.shortlist)
   && Array.isArray(s.youth) && s.clubs.every(c => c.staff && Number.isInteger(c.staff.coaching))
-  && Array.isArray(s.jobs) && Array.isArray(s.inbox) && (s.career === null || (Number.isFinite(s.career.rep) && Number.isFinite(s.career.money) && !!s.career.shares)) && s.clubs.every(c => Number.isFinite(c.conf) && Number.isInteger(c.games));
+  && Array.isArray(s.jobs) && Array.isArray(s.inbox) && (s.career === null || (Number.isFinite(s.career.rep) && Number.isFinite(s.career.money) && !!s.career.shares && Number.isFinite(s.career.stars) && Array.isArray(s.career.hall) && Array.isArray(s.career.waiting)))
+  && !!s.legends && Array.isArray(s.legends.used) && Array.isArray(s.legends.extra) && s.clubs.every(c => Number.isFinite(c.conf) && Number.isInteger(c.games));
 
 // MIGRATIONS[v] upgrades a save from version v to v + 1.
 const MIGRATIONS = {
@@ -83,6 +85,11 @@ const MIGRATIONS = {
     for (const c of s.clubs) c.lentPay = Math.round(c.lentPay / WAGE_CUT);
   },
   13: s => { for (const r of s.records) r.assists = null; for (const c of s.clubs) c.rec.assists = null; }, // no assists records yet
+  14: s => { // everyone's time at his club starts now; no Star points, legends or Hall of fame yet
+    for (const c of s.clubs) for (const p of c.players) p.since = joinSeason(s);
+    s.legends = blankLegends();
+    if (s.career) Object.assign(s.career, { stars: 0, hall: [], waiting: [] });
+  },
 };
 
 export function deserialize(text) {
