@@ -39,7 +39,8 @@ function fixtures(s, it) {
   if (!round) return [];
   const legs = it.comp === 'playoff' && it.round === 0 ? 2 : 1;
   const neutral = it.comp === 'cup' ? it.round === cupRounds(s.clubs.length) - 1 : it.round === 1;
-  return round.ties.map(t => legs === 2 && it.leg === 0 ? { h: t.a, a: t.h, tie: t, legs, neutral } : { h: t.h, a: t.a, tie: t, legs, neutral });
+  const extra = it.comp === 'cup'; // extra time before penalties (only the cup so far)
+  return round.ties.map(t => legs === 2 && it.leg === 0 ? { h: t.a, a: t.h, tie: t, legs, neutral, extra } : { h: t.h, a: t.a, tie: t, legs, neutral, extra });
 }
 
 // The human club's match on the next calendar day, with its calendar item, or null.
@@ -99,21 +100,23 @@ export function kickOff(s) {
   if (s.live || !f) return s.live;
   fixLineup(s);
   const rng = makeRng(s.seed);
-  s.live = startMatch(rng.int(0, 0xffffffff), entry(s, f.h), entry(s, f.a), f.neutral);
+  s.live = startMatch(rng.int(0, 0xffffffff), entry(s, f.h), entry(s, f.a), f.neutral, f.extra);
   s.live.sides[f.h === s.me ? 0 : 1].auto = false;
   s.seed = rng.seed;
   return s.live;
 }
 
 function play(rng, s, f) {
-  const m = startMatch(rng.int(0, 0xffffffff), entry(s, f.h), entry(s, f.a), f.neutral);
+  const m = startMatch(rng.int(0, 0xffffffff), entry(s, f.h), entry(s, f.a), f.neutral, f.extra);
   while (!m.done) stepMinute(m);
   return m;
 }
 
-// Adds a finished knockout match to its tie; a tie level after its last leg goes to penalties.
+// Adds a finished knockout match to its tie; a tie level after its last leg (and extra time, in the
+// cup) goes to penalties.
 function settle(f, m) {
   const t = f.tie, flip = f.h !== t.h, g = [m.sides[0].st.goals, m.sides[1].st.goals];
+  if (m.extra && m.min > 90) t.aet = true;
   if (addLeg(t, flip ? g[1] : g[0], flip ? g[0] : g[1], f.legs)) {
     const p = shootout(m);
     decide(t, flip ? [p[1], p[0]] : p);

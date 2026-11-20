@@ -11,7 +11,9 @@ import { readiness } from './squad.js';
 // injured, everyone tires, and AI sides make substitutions. Tactics (src/tactics.js) shift all of it.
 // Tuning: calibrated on the real leagues, see the 'a season of real leagues' test in tests/england.test.js.
 export const MAX_SUBS = 5;
-const MINUTES = 90;
+const MINUTES = 90, EXTRA = 30;
+// One more substitution in extra time, as in the real game.
+export const subLimit = m => MAX_SUBS + (m.min >= MINUTES && !m.done ? 1 : 0);
 const HOME_EDGE = 1.12;      // home side's extra share of the ball and of chances
 const K = { // tuning; see the calibration note above
   SHOT_RATE: 0.25,      // chance per minute that the side on the ball shoots, between equal sides
@@ -67,10 +69,12 @@ function makeSide({ club, ids, formation, bench = autoBench(club, ids), tactics 
   };
 }
 
-// neutral: a final at a neutral ground, where side 0 has no home edge.
-export function startMatch(seed, home, away, neutral = false) {
+// neutral: a final at a neutral ground, where side 0 has no home edge. extra: a knockout match that
+// goes to 30 minutes of extra time when level after 90 (penalties after that are the caller's).
+export function startMatch(seed, home, away, neutral = false, extra = false) {
   const pl = {}, m = { seed, min: 0, done: false, pl, sides: [makeSide(home, 0, pl), makeSide(away, 1, pl)], ev: [] };
   if (neutral) m.neutral = true;
+  if (extra) m.extra = true;
   return m;
 }
 
@@ -208,7 +212,7 @@ export function substitute(m, i, outId, inId, pos) {
   if (m.done) return 'The match is over.';
   if (!slot) return 'That player is not on the pitch.';
   if (!S.bench.includes(inId)) return 'That player is not on the bench.';
-  if (S.subs >= MAX_SUBS) return `All ${MAX_SUBS} substitutions are used.`;
+  if (S.subs >= subLimit(m)) return `All ${subLimit(m)} substitutions are used.`;
   if (pos !== undefined && !POS.includes(pos)) return 'Unknown position.';
   S.subs++;
   S.bench = S.bench.filter(id => id !== inId);
@@ -274,7 +278,7 @@ const bestFor = (m, S, pos) => S.bench.reduce((b, id) => b === null || eff(m.pl[
 // and from the hour mark take off the most tired outfielder (one per ten minutes, three at most).
 function autoSubs(m, i) {
   const S = m.sides[i];
-  if (S.subs >= MAX_SUBS || !S.bench.length || !S.on.length) return;
+  if (S.subs >= subLimit(m) || !S.bench.length || !S.on.length) return;
   const hurt = S.on.find(o => m.pl[o.id].inj);
   if (hurt) return void substitute(m, i, hurt.id, bestFor(m, S, hurt.pos));
   if (!S.on.some(o => o.pos === 'GK')) {
@@ -296,7 +300,7 @@ function finish(m) {
   }
 }
 
-// ponytail: no stoppage time.
+// ponytail: no stoppage time. A level match with m.extra goes on to 120 minutes.
 export function stepMinute(m) {
   if (m.done) return;
   const rng = makeRng(m.seed);
@@ -311,7 +315,9 @@ export function stepMinute(m) {
   if (rng.next() < K.INJURY_RATE) injury(m, rng, rng.int(0, 1));
   tire(m);
   for (const i of [0, 1]) if (m.sides[i].auto) autoSubs(m, i);
-  if (m.min === MINUTES) finish(m);
+  const level = m.sides[0].st.goals === m.sides[1].st.goals;
+  if (m.min === MINUTES && m.extra && level) m.ev.push({ min: m.min, side: 0, type: 'extra', id: 0, name: '' });
+  else if (m.min === MINUTES || m.min === MINUTES + EXTRA) finish(m);
   m.seed = rng.seed;
 }
 
@@ -322,6 +328,7 @@ export function matchResult(m) {
     .map(([id, p]) => ({ id: +id, name: p.name, side: p.side, rt: Math.round(Math.max(3, Math.min(10, p.rt)) * 10) / 10 }))
     .sort((x, y) => y.rt - x.rt);
   const r = { h: H.club, a: A.club, hg: H.st.goals, ag: A.st.goals, ev: m.ev, stats: [H.st, A.st], ratings };
+  if (m.min > MINUTES) r.aet = true;
   if (m.pens) r.pens = m.pens;
   return r;
 }

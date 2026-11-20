@@ -4,7 +4,7 @@ import { makeRng } from '../src/rng.js';
 import { createWorld } from '../src/world.js';
 import { FORMATIONS, BENCH, slots, bestXI, strength } from '../src/lineup.js';
 import { ROLES, defaultTactics } from '../src/tactics.js';
-import { startMatch, stepMinute, matchResult, simMatch, power, preview, substitute, swapPositions, emptySlots, moveTo, setFormation, setLiveTactic, shootout, MAX_SUBS } from '../src/match.js';
+import { startMatch, stepMinute, matchResult, simMatch, power, preview, substitute, swapPositions, emptySlots, moveTo, setFormation, setLiveTactic, shootout, MAX_SUBS, subLimit } from '../src/match.js';
 import { MINI } from './fixtures/mini.js';
 
 const s = createWorld(3, MINI);
@@ -325,4 +325,24 @@ test('a player starts a match with his condition, and readiness scales his stren
   set({ cond: 100, morale: 100 });
   const happy = power(startMatch(1, home, away), 0);
   for (const k of ['att', 'def', 'ctrl']) assert.ok(Math.abs(happy[k] / fresh[k] - 1.02) < 1e-9, k);
+});
+
+test('extra time: a knockout match level after 90 plays on to 120, with one more substitution', () => {
+  let went = 0, decided = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const m = startMatch(seed, side(4), side(5), false, true);
+    while (m.min < 90) stepMinute(m);
+    const level = m.sides[0].st.goals === m.sides[1].st.goals;
+    assert.equal(m.done, !level);
+    if (!level) { decided++; assert.equal(matchResult(m).aet, undefined); continue; }
+    went++;
+    assert.equal(subLimit(m), MAX_SUBS + 1);
+    assert.equal(m.ev.at(-1).type, 'extra');
+    while (!m.done) stepMinute(m);
+    assert.equal(m.min, 120);
+    assert.equal(matchResult(m).aet, true);
+    assert.equal(subLimit(m), MAX_SUBS);
+  }
+  assert.ok(went > 5 && decided > 5, `${went} to extra time, ${decided} decided in 90`);
+  assert.equal(play(1, side(4), side(5)).min, 90); // no extra time unless asked
 });

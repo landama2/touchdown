@@ -9,6 +9,7 @@ const T = {
   second: ['Second yellow for {name}, and that is an early bath.'],
   injury: ['{name} is down injured and cannot continue.', '{name} pulls up injured.'],
   sub: ['Substitution: {in} replaces {name}.'],
+  extra: ['Level after 90 minutes: we go to extra time.'],
   goal_pen: ['GOAL! {name} sends the keeper the wrong way from the spot.', 'GOAL! {name} converts the penalty.'],
   save_pen: ['Penalty saved! {name} is denied from the spot.'],
   miss_pen: ['{name} misses the penalty!'],
@@ -22,6 +23,6 @@ const T = {
 
 export function line(e, team) {
   const list = T[e.type === 'red' && e.second ? 'second' : e.kind ? `${e.type}_${e.kind}` : e.type], text = list[(e.min + e.id) % list.length];
-  return `${e.min}' ${team} — ` + text.replace('{name}', () => e.name).replace('{in}', () => e.inName)
+  return `${e.min}' ${e.type === 'extra' ? '' : `${team} — `}` + text.replace('{name}', () => e.name).replace('{in}', () => e.inName)
     .replace('{assist}', () => (e.assistName ? `, set up by ${e.assistName}` : ''));
 }

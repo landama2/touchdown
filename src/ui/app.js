@@ -8,7 +8,7 @@ import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, e
 import { dateLabel } from '../calendar.js';
 import { CUP_NAME, cupRoundName, aggregate } from '../cup.js';
 import { ranking } from '../awards.js';
-import { stepMinute, substitute, swapPositions, emptySlots, moveTo, setFormation, setLiveTactic, preview, MAX_SUBS } from '../match.js';
+import { stepMinute, substitute, swapPositions, emptySlots, moveTo, setFormation, setLiveTactic, preview, subLimit } from '../match.js';
 import { TEAM, TEAM_KEYS, TEAM_NAMES, ROLES, DUTIES, INSTR, TAKERS, setTeam, setSlot, setTaker } from '../tactics.js';
 import { line } from './commentary.js';
 import { buy, sell, bid, acceptCounter, talksOn, loanIn, setListing, acceptOffer, rejectOffer, counterOffer, MAX_SQUAD } from '../transfers.js';
@@ -114,7 +114,7 @@ const teamSelects = (act, t) => TEAM_KEYS.map(k => `<label>${TEAM_NAMES[k]} ${fi
 const formationSelect = (act, current) => `<select data-act="${act}">${Object.keys(FORMATIONS).map(f => `<option${f === current ? ' selected' : ''}>${f}</option>`).join('')}</select>`;
 
 // Live feed: what matters stands out (goals, cards, injuries, substitutions); shots are background.
-const FEED = { goal: ['⚽', 'goal'], yellow: ['🟨', 'big'], red: ['🟥', 'big sent'], injury: ['🚑', 'big'], sub: ['🔁', 'big'], save: ['🧤', 'dim'], miss: ['💨', 'dim'] };
+const FEED = { goal: ['⚽', 'goal'], yellow: ['🟨', 'big'], red: ['🟥', 'big sent'], injury: ['🚑', 'big'], sub: ['🔁', 'big'], extra: ['⏱️', 'big'], save: ['🧤', 'dim'], miss: ['💨', 'dim'] };
 function liveView() {
   const m = s.live, i = mySide(), S = m.sides[i], [H, A] = m.sides;
   const feed = [...m.ev].reverse().map(e => { const [icon, cls] = FEED[e.type] ?? ['', 'dim'], mine = e.side === i ? ' mine' : '';
@@ -134,10 +134,10 @@ function liveView() {
       <label>Speed <select data-act="speed">${SPEEDS.map(([t, ms]) => `<option value="${ms}"${ms === speed ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
       <label>Formation ${formationSelect('liveFormation', S.formation)}</label>
       <button data-act="play">Skip to result</button></div><div class="bar">${teamSelects('liveTeam', S.tac)}`;
-  return `${scoreboard(H.club, A.club, `${H.st.goals} – ${A.st.goals}`, m.done ? 'Full time' : m.min ? `${m.min}'` : 'Kick-off')}<div class="bar">${controls}</div>
+  return `${scoreboard(H.club, A.club, `${H.st.goals} – ${A.st.goals}`, m.done ? (m.min > 90 ? 'Full time (aet)' : 'Full time') : m.min > 90 ? `ET ${m.min}'` : m.min ? `${m.min}'` : 'Kick-off')}<div class="bar">${controls}</div>
     <div class="live"><div class="feed" aria-live="polite">${feed || '<div class="dim">The teams are walking out.</div>'}</div>
     <div>${m.done ? '' : `<p class="dim">${hint}</p>`}<div class="wrap"><table><tr><th>Pos</th><th>On the pitch</th><th class="n">Ovr</th><th class="n">Fit</th><th class="n">Rating</th><th></th></tr>${S.on.map(onRow).join('')}${emptySlots(m, i).map(emptyRow).join('')}${(S.sent ?? []).map(sentRow).join('')}
-    <tr><th colspan="6">Bench · substitutions ${S.subs}/${MAX_SUBS}</th></tr>${S.bench.map(benchRow).join('')}</table></div></div></div>`;
+    <tr><th colspan="6">Bench · substitutions ${S.subs}/${subLimit(m)}</th></tr>${S.bench.map(benchRow).join('')}</table></div></div></div>`;
 }
 
 // 'Premier League, round 5', 'FA Cup Quarter-finals', 'Championship play-off semi-final, 2nd leg'.
@@ -150,7 +150,7 @@ function compLabel(it) {
 function koNote(r) {
   const t = r.item.comp === 'playoff' && r.item.leg === 1 ? s.playoffs[r.item.div]?.rounds[0].ties.find(x => x.h === r.h && x.a === r.a) : null;
   const agg = t ? ` · aggregate ${aggregate(t).join('–')}` : '';
-  return agg + (r.pens ? ` · ${r.pens[0]}–${r.pens[1]} on penalties` : '');
+  return agg + (r.aet ? ' · after extra time' : '') + (r.pens ? ` · ${r.pens[0]}–${r.pens[1]} on penalties` : '');
 }
 const scoreLine = r => `${clubName(r.h)} ${r.hg} – ${r.ag} ${clubName(r.a)}${koNote(r) ? `<span class="dim">${koNote(r)}</span>` : ''}`;
 
@@ -178,6 +178,7 @@ function tick() {
   if (subIn !== null && !m.sides[i].bench.includes(subIn)) subIn = null;
   if (m.done) stopClock();
   if (m.ev.slice(seen).some(e => e.side === i && (e.type === 'injury' || e.type === 'red'))) { stopClock(); msg = 'Play paused: make a change if you need one.'; }
+  if (m.ev.slice(seen).some(e => e.type === 'extra')) { stopClock(); msg = 'Level after 90 minutes: extra time, with one more substitution.'; }
   if (!timer || m.min % 5 === 0) save();
   if (!timer || document.activeElement?.tagName !== 'SELECT') render(); // ponytail: routine ticks skip a redraw so an open dropdown survives; a tick that stopped the clock (full time, pause) always renders
 }
@@ -185,7 +186,7 @@ function tick() {
 // Rounds of knockout ties: [[title, ties], ...].
 const knockout = rounds => rounds.map(([title, ties]) => `<h3>${esc(title)}</h3><div class="wrap"><table>${ties.map(t => `<tr class="${t.h === s.me || t.a === s.me ? 'me' : ''}">
   <td class="${t.w === t.h ? 'win' : ''}">${clubName(t.h)}</td><td class="n">${t.legs.length ? aggregate(t).join(' – ') : 'v'}</td><td class="${t.w === t.a ? 'win' : ''}">${clubName(t.a)}</td>
-  <td class="dim">${t.pens ? `${t.pens[0]}–${t.pens[1]} pens` : t.legs.length > 1 ? 'agg.' : ''}</td></tr>`).join('')}</table></div>`).join('');
+  <td class="dim">${t.pens ? `${t.aet ? 'aet, ' : ''}${t.pens[0]}–${t.pens[1]} pens` : t.aet ? 'aet' : t.legs.length > 1 ? 'agg.' : ''}</td></tr>`).join('')}</table></div>`).join('');
 
 // Potential: the overall he could reach (see ceiling in youth.js), as your coaches judge it; only for
 // players you know fully, and never below what he is now.

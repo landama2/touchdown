@@ -1,6 +1,6 @@
 import { table, takeClub, PROMOTED, PLAYOFF, RELEGATED } from './season.js';
 import { SEASON_WEEKS, SHARE, clubValue, profit, stake, rankPrize } from './finance.js';
-import { cupRounds } from './cup.js';
+import { cupPlan } from './cup.js';
 import { seeding, BOARD_START as START, REP_START } from './world.js';
 
 // The manager's career. Every club's board judges its manager: c.conf (confidence 0-100) and c.games
@@ -49,10 +49,14 @@ export function leagueTarget(s, id) {
   const b = bands(s, s.clubs[id].div), e = expectedPos(s, id), k = b.findIndex(([, lim]) => lim >= e);
   return k < 0 ? b.length - 1 : k;
 }
-// The cup round the board expects club id to reach: seeded r-th of the n clubs, it should outlast the clubs seeded below it.
+// The cup round the board expects club id to reach: seeded r-th, it should outlast the clubs seeded
+// below it, so reach the last round with r clubs or more in it (at least the round it enters in).
 export function cupTarget(s, id) {
-  const n = s.clubs.length, P = 2 ** Math.floor(Math.log2(n)), r = seeding(s.clubs).indexOf(id) + 1;
-  return Math.max(0, Math.min(cupRounds(n) - 1, Math.floor(Math.log2(P / r)) + (n > P ? 1 : 0)));
+  const { enter, size } = cupPlan(s.clubs.length), r = seeding(s.clubs).indexOf(id) + 1;
+  let k = 0, below = s.clubs.length - r; // clubs seeded below, who enter no later
+  while (below >= enter[k]) below -= enter[k++];
+  while (k + 1 < size.length && size[k + 1] >= r) k++;
+  return k;
 }
 // A club's size, 0-100: its place in the cup seeding (division, then squad quality).
 export function level(s, id) {
