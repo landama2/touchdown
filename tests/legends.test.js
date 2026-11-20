@@ -11,7 +11,7 @@ import { makeRng } from '../src/rng.js';
 import { overall, ageOneYear, displayName, ATTRS, ALL_ATTRS, WEIGHTS, createPlayer } from '../src/player.js';
 import { serialize, deserialize, SAVE_VERSION } from '../src/save.js';
 import {
-  TIERS, STAR, OWN_DISCOUNT, starLines, starPoints, retireStars, awardsOf, available, makeLegend, signLegend, aiLegends,
+  TIERS, STAR, OWN_DISCOUNT, projectStar, starLines, starPoints, retireStars, awardsOf, available, makeLegend, signLegend, aiLegends,
 } from '../src/legends.js';
 import LIST from '../src/data/legends.js';
 import { MINI } from './fixtures/mini.js';
@@ -28,7 +28,7 @@ test('Star points: 2, +1 a season at the club after the first (up to 4), +1 an a
   assert.equal(starPoints(1, 0, 0), 3);
 });
 
-test('a star retiring from your club earns points and a Hall of fame row; a non-star nothing; an AI club\'s star gives you nothing', () => {
+test('a star retiring from your club earns points and a Hall of fame row; a non-star one quiet point (no Hall row, no note); an AI club\'s star gives you nothing', () => {
   const s = world(1);
   startCareer(s, 0);
   const [star, plain] = s.clubs[0].players, ai = s.clubs[1].players[0];
@@ -40,7 +40,9 @@ test('a star retiring from your club earns points and a Hall of fame row; a non-
   const stars = retireStars(s, list, starLines(s), []);
   assert.deepEqual(stars.map(x => x.p), [star, ai]);
   const points = 2 + 4 + 2 + 1;
-  assert.equal(s.career.stars, points);
+  assert.equal(s.career.stars, points + STAR.retiree); // plus one quiet point for the non-star
+  assert.equal(s.career.hall.length, 1);
+  assert.equal(s.news.filter(n => n.type === 'retired').length, 1);
   assert.deepEqual(s.career.hall, [{ name: star.name, pos: star.pos, club: 0, season: s.season, ovr: overall(star), seasons: 6, awards: 2, apps: 170, goals: 45, points }]);
   assert.equal(s.news.at(-1).type, 'retired');
   // Both stars retired from the top division: both become legends (once they have left); yours is marked as yours and cheaper.
@@ -239,4 +241,17 @@ test('a version 14 save gets seasons at the club from now, no Star points or leg
   playSeason(b);
   endSeason(b);
   assert.equal(b.season, 2);
+});
+
+test('projectStar previews the points a retiring star of yours will give; 0 for a non-star or another club\'s player', () => {
+  const s = world(1);
+  startCareer(s, 0);
+  const [star, plain] = s.clubs[0].players, ai = s.clubs[1].players[0];
+  makeStar(star); makeStar(ai);
+  star.since = s.season - 3;
+  assert.equal(projectStar(s, star), starPoints(4, 0, s.clubs[0].div));
+  assert.equal(projectStar(s, star, 1), starPoints(5, 0, s.clubs[0].div));
+  assert.equal(projectStar(s, ai), 0);
+  for (const k of ALL_ATTRS) plain.attrs[k] = 1;
+  assert.equal(projectStar(s, plain), 0);
 });

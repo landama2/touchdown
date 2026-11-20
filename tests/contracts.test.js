@@ -4,7 +4,7 @@ import { makeRng } from '../src/rng.js';
 import { overall, value } from '../src/player.js';
 import { createWorld } from '../src/world.js';
 import { wage, wageBill } from '../src/finance.js';
-import { yearsFor, startContract, terms, canRenew, renew, expireContracts, academy, lastSeason } from '../src/contracts.js';
+import { yearsFor, startContract, terms, canRenew, renew, expireContracts, autoRenewOn, academy, lastSeason } from '../src/contracts.js';
 import { MINI } from './fixtures/mini.js';
 
 // A mini world managed from club 6 with a wage budget that never gets in the way.
@@ -63,15 +63,19 @@ test('canRenew: only when the new deal would run longer than the old one', () =>
   assert.ok(canRenew(s, p));
 });
 
-test('expiry: AI clubs renew; your players whose contracts end leave, and academy players fill the squad to the minimum', () => {
+test('expiry: everyone is renewed, yours on his asked terms; only a player about to retire leaves, and academy players fill the squad to the minimum', () => {
   const s = fresh(3), club = s.clubs[6], rng = makeRng(1);
-  const leaving = club.players.filter(p => p.contract.until === s.season);
-  const kept = club.players.length - leaving.length;
+  const ending = club.players.filter(p => p.contract.until === s.season);
+  const retiring = ending[0]; retiring.age = 35;
+  const asked = new Map(ending.slice(1).map(p => [p, terms(s, p)]));
   const aiEnding = s.clubs[0].players.filter(p => p.contract.until === s.season);
+  const size = club.players.length;
   const left = expireContracts(s, rng, 16);
-  assert.deepEqual(left, leaving.map(p => p.name));
-  assert.ok(leaving.length > 0 && leaving.every(p => p.contract === null && s.market.includes(p) && !club.players.includes(p)));
-  assert.equal(club.players.length, Math.max(16, kept));
+  assert.deepEqual(left, [retiring.name]);
+  assert.ok(retiring.contract === null && s.market.includes(retiring) && !club.players.includes(retiring));
+  assert.equal(club.players.length, Math.max(16, size - 1));
+  for (const [p, t] of asked) assert.deepEqual(p.contract, { wage: t.wage, until: s.season + t.years, clause: t.clause });
+  assert.deepEqual(s.news.at(-1), { type: 'renewed', names: [...asked.keys()].map(p => p.name) });
   assert.ok(club.players.every(p => p.contract && p.contract.until > s.season));
   assert.ok(aiEnding.length > 0 && aiEnding.every(p => s.clubs[0].players.includes(p) && p.contract.until === s.season + yearsFor(p.age) && p.contract.wage === wage(p)));
   const kid = academy(s, makeRng(2), club, 'GK');
@@ -90,4 +94,16 @@ test('no contract runs past retirement', () => {
   assert.equal(canRenew(s, p), false);
   p.age = 30;
   assert.ok(canRenew(s, p) && terms(s, p).years === 2);
+});
+
+test('with auto-renew off (on by default), your players whose contracts end leave', () => {
+  const s = fresh(3), club = s.clubs[6];
+  assert.ok(autoRenewOn(s));
+  s.autoRenew = false;
+  const leaving = club.players.filter(p => p.contract.until === s.season);
+  assert.ok(leaving.length > 0);
+  const left = expireContracts(s, makeRng(1), 16);
+  assert.deepEqual(left, leaving.map(p => p.name));
+  assert.ok(leaving.every(p => p.contract === null && !club.players.includes(p)));
+  assert.ok(!s.news.some(n => n.type === 'renewed'));
 });

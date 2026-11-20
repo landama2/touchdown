@@ -1,5 +1,5 @@
 import { POS, ATTRS, ALL_ATTRS, overall, value, RETIRE_AGE, displayName, declineAge } from '../player.js';
-import { TIERS, OWN_DISCOUNT, available as legendsOnOffer, signLegend } from '../legends.js';
+import { TIERS, OWN_DISCOUNT, available as legendsOnOffer, signLegend, projectStar } from '../legends.js';
 import { available, formAvg, moraleLabel, YELLOW_LIMIT } from '../squad.js';
 import { FOCUS, INTENSITY, LOADS, setTraining, setFocus, setLoad } from '../training.js';
 import { createWorld } from '../world.js';
@@ -18,7 +18,7 @@ import { TASKS, taskDays, estimate, ranges, assign, recall, toggleShortlist, sea
 import { AREAS, COACHING, MEDICAL, SCOUTS, SCOUT_SPEED, setStaff } from '../staff.js';
 import { YOUTH_MAX, LEAVE_AGE, ceilingRange, promote, release } from '../youth.js';
 import { rankPrize, wage, wageBill, projection, staffBill, STAFF_COST, STANDARD, SHARE, clubValue, stake } from '../finance.js';
-import { terms, canRenew, renew as renewContract } from '../contracts.js';
+import { terms, canRenew, autoRenewOn, renew as renewContract } from '../contracts.js';
 import { MIN_GAMES, ASK, REP, BONUS, SEVERANCE, bands, leagueTarget, cupTarget, level, startCareer, acceptJob, declineJob, openOffer, askBoard, sackLine, salaryFor, trade } from '../career.js';
 import { crestSvg, kitSvg } from './art.js';
 
@@ -48,7 +48,9 @@ const badge = (id, size = 20) => crestSvg(s.clubs[id], size);
 const HEAD = '<th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Value</th>';
 // Retirement: at the end of a season he is RETIRE_AGE or older in; flagged a season ahead.
 const retires = p => p.age >= RETIRE_AGE ? 'retires at the end of this season' : p.age === RETIRE_AGE - 1 ? 'retires at the end of next season' : '';
-const ageCell = p => retires(p) ? `<span class="${p.age >= RETIRE_AGE ? 'oop' : 'dim'}" title="${retires(p)}">${p.age} ⏳</span>` : p.age;
+// Star points he would earn when he retires from your club (see Legends): '' if none.
+const starNote = p => { const n = retires(p) ? projectStar(s, p, p.age >= RETIRE_AGE ? 0 : 1) : 0; return n ? `gives ${n} Star point${n === 1 ? '' : 's'}` : ''; };
+const ageCell = p => retires(p) ? `<span class="${p.age >= RETIRE_AGE ? 'oop' : 'dim'}" title="${retires(p)}${starNote(p) ? ' · ' + starNote(p) : ''}">${p.age} ⏳${starNote(p) ? ` ★${starNote(p).match(/\d+/)[0]}` : ''}</span>` : p.age;
 const cells = p => `<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${money(value(p))}</td>`;
 const nameBtn = (p, act) => `<td><button class="link" data-act="${act}" data-id="${p.id}">${esc(displayName(p))}</button>${p.mine ? ' <span title="yours: bought with your own money">💼</span>' : ''}</td>`;
 const outFor = d => d === 1 ? '1 day' : d < 14 ? `${d} days` : `${Math.round(d / 7)} weeks`;
@@ -75,6 +77,7 @@ const NEWS = {
   review: n => `📋 Season review: you finished ${ordinal(n.pos)}; the board wanted you to ${n.target}${n.met ? ' — target met' : ' — target missed'}. Reputation ${n.was} → ${n.rep}.`,
   ranking: n => `${n.place ? '🥈' : '🏆'} ${esc(n.name)} finished ${ordinal(n.place + 1)} in the ${esc(s.divisions[n.div]?.name ?? '')} ${n.key === 'goals' ? 'scorers' : 'assists'} ranking (${n.v}). ${clubName(n.club)} receive ${money(n.amount)}; your bonus is ${money(n.bonus)}.`,
   retired: n => `🎖️ ${esc(n.name)} retires from ${clubName(n.club)}: ${n.seasons} season${n.seasons === 1 ? '' : 's'} at the club, ${n.awards} award${n.awards === 1 ? '' : 's'}. +${n.points} Star points (see Legends).`,
+  renewed: n => `📝 Contracts renewed automatically: ${n.names.map(esc).join(', ')}.`,
   aiLegend: n => `⭐ ${clubName(n.club)} have signed a young ${esc(n.name)} ★ from their academy.`,
   request: n => `🏦 You asked the board for more ${n.kind} budget: ${n.yes ? 'agreed' : 'refused'}.`,
 };
@@ -209,7 +212,7 @@ function profile() {
   const shown = k => r ? span(r[k]) : p.attrs[k], high = k => (r ? r[k][0] : p.attrs[k]) >= 15;
   const group = ([title, keys]) => `<h3>${title}</h3>` + keys.map(k => `<div><span>${label(k)}</span><b class="${high(k) ? 'hi' : ''}">${shown(k)}</b></div>`).join('');
   const known = e.k < 100 ? ` · <span class="dim">known ${e.k}%</span> ${e.ovr[0] < e.ovr[1] && s.scouts.some(x => !x.task) ? `<button data-act="scoutPlayer" data-id="${p.id}">Scout him</button>` : ''}` : '';
-  return `<div class="attrs"><div class="ph">${c?.id === s.me ? '' : star(p.id)}<b class="pname">${esc(displayName(p))}</b><span class="dim">${p.pos} · age ${p.age}${retires(p) ? ` <span class="oop">⏳ ${retires(p)}</span>` : ''} · ${c ? clubName(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · potential ${potential(p, e)} · ${moneySpan(e.value)}${known}</span>
+  return `<div class="attrs"><div class="ph">${c?.id === s.me ? '' : star(p.id)}<b class="pname">${esc(displayName(p))}</b><span class="dim">${p.pos} · age ${p.age}${retires(p) ? ` <span class="oop">⏳ ${retires(p)}${starNote(p) ? ` · ★ ${starNote(p)}` : ''}</span>` : ''} · ${c ? clubName(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · potential ${potential(p, e)} · ${moneySpan(e.value)}${known}</span>
     <button data-act="close">Close</button></div>
     ${seasonLine(p, c)}<p>Condition ${p.cond}% · sharpness ${Math.round(p.sharp)}% · morale ${moraleLabel(p.morale)} · form ${formAvg(p) ?? '–'} · ${p.yc} league yellow${p.yc === 1 ? '' : 's'}${status(p) ? ` · <span class="oop">${status(p)}</span>` : ''}${p.contract ? ` · contract ${perWeek(p.contract.wage)} until season ${p.contract.until}${p.contract.clause ? `, release clause ${money(p.contract.clause)}` : ''}` : ''}</p>${Object.entries(ATTRS).map(group).join('')}</div>`;
 }
@@ -382,7 +385,8 @@ const views = {
         <td class="n">${p.contract.clause ? money(p.contract.clause) : ''}</td><td>${t ? `<span class="dim">asks ${termsText(t)}</span> <button data-act="renew" data-id="${p.id}">Accept</button>` : ''}</td></tr>`;
     };
     return `<h2>Contracts</h2><p>Wage bill ${perWeek(wageBill(club))}.</p>
-      ${help(`A player whose contract ends this season or next names his terms for a new one: accept them, or he leaves when his contract ends. If too many leave, academy players fill the squad.`)}
+      <label><input type="checkbox" data-act="autoRenew"${autoRenewOn(s) ? ' checked' : ''}> Renew expiring contracts automatically</label>
+      ${help(`A player whose contract ends this season or next names his terms for a new one. With automatic renewal on, he is re-signed on those terms when the season ends (retiring players aside). With it off, accept them yourself or he leaves when his contract ends. If too many leave, academy players fill the squad.`)}
       <div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Wage</th><th>Until</th><th class="n">Clause</th><th>New contract</th></tr>${byPos(club.players).map(row).join('')}</table></div>`;
   },
   Finances() {
@@ -607,6 +611,7 @@ const actions = {
   acceptOffer(id) { msg = acceptOffer(s, id) || 'Sold.'; },
   rejectOffer(id) { msg = rejectOffer(s, id) || 'Offer rejected.'; },
   counterOffer(id) { msg = counterOffer(s, id, feeOf(id)) || 'They agreed: sold.'; },
+  autoRenew(_, el) { s.autoRenew = el.checked; msg = s.autoRenew ? 'Expiring contracts will be renewed automatically.' : 'Expiring contracts will no longer be renewed automatically.'; },
   renew(id) { msg = renewContract(s, id) || 'Contract agreed.'; },
   sell(id) { msg = sell(s, id) || 'Sold.'; if (viewing === id) viewing = null; },
 };

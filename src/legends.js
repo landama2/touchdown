@@ -8,6 +8,7 @@ import LIST from './data/legends.js';
 // A star: in the top STAR.top of his division's overalls that season, or the winner of any season award ever.
 // Points: STAR.base, +1 a season at the club after the first (counted from p.since, before the manager came too),
 // +1 an award, +1 retiring in the top division; with caps.
+// Any other player retiring from your club gives STAR.retiree point, with no Hall of fame row or note.
 // Points buy legends: 17-year-old young versions of great players (src/data/legends.js, plus every star who
 // retires from the top division or from your club), with potential 20 and a head start by tier. Each exists once
 // a world (s.legends.used). A signed legend joins the youth squad; AI clubs draw one now and then when a star
@@ -19,7 +20,7 @@ export const TIERS = {
   great: { cost: 7, ovr: 85, sig: 18 },
   icon: { cost: 10, ovr: 90, sig: 19 },
 };
-export const STAR = { top: 0.1, base: 2, seasons: 4, awards: 3, topFlight: 1 };
+export const STAR = { retiree: 1, top: 0.1, base: 2, seasons: 4, awards: 3, topFlight: 1 };
 export const OWN_DISCOUNT = 2;
 export const AI_CHANCE = 1 / 30, AI_WEIGHTS = { star: 6, great: 3, icon: 1 };
 const AWARDS = ['player', 'scorer', 'assists', 'young'];
@@ -41,6 +42,16 @@ export const tenure = (s, p) => s.season - (p.since ?? s.season) + 1;
 export function starPoints(seasons, awards, div) {
   return STAR.base + Math.min(STAR.seasons, Math.max(0, seasons - 1)) + Math.min(STAR.awards, awards) + (div === 0 ? STAR.topFlight : 0);
 }
+// Preview for the UI: the Star points your player p would earn if he retired now (0: not a star, or not at your club).
+// `ahead` = seasons until he retires (0: this season, 1: next). Uses the current star line and division; an estimate.
+export function projectStar(s, p, ahead = 0) {
+  if (!s.career || s.me === null) return 0;
+  const club = s.clubs.find(c => c.players.includes(p));
+  if (!club || (p.loan ? p.loan.from : club.id) !== s.me) return 0;
+  const awards = awardsOf(s, p.id);
+  if (overall(p) < starLines(s)[club.div] && !awards) return 0;
+  return starPoints(tenure(s, p) + ahead, awards, club.div);
+}
 const tierFor = ovr => ovr >= 88 ? 'icon' : ovr >= 84 ? 'great' : 'star';
 const bestKeys = p => Object.keys(WEIGHTS[p.pos]).sort((a, b) => p.attrs[b] - p.attrs[a] || WEIGHTS[p.pos][b] - WEIGHTS[p.pos][a]).slice(0, 3);
 
@@ -54,7 +65,10 @@ export function retireStars(s, list, lines, now) {
   const stars = [];
   for (const { p, club, div } of list) {
     const ovr = overall(p), awards = awardsOf(s, p.id, now);
-    if (ovr < lines[div] && !awards) continue;
+    if (ovr < lines[div] && !awards) { // not a star: your retiree is still worth a single point, quietly (no Hall of fame, no note)
+      if (club === s.me && s.career) s.career.stars += STAR.retiree;
+      continue;
+    }
     stars.push({ p, club, div });
     const mine = club === s.me && !!s.career;
     if (mine) {

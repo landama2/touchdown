@@ -10,6 +10,9 @@ import { fromYouth } from './youth.js';
 const CLAUSE = { above: 5, times: 2 }; // 5+ overall above your best XI's average: a clause of twice his value
 const ACADEMY_YEARS = 3;
 
+// The setting: re-sign the manager's expiring players automatically. On unless switched off (s.autoRenew === false; old saves have none).
+export const autoRenewOn = s => s.autoRenew !== false;
+
 export const yearsFor = age => age <= 23 ? 5 : age <= 29 ? 4 : age <= 32 ? 2 : 1;
 // The last season player p plays before he retires: no contract runs past it.
 export const lastSeason = (s, p) => s.season + Math.max(0, RETIRE_AGE - p.age);
@@ -51,19 +54,27 @@ export function academy(s, rng, c, pos) {
 }
 
 // End of season s.season (before the season number moves on): contracts ending now. AI clubs renew
-// them; the human club's players leave for the free-agent list. If that leaves the squad below
+// them; the human club's players are re-signed on the terms they ask (an inbox note lists them) when the
+// autoRenew setting is on, except those who retire. Otherwise, and for retirees, they leave for the free-agent list. If that leaves the squad below
 // minSquad, academy players in the leavers' positions fill the gap: the best of the youth squad
 // there, else a new one. Returns the leavers' names.
 export function expireContracts(s, rng, minSquad) {
-  const left = [];
+  const left = [], renewed = [];
   for (const c of s.clubs) for (const p of [...c.players]) {
     if (!p.contract || p.contract.until > s.season) continue;
     if (c.id !== s.me) { p.contract = { wage: wage(p), until: s.season + years(s, p), clause: null }; continue; }
+    if (autoRenewOn(s) && years(s, p) > 0) { // the manager's player is re-signed on the terms he asks, unless he is about to retire
+      const t = terms(s, p);
+      p.contract = { wage: t.wage, until: s.season + t.years, clause: t.clause };
+      renewed.push(p.name);
+      continue;
+    }
     c.players.splice(c.players.indexOf(p), 1);
     p.contract = null; delete p.mine; // released: no longer the manager's
     s.market.push(p);
     left.push(p);
   }
   if (s.me !== null) for (const p of left) if (s.clubs[s.me].players.length < minSquad) s.clubs[s.me].players.push(fromYouth(s, p.pos) ?? academy(s, rng, s.clubs[s.me], p.pos));
+  if (renewed.length) s.news.push({ type: 'renewed', names: renewed });
   return left.map(p => p.name);
 }
