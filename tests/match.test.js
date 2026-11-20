@@ -180,19 +180,26 @@ function tally(change, n = 300) {
   return t;
 }
 
-test('aggression bites harder with a high press: more cards per foul, fewer with a low one', () => {
-  const rate = pressing => {
-    let yc = 0, fouls = 0;
+test('aggression strengthens pressing: a pressing side of aggressive players wins more of the ball and concedes fewer shots', () => {
+  const run = (pressing, aggression) => {
+    let poss = 0, against = 0;
     for (let seed = 1; seed <= 300; seed++) {
       const entry = mine(4, t => { t.pressing = pressing; });
-      for (const p of entry.club.players) p.attrs.aggression = 20;
+      for (const p of entry.club.players) p.attrs.aggression = aggression;
       const m = play(seed, entry, side(5));
-      yc += m.sides[0].st.yc; fouls += m.sides[0].st.fouls;
+      poss += m.sides[0].st.poss; against += m.sides[1].st.shots;
     }
-    return yc / fouls;
+    return { poss, against };
   };
-  const low = rate(-1), normal = rate(0), high = rate(1);
-  assert.ok(low < normal && normal < high, `yellows per foul ${low} ${normal} ${high}`);
+  const calm = run(1, 2), fierce = run(1, 20);
+  assert.ok(fierce.poss > calm.poss && fierce.against < calm.against, `pressing: ${JSON.stringify([calm, fierce])}`);
+  const ctrl = (pressing, aggression) => {
+    const entry = mine(4, t => { t.pressing = pressing; });
+    for (const p of entry.club.players) p.attrs.aggression = aggression;
+    return power(startMatch(1, entry, side(5)), 0).ctrl;
+  };
+  assert.equal(ctrl(0, 2), ctrl(0, 20), 'Normal pressing: aggression adds no control');
+  assert.ok(ctrl(1, 20) > ctrl(1, 2) && ctrl(-1, 20) < ctrl(-1, 2), 'it strengthens High pressing and Low pressing alike');
 });
 
 test('the matchday bench is seven players, a keeper among them; only they are in the match', () => {

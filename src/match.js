@@ -23,7 +23,7 @@ const K = { // tuning; see the calibration note above
   FAM_WEIGHT: 0.06,     // a side wholly unfamiliar with its formation loses this share of its power
   MENTALITY: 0.04, LEAN: 0.015, TACKLE_DEF: 0.02, TACKLE_CARD: 0.05,
   PRESS_CTRL: 0.05, PRESS_SHOTS: 0.03, PRESS_FOULS: 0.3, PRESS_TIRE: 0.3,
-  PRESS_AGG: 0.5,       // aggression counts this much more (High) or less (Low) in who fouls and who is booked
+  PRESS_AGG: 0.5, AGG0: 10, // the control and shots-against effects of pressing grow by this share per AGG0 of the outfield's average aggression above AGG0
   TEMPO_SHOTS: 0.12, TEMPO_XG: 0.1, TEMPO_CTRL: 0.04, TEMPO_TIRE: 0.05,
   WIDTH_XG: 0.02, WIDTH0: -2, WIDTH_CORNERS: 0.3,
   LINE_SHOTS: 0.06, LINE_XG: 0.06, LINE_PACE: 0.012, LINE_PACE0: 12,
@@ -50,6 +50,8 @@ const active = (m, i) => m.sides[i].on.filter(o => !m.pl[o.id].inj);
 const keeperOf = (m, i) => { const k = active(m, i).find(o => o.pos === 'GK'); return k ? m.pl[k.id] : null; };
 const role = o => ROLES[o.pos][o.role];
 const avg = (list, f) => list.length ? list.reduce((t, x) => t + f(x), 0) / list.length : 0;
+// How well side i presses: the outfield's average aggression against AGG0. 1 at AGG0, 1.5 at twice it, 0.5 at none.
+const pressPower = (m, i) => 1 + K.PRESS_AGG * (avg(active(m, i).filter(o => o.pos !== 'GK'), o => m.pl[o.id].attrs.aggression) / K.AGG0 - 1);
 
 // home/away: { club, ids, formation, bench, tactics, fam } as built by entry() in season.js. AI sides
 // leave out the last three: the best bench, default tactics, and full familiarity with every formation.
@@ -93,7 +95,7 @@ export function power(m, i) {
   return {
     att: a / aw * bonus.att * fam * (1 + tilt),
     def: d / dw * bonus.def * fam * (1 - tilt),
-    ctrl: c / cw * fam * (1 + K.PRESS_CTRL * t.pressing - K.TEMPO_CTRL * t.tempo),
+    ctrl: c / cw * fam * (1 + K.PRESS_CTRL * t.pressing * pressPower(m, i) - K.TEMPO_CTRL * t.tempo),
   };
 }
 
@@ -169,13 +171,12 @@ function sendOff(m, i, o, second) {
 }
 
 function foul(m, rng, i) {
-  const S = m.sides[i], agg = 1 + K.PRESS_AGG * S.tac.pressing; // aggression bites harder when the side presses high
-  const o = pickWeighted(rng, active(m, i), x => (1 + agg * m.pl[x.id].attrs.aggression) * (role(x).foul ?? 1) * TACKLE_FOUL[x.tackle + 1]);
+  const S = m.sides[i], o = pickWeighted(rng, active(m, i), x => (m.pl[x.id].attrs.aggression + 1) * (role(x).foul ?? 1) * TACKLE_FOUL[x.tackle + 1]);
   if (!o) return;
   const p = m.pl[o.id], r = rng.next();
   S.st.fouls++;
   if (r < K.STRAIGHT_RED) sendOff(m, i, o, false);
-  else if (r < K.YELLOW_BASE + agg * p.attrs.aggression / 100 + K.TACKLE_CARD * o.tackle) {
+  else if (r < K.YELLOW_BASE + p.attrs.aggression / 100 + K.TACKLE_CARD * o.tackle) {
     p.yc++; p.rt -= 0.3; S.st.yc++;
     m.ev.push({ min: m.min, side: i, type: 'yellow', id: o.id, name: p.name });
     if (p.yc === 2) sendOff(m, i, o, true);
@@ -307,7 +308,7 @@ export function stepMinute(m) {
   const atk = rng.next() < home / (home + P[1].ctrl) ? 0 : 1, def = 1 - atk, ta = m.sides[atk].tac, td = m.sides[def].tac;
   m.sides[atk].st.poss++;
   const chance = K.SHOT_RATE * (atk === 0 ? edge : 1) * Math.exp((P[atk].att - P[def].def) / K.SPREAD)
-    * (1 + K.TEMPO_SHOTS * ta.tempo) * (1 - K.LINE_SHOTS * td.line - K.PRESS_SHOTS * td.pressing);
+    * (1 + K.TEMPO_SHOTS * ta.tempo) * (1 - K.LINE_SHOTS * td.line - K.PRESS_SHOTS * td.pressing * pressPower(m, def));
   if (rng.next() < chance) shot(m, rng, atk);
   if (rng.next() < K.FOUL_RATE * (1 + K.PRESS_FOULS * td.pressing)) foul(m, rng, def);
   if (rng.next() < K.INJURY_RATE) injury(m, rng, rng.int(0, 1));
