@@ -180,6 +180,21 @@ function tally(change, n = 300) {
   return t;
 }
 
+test('aggression bites harder with a high press: more cards per foul, fewer with a low one', () => {
+  const rate = pressing => {
+    let yc = 0, fouls = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const entry = mine(4, t => { t.pressing = pressing; });
+      for (const p of entry.club.players) p.attrs.aggression = 20;
+      const m = play(seed, entry, side(5));
+      yc += m.sides[0].st.yc; fouls += m.sides[0].st.fouls;
+    }
+    return yc / fouls;
+  };
+  const low = rate(-1), normal = rate(0), high = rate(1);
+  assert.ok(low < normal && normal < high, `yellows per foul ${low} ${normal} ${high}`);
+});
+
 test('the matchday bench is seven players, a keeper among them; only they are in the match', () => {
   const m = startMatch(1, side(4), side(5));
   for (const S of m.sides) {

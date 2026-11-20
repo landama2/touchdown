@@ -23,6 +23,7 @@ const K = { // tuning; see the calibration note above
   FAM_WEIGHT: 0.06,     // a side wholly unfamiliar with its formation loses this share of its power
   MENTALITY: 0.04, LEAN: 0.015, TACKLE_DEF: 0.02, TACKLE_CARD: 0.05,
   PRESS_CTRL: 0.05, PRESS_SHOTS: 0.03, PRESS_FOULS: 0.3, PRESS_TIRE: 0.3,
+  PRESS_AGG: 0.5,       // aggression counts this much more (High) or less (Low) in who fouls and who is booked
   TEMPO_SHOTS: 0.12, TEMPO_XG: 0.1, TEMPO_CTRL: 0.04, TEMPO_TIRE: 0.05,
   WIDTH_XG: 0.02, WIDTH0: -2, WIDTH_CORNERS: 0.3,
   LINE_SHOTS: 0.06, LINE_XG: 0.06, LINE_PACE: 0.012, LINE_PACE0: 12,
@@ -168,12 +169,13 @@ function sendOff(m, i, o, second) {
 }
 
 function foul(m, rng, i) {
-  const S = m.sides[i], o = pickWeighted(rng, active(m, i), x => (m.pl[x.id].attrs.aggression + 1) * (role(x).foul ?? 1) * TACKLE_FOUL[x.tackle + 1]);
+  const S = m.sides[i], agg = 1 + K.PRESS_AGG * S.tac.pressing; // aggression bites harder when the side presses high
+  const o = pickWeighted(rng, active(m, i), x => (1 + agg * m.pl[x.id].attrs.aggression) * (role(x).foul ?? 1) * TACKLE_FOUL[x.tackle + 1]);
   if (!o) return;
   const p = m.pl[o.id], r = rng.next();
   S.st.fouls++;
   if (r < K.STRAIGHT_RED) sendOff(m, i, o, false);
-  else if (r < K.YELLOW_BASE + p.attrs.aggression / 100 + K.TACKLE_CARD * o.tackle) {
+  else if (r < K.YELLOW_BASE + agg * p.attrs.aggression / 100 + K.TACKLE_CARD * o.tackle) {
     p.yc++; p.rt -= 0.3; S.st.yc++;
     m.ev.push({ min: m.min, side: i, type: 'yellow', id: o.id, name: p.name });
     if (p.yc === 2) sendOff(m, i, o, true);
