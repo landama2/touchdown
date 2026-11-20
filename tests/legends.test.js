@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../src/world.js';
-import { takeClub, playDay, endSeason } from '../src/season.js';
+import { takeClub, playDay, endSeason, forceRetire } from '../src/season.js';
 import { startCareer, acceptJob, boardDay, MIN_GAMES } from '../src/career.js';
 import { lend } from '../src/market.js';
 import { promote, ageYouth, ceilingRange, ceiling, YOUTH_MAX, LEAVE_AGE } from '../src/youth.js';
@@ -254,4 +254,22 @@ test('projectStar previews the points a retiring star of yours will give; 0 for 
   assert.equal(projectStar(s, ai), 0);
   for (const k of ALL_ATTRS) plain.attrs[k] = 1;
   assert.equal(projectStar(s, plain), 0);
+});
+
+test('forceRetire: a star of yours retires at once for his points and the Hall; a plain player gives one point; the squad stays at the minimum', () => {
+  const s = world(1);
+  startCareer(s, 0);
+  const club = s.clubs[0], [star, plain] = club.players;
+  makeStar(star); star.since = s.season - 2;
+  for (const k of ALL_ATTRS) plain.attrs[k] = 1;
+  assert.match(forceRetire(s, 9999), /Not your player/);
+  assert.equal(forceRetire(s, star.id), null);
+  assert.ok(!club.players.includes(star));
+  assert.equal(s.career.hall.length, 1);
+  assert.equal(s.career.stars, starPoints(3, 0, club.div));
+  const before = s.career.stars, n = club.players.length;
+  assert.equal(forceRetire(s, plain.id), null);
+  assert.equal(s.career.stars, before + STAR.retiree);
+  assert.equal(s.career.hall.length, 1);
+  assert.ok(club.players.length >= Math.min(n, 16) - 1);
 });

@@ -14,7 +14,7 @@ import { expireContracts, academy } from './contracts.js';
 import { MIN_SQUAD, inWindow, windowId, marketDay, returnLoans } from './market.js';
 import { scoutDays, staffScouts, prune } from './scouting.js';
 import { aiStaff, standardStaff } from './staff.js';
-import { intake, trainYouth, ageYouth } from './youth.js';
+import { intake, trainYouth, ageYouth, fromYouth } from './youth.js';
 import { afterLeague, afterCup, boardWeeks, boardDay, seasonReview, seasonStart, file, payManager } from './career.js';
 
 const MARKET_KEEP = MARKET_SIZE / 2; // half of last season's free agents stay on the list
@@ -63,6 +63,23 @@ export function upcoming(s, n) {
       if (f) out.push({ day: s.days[k].day, item, h: f.h, a: f.a, neutral: f.neutral });
     }
   return out.slice(0, n);
+}
+
+// The manager makes his player `id` retire now. He counts as any retiree from your club (Star points, the Hall of
+// fame and a legend if he is a star; one point if not), is released, and a youth or academy player fills the gap if
+// the squad drops below the minimum. Returns an error message or null.
+export function forceRetire(s, id) {
+  if (s.me === null) return 'You have no club.';
+  const club = s.clubs[s.me], p = club.players.find(x => x.id === id);
+  if (!p) return 'Not your player.';
+  if (p.loan) return `${p.name} is on loan here.`;
+  if (s.live) return 'Not during a match.';
+  retireStars(s, [{ p, club: s.me, div: club.div }], starLines(s), []);
+  club.players.splice(club.players.indexOf(p), 1);
+  s.shortlist = s.shortlist.filter(x => x !== p.id);
+  if (club.players.length < MIN_SQUAD) club.players.push(fromYouth(s, p.pos) ?? academy(s, makeRng(s.seed + p.id), club, p.pos));
+  fixLineup(s);
+  return null;
 }
 
 export function takeClub(s, clubId) {
