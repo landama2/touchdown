@@ -41,6 +41,16 @@ export const tenure = (s, p) => s.season - (p.since ?? s.season) + 1;
 export function starPoints(seasons, awards, div) {
   return STAR.base + Math.min(STAR.seasons, Math.max(0, seasons - 1)) + Math.min(STAR.awards, awards) + (div === 0 ? STAR.topFlight : 0);
 }
+// Preview for the UI: the Star points your player p would earn if he retired now (0: not a star, or not at your club).
+// `ahead` = seasons until he retires (0: this season, 1: next). Uses the current star line and division; an estimate.
+export function projectStar(s, p, ahead = 0) {
+  if (!s.career || s.me === null) return 0;
+  const club = s.clubs.find(c => c.players.includes(p));
+  if (!club || (p.loan ? p.loan.from : club.id) !== s.me) return 0;
+  const awards = awardsOf(s, p.id);
+  if (overall(p) < starLines(s)[club.div] && !awards) return 0;
+  return starPoints(tenure(s, p) + ahead, awards, club.div);
+}
 const tierFor = ovr => ovr >= 88 ? 'icon' : ovr >= 84 ? 'great' : 'star';
 const bestKeys = p => Object.keys(WEIGHTS[p.pos]).sort((a, b) => p.attrs[b] - p.attrs[a] || WEIGHTS[p.pos][b] - WEIGHTS[p.pos][a]).slice(0, 3);
 

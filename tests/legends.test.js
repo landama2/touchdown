@@ -11,7 +11,7 @@ import { makeRng } from '../src/rng.js';
 import { overall, ageOneYear, displayName, ATTRS, ALL_ATTRS, WEIGHTS, createPlayer } from '../src/player.js';
 import { serialize, deserialize, SAVE_VERSION } from '../src/save.js';
 import {
-  TIERS, STAR, OWN_DISCOUNT, starLines, starPoints, retireStars, awardsOf, available, makeLegend, signLegend, aiLegends,
+  TIERS, STAR, OWN_DISCOUNT, projectStar, starLines, starPoints, retireStars, awardsOf, available, makeLegend, signLegend, aiLegends,
 } from '../src/legends.js';
 import LIST from '../src/data/legends.js';
 import { MINI } from './fixtures/mini.js';
@@ -239,4 +239,17 @@ test('a version 14 save gets seasons at the club from now, no Star points or leg
   playSeason(b);
   endSeason(b);
   assert.equal(b.season, 2);
+});
+
+test('projectStar previews the points a retiring star of yours will give; 0 for a non-star or another club\'s player', () => {
+  const s = world(1);
+  startCareer(s, 0);
+  const [star, plain] = s.clubs[0].players, ai = s.clubs[1].players[0];
+  makeStar(star); makeStar(ai);
+  star.since = s.season - 3;
+  assert.equal(projectStar(s, star), starPoints(4, 0, s.clubs[0].div));
+  assert.equal(projectStar(s, star, 1), starPoints(5, 0, s.clubs[0].div));
+  assert.equal(projectStar(s, ai), 0);
+  for (const k of ALL_ATTRS) plain.attrs[k] = 1;
+  assert.equal(projectStar(s, plain), 0);
 });
