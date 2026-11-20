@@ -10,6 +10,9 @@ import { fromYouth } from './youth.js';
 const CLAUSE = { above: 5, times: 2 }; // 5+ overall above your best XI's average: a clause of twice his value
 const ACADEMY_YEARS = 3;
 
+// The setting: re-sign the manager's expiring players automatically. On unless switched off (s.autoRenew === false; old saves have none).
+export const autoRenewOn = s => s.autoRenew !== false;
+
 export const yearsFor = age => age <= 23 ? 5 : age <= 29 ? 4 : age <= 32 ? 2 : 1;
 // The last season player p plays before he retires: no contract runs past it.
 export const lastSeason = (s, p) => s.season + Math.max(0, RETIRE_AGE - p.age);
@@ -51,8 +54,8 @@ export function academy(s, rng, c, pos) {
 }
 
 // End of season s.season (before the season number moves on): contracts ending now. AI clubs renew
-// them; the human club's players are re-signed on the terms they ask (an inbox note lists them), except those who
-// retire: they leave for the free-agent list. If that leaves the squad below
+// them; the human club's players are re-signed on the terms they ask (an inbox note lists them) when the
+// autoRenew setting is on, except those who retire. Otherwise, and for retirees, they leave for the free-agent list. If that leaves the squad below
 // minSquad, academy players in the leavers' positions fill the gap: the best of the youth squad
 // there, else a new one. Returns the leavers' names.
 export function expireContracts(s, rng, minSquad) {
@@ -60,7 +63,7 @@ export function expireContracts(s, rng, minSquad) {
   for (const c of s.clubs) for (const p of [...c.players]) {
     if (!p.contract || p.contract.until > s.season) continue;
     if (c.id !== s.me) { p.contract = { wage: wage(p), until: s.season + years(s, p), clause: null }; continue; }
-    if (years(s, p) > 0) { // the manager's player is re-signed on the terms he asks, unless he is about to retire
+    if (autoRenewOn(s) && years(s, p) > 0) { // the manager's player is re-signed on the terms he asks, unless he is about to retire
       const t = terms(s, p);
       p.contract = { wage: t.wage, until: s.season + t.years, clause: t.clause };
       renewed.push(p.name);

@@ -4,7 +4,7 @@ import { makeRng } from '../src/rng.js';
 import { overall, value } from '../src/player.js';
 import { createWorld } from '../src/world.js';
 import { wage, wageBill } from '../src/finance.js';
-import { yearsFor, startContract, terms, canRenew, renew, expireContracts, academy, lastSeason } from '../src/contracts.js';
+import { yearsFor, startContract, terms, canRenew, renew, expireContracts, autoRenewOn, academy, lastSeason } from '../src/contracts.js';
 import { MINI } from './fixtures/mini.js';
 
 // A mini world managed from club 6 with a wage budget that never gets in the way.
@@ -94,4 +94,16 @@ test('no contract runs past retirement', () => {
   assert.equal(canRenew(s, p), false);
   p.age = 30;
   assert.ok(canRenew(s, p) && terms(s, p).years === 2);
+});
+
+test('with auto-renew off (on by default), your players whose contracts end leave', () => {
+  const s = fresh(3), club = s.clubs[6];
+  assert.ok(autoRenewOn(s));
+  s.autoRenew = false;
+  const leaving = club.players.filter(p => p.contract.until === s.season);
+  assert.ok(leaving.length > 0);
+  const left = expireContracts(s, makeRng(1), 16);
+  assert.deepEqual(left, leaving.map(p => p.name));
+  assert.ok(leaving.every(p => p.contract === null && !club.players.includes(p)));
+  assert.ok(!s.news.some(n => n.type === 'renewed'));
 });

@@ -18,7 +18,7 @@ import { TASKS, taskDays, estimate, ranges, assign, recall, toggleShortlist, sea
 import { AREAS, COACHING, MEDICAL, SCOUTS, SCOUT_SPEED, setStaff } from '../staff.js';
 import { YOUTH_MAX, LEAVE_AGE, ceilingRange, promote, release } from '../youth.js';
 import { rankPrize, wage, wageBill, projection, staffBill, STAFF_COST, STANDARD, SHARE, clubValue, stake } from '../finance.js';
-import { terms, canRenew, renew as renewContract } from '../contracts.js';
+import { terms, canRenew, autoRenewOn, renew as renewContract } from '../contracts.js';
 import { MIN_GAMES, ASK, REP, BONUS, SEVERANCE, bands, leagueTarget, cupTarget, level, startCareer, acceptJob, declineJob, openOffer, askBoard, sackLine, salaryFor, trade } from '../career.js';
 import { crestSvg, kitSvg } from './art.js';
 
@@ -385,7 +385,8 @@ const views = {
         <td class="n">${p.contract.clause ? money(p.contract.clause) : ''}</td><td>${t ? `<span class="dim">asks ${termsText(t)}</span> <button data-act="renew" data-id="${p.id}">Accept</button>` : ''}</td></tr>`;
     };
     return `<h2>Contracts</h2><p>Wage bill ${perWeek(wageBill(club))}.</p>
-      ${help(`A player whose contract ends this season or next names his terms for a new one: accept them, or he leaves when his contract ends. If too many leave, academy players fill the squad.`)}
+      <label><input type="checkbox" data-act="autoRenew"${autoRenewOn(s) ? ' checked' : ''}> Renew expiring contracts automatically</label>
+      ${help(`A player whose contract ends this season or next names his terms for a new one. With automatic renewal on, he is re-signed on those terms when the season ends (retiring players aside). With it off, accept them yourself or he leaves when his contract ends. If too many leave, academy players fill the squad.`)}
       <div class="wrap"><table><tr><th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</th><th class="n">Wage</th><th>Until</th><th class="n">Clause</th><th>New contract</th></tr>${byPos(club.players).map(row).join('')}</table></div>`;
   },
   Finances() {
@@ -610,6 +611,7 @@ const actions = {
   acceptOffer(id) { msg = acceptOffer(s, id) || 'Sold.'; },
   rejectOffer(id) { msg = rejectOffer(s, id) || 'Offer rejected.'; },
   counterOffer(id) { msg = counterOffer(s, id, feeOf(id)) || 'They agreed: sold.'; },
+  autoRenew(_, el) { s.autoRenew = el.checked; msg = s.autoRenew ? 'Expiring contracts will be renewed automatically.' : 'Expiring contracts will no longer be renewed automatically.'; },
   renew(id) { msg = renewContract(s, id) || 'Contract agreed.'; },
   sell(id) { msg = sell(s, id) || 'Sold.'; if (viewing === id) viewing = null; },
 };
