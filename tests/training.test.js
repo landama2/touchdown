@@ -136,3 +136,15 @@ test('a season in a whole world raises players aged 24-30 by a little, not a lot
   const after = avg(s.clubs.flatMap(c => c.players).filter(p => ids.has(p.id)));
   assert.ok(after - before > 0 && after - before < 3, `${before} -> ${after}`);
 });
+
+test('each gain is recorded against the attribute that rose, and the record matches p.gain', () => {
+  const club = squad(5, 8, 19);
+  const before = club.players.map(p => ({ ...p.attrs }));
+  season(club, plan({}), 3);
+  club.players.forEach((p, i) => {
+    const rose = Object.entries(p.attrs).filter(([k, v]) => v > before[i][k]);
+    assert.deepEqual(Object.fromEntries(rose.map(([k, v]) => [k, v - before[i][k]])), p.gains || {});
+    assert.equal(Object.values(p.gains || {}).reduce((a, b) => a + b, 0), p.gain);
+  });
+  assert.ok(club.players.some(p => p.gain > 0));
+});

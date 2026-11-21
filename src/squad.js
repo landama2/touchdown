@@ -60,6 +60,7 @@ export function passDays(players, days, perDay) {
 export function offseason(p) {
   if (p.inj && (p.inj.days -= OFFSEASON) <= 0) p.inj = null;
   Object.assign(p, { cond: 100, sharp: 100, form: [], yc: 0, gain: 0 });
+  delete p.gains;
 }
 
 // What a finished match m leaves on both squads (comp: 'league', 'cup' or 'playoff'). Every ban

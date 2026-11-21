@@ -44,7 +44,9 @@ function raise(rng, p, t) {
   const open = ks => ks.filter(k => p.attrs[k] < p.pot);
   const pool = own && rng.next() < 0.5 && open([own]).length ? [own] : open(team);
   if (!pool.length) return;
-  p.attrs[rng.pick(pool)]++; p.gain++;
+  const k = rng.pick(pool);
+  p.attrs[k]++; p.gain++;
+  (p.gains ||= {})[k] = (p.gains[k] || 0) + 1; // which attribute, for the Training tab (cleared each summer with p.gain)
 }
 
 // One week of training for `club` under schedule t. Injured players sit it out. Returns the players injured in training.
