@@ -57,7 +57,10 @@ export function trainWeek(rng, club, t) {
     const I = intensityOf(t, p);
     if (rng.next() < INJURY * I.injury) { injure(rng, p, heal); hurt.push(p); continue; }
     if (t.focus !== 'Rest' && rng.next() < grow * I.grow * ageGrow(p.age) * growFactor(p)) raise(rng, p, t);
-    if (p.age >= declineAge(p) && rng.next() < DECLINE) { const k = rng.pick(ATTRS.physical); p.attrs[k] = Math.max(1, p.attrs[k] - 1); }
+    if (p.age >= declineAge(p) && rng.next() < DECLINE) {
+      const k = rng.pick(ATTRS.physical);
+      if (p.attrs[k] > 1) { p.attrs[k]--; (p.losses ||= {})[k] = (p.losses[k] || 0) + 1; } // recorded like gains, for the Training tab
+    }
   }
   return hurt;
 }

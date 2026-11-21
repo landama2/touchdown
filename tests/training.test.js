@@ -148,3 +148,13 @@ test('each gain is recorded against the attribute that rose, and the record matc
   });
   assert.ok(club.players.some(p => p.gain > 0));
 });
+
+test('an older player\'s physical losses are recorded, so gains and losses together explain every change', () => {
+  const club = squad(6, 8, 34);
+  const before = club.players.map(p => ({ ...p.attrs }));
+  season(club, plan({}), 4);
+  club.players.forEach((p, i) => {
+    for (const k of Object.keys(p.attrs)) assert.equal(p.attrs[k] - before[i][k], (p.gains?.[k] || 0) - (p.losses?.[k] || 0));
+  });
+  assert.ok(club.players.some(p => p.losses));
+});
