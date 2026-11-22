@@ -1,4 +1,4 @@
-import { POS, overall, value } from './player.js';
+import { POS, overall, value, joinSeason } from './player.js';
 import { wage, wageBill, projection, lentPart } from './finance.js';
 import { terms, yearsFor, lastSeason } from './contracts.js';
 import { fixLineup } from './lineup.js';
@@ -95,6 +95,7 @@ export function move(s, p, from, to, fee, own = false) {
     const t = to.id === s.me ? terms(s, p) : { wage: aiWage(p), years: yearsFor(p.age), clause: null };
     p.contract = { wage: t.wage, until: Math.min(start + t.years, lastSeason(s, p)), clause: t.clause };
     p.joined = windowId(s);
+    p.since = joinSeason(s); delete p.tally; // a new club: tenure and the club tally start again (legends.js)
     to.players.push(p);
   }
   log(s, p, from, to, fee, false);

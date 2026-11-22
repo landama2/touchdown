@@ -1,5 +1,5 @@
 import { makeRng } from './rng.js';
-import { POS } from './player.js';
+import { POS, displayName } from './player.js';
 import { FORMATIONS, slots, eff, SLOT_WEIGHT, formationBonus, autoBench } from './lineup.js';
 import { ROLES, DUTIES, TEAM_KEYS, defaultSlot, defaultTactics, setTeam, has } from './tactics.js';
 import { readiness } from './squad.js';
@@ -11,7 +11,9 @@ import { readiness } from './squad.js';
 // injured, everyone tires, and AI sides make substitutions. Tactics (src/tactics.js) shift all of it.
 // Tuning: calibrated on the real leagues, see the 'a season of real leagues' test in tests/england.test.js.
 export const MAX_SUBS = 5;
-const MINUTES = 90;
+const MINUTES = 90, EXTRA = 30;
+// One more substitution in extra time, as in the real game.
+export const subLimit = m => MAX_SUBS + (m.min >= MINUTES && !m.done ? 1 : 0);
 const HOME_EDGE = 1.12;      // home side's extra share of the ball and of chances
 const K = { // tuning; see the calibration note above
   SHOT_RATE: 0.25,      // chance per minute that the side on the ball shoots, between equal sides
@@ -23,6 +25,7 @@ const K = { // tuning; see the calibration note above
   FAM_WEIGHT: 0.06,     // a side wholly unfamiliar with its formation loses this share of its power
   MENTALITY: 0.04, LEAN: 0.015, TACKLE_DEF: 0.02, TACKLE_CARD: 0.05,
   PRESS_CTRL: 0.05, PRESS_SHOTS: 0.03, PRESS_FOULS: 0.3, PRESS_TIRE: 0.3,
+  PRESS_AGG: 0.5, AGG0: 10, // a High press's control and shots-against effects grow by this share per AGG0 of the outfield's average aggression above AGG0
   TEMPO_SHOTS: 0.12, TEMPO_XG: 0.1, TEMPO_CTRL: 0.04, TEMPO_TIRE: 0.05,
   WIDTH_XG: 0.02, WIDTH0: -2, WIDTH_CORNERS: 0.3,
   LINE_SHOTS: 0.06, LINE_XG: 0.06, LINE_PACE: 0.012, LINE_PACE0: 12,
@@ -49,6 +52,9 @@ const active = (m, i) => m.sides[i].on.filter(o => !m.pl[o.id].inj);
 const keeperOf = (m, i) => { const k = active(m, i).find(o => o.pos === 'GK'); return k ? m.pl[k.id] : null; };
 const role = o => ROLES[o.pos][o.role];
 const avg = (list, f) => list.length ? list.reduce((t, x) => t + f(x), 0) / list.length : 0;
+// Side i's pressing instruction as it plays out: a High press grows with the outfield's average aggression
+// (x1 up to AGG0, x1.5 at twice it); Normal and Low are never changed by it, and it never weakens a High press.
+const pressing = (m, i) => { const p = m.sides[i].tac.pressing; return p > 0 ? p * (1 + K.PRESS_AGG * Math.max(0, avg(active(m, i).filter(o => o.pos !== 'GK'), o => m.pl[o.id].attrs.aggression) / K.AGG0 - 1)) : p; };
 
 // home/away: { club, ids, formation, bench, tactics, fam } as built by entry() in season.js. AI sides
 // leave out the last three: the best bench, default tactics, and full familiarity with every formation.
@@ -56,7 +62,7 @@ function makeSide({ club, ids, formation, bench = autoBench(club, ids), tactics 
   const pos = slots(formation);
   for (const id of [...ids, ...bench]) {
     const p = club.players.find(x => x.id === id);
-    pl[id] = { name: p.name, pos: p.pos, attrs: p.attrs, side, fit: p.cond, edge: readiness(p), rt: 6, yc: 0, inj: false, played: ids.includes(id) };
+    pl[id] = { name: displayName(p), pos: p.pos, attrs: p.attrs, side, fit: p.cond, edge: readiness(p), rt: 6, yc: 0, inj: false, played: ids.includes(id) };
   }
   return {
     club: club.id, formation, auto: true, subs: 0,
@@ -67,10 +73,14 @@ function makeSide({ club, ids, formation, bench = autoBench(club, ids), tactics 
   };
 }
 
-// neutral: a final at a neutral ground, where side 0 has no home edge.
-export function startMatch(seed, home, away, neutral = false) {
+// neutral: a final at a neutral ground, where side 0 has no home edge. extra: a knockout match that
+// goes to 30 minutes of extra time when level after 90 (penalties after that are the caller's);
+// for a second leg, extra = [home, away] goals from the first leg, and level means on aggregate.
+export function startMatch(seed, home, away, neutral = false, extra = false) {
   const pl = {}, m = { seed, min: 0, done: false, pl, sides: [makeSide(home, 0, pl), makeSide(away, 1, pl)], ev: [] };
   if (neutral) m.neutral = true;
+  if (extra) m.extra = true;
+  if (Array.isArray(extra)) m.carry = [...extra];
   return m;
 }
 
@@ -92,7 +102,7 @@ export function power(m, i) {
   return {
     att: a / aw * bonus.att * fam * (1 + tilt),
     def: d / dw * bonus.def * fam * (1 - tilt),
-    ctrl: c / cw * fam * (1 + K.PRESS_CTRL * t.pressing - K.TEMPO_CTRL * t.tempo),
+    ctrl: c / cw * fam * (1 + K.PRESS_CTRL * pressing(m, i) - K.TEMPO_CTRL * t.tempo),
   };
 }
 
@@ -208,7 +218,7 @@ export function substitute(m, i, outId, inId, pos) {
   if (m.done) return 'The match is over.';
   if (!slot) return 'That player is not on the pitch.';
   if (!S.bench.includes(inId)) return 'That player is not on the bench.';
-  if (S.subs >= MAX_SUBS) return `All ${MAX_SUBS} substitutions are used.`;
+  if (S.subs >= subLimit(m)) return `All ${subLimit(m)} substitutions are used.`;
   if (pos !== undefined && !POS.includes(pos)) return 'Unknown position.';
   S.subs++;
   S.bench = S.bench.filter(id => id !== inId);
@@ -274,7 +284,7 @@ const bestFor = (m, S, pos) => S.bench.reduce((b, id) => b === null || eff(m.pl[
 // and from the hour mark take off the most tired outfielder (one per ten minutes, three at most).
 function autoSubs(m, i) {
   const S = m.sides[i];
-  if (S.subs >= MAX_SUBS || !S.bench.length || !S.on.length) return;
+  if (S.subs >= subLimit(m) || !S.bench.length || !S.on.length) return;
   const hurt = S.on.find(o => m.pl[o.id].inj);
   if (hurt) return void substitute(m, i, hurt.id, bestFor(m, S, hurt.pos));
   if (!S.on.some(o => o.pos === 'GK')) {
@@ -296,7 +306,7 @@ function finish(m) {
   }
 }
 
-// ponytail: no stoppage time.
+// ponytail: no stoppage time. A level match (tie) with m.extra goes on to 120 minutes.
 export function stepMinute(m) {
   if (m.done) return;
   const rng = makeRng(m.seed);
@@ -305,13 +315,15 @@ export function stepMinute(m) {
   const atk = rng.next() < home / (home + P[1].ctrl) ? 0 : 1, def = 1 - atk, ta = m.sides[atk].tac, td = m.sides[def].tac;
   m.sides[atk].st.poss++;
   const chance = K.SHOT_RATE * (atk === 0 ? edge : 1) * Math.exp((P[atk].att - P[def].def) / K.SPREAD)
-    * (1 + K.TEMPO_SHOTS * ta.tempo) * (1 - K.LINE_SHOTS * td.line - K.PRESS_SHOTS * td.pressing);
+    * (1 + K.TEMPO_SHOTS * ta.tempo) * (1 - K.LINE_SHOTS * td.line - K.PRESS_SHOTS * pressing(m, def));
   if (rng.next() < chance) shot(m, rng, atk);
   if (rng.next() < K.FOUL_RATE * (1 + K.PRESS_FOULS * td.pressing)) foul(m, rng, def);
   if (rng.next() < K.INJURY_RATE) injury(m, rng, rng.int(0, 1));
   tire(m);
   for (const i of [0, 1]) if (m.sides[i].auto) autoSubs(m, i);
-  if (m.min === MINUTES) finish(m);
+  const c = m.carry ?? [0, 0], level = m.sides[0].st.goals + c[0] === m.sides[1].st.goals + c[1];
+  if (m.min === MINUTES && m.extra && level) m.ev.push({ min: m.min, side: 0, type: 'extra', id: 0, name: '' });
+  else if (m.min === MINUTES || m.min === MINUTES + EXTRA) finish(m);
   m.seed = rng.seed;
 }
 
@@ -322,6 +334,7 @@ export function matchResult(m) {
     .map(([id, p]) => ({ id: +id, name: p.name, side: p.side, rt: Math.round(Math.max(3, Math.min(10, p.rt)) * 10) / 10 }))
     .sort((x, y) => y.rt - x.rt);
   const r = { h: H.club, a: A.club, hg: H.st.goals, ag: A.st.goals, ev: m.ev, stats: [H.st, A.st], ratings };
+  if (m.min > MINUTES) r.aet = true;
   if (m.pens) r.pens = m.pens;
   return r;
 }

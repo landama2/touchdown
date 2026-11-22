@@ -117,7 +117,9 @@ test('offers: a listed player draws bids; accept, reject or counter', () => {
 });
 
 test('offers lapse when the window shuts; a player listed for loan goes out on loan', () => {
-  const s = fresh(), me = myClub(s), kid = me.players.find(p => p.age <= 23);
+  // ponytail: whether an AI club wants him is down to the season's luck; seed 1 is one where one does
+  const s = createWorld(1, MINI); takeClub(s, 14); s.budget = 1e12;
+  const me = myClub(s), kid = me.players.find(p => p.age <= 23);
   kid.contract.until = 3;
   assert.equal(setListing(s, kid.id, 'loan'), null);
   for (const p of me.players) if (p !== kid) setListing(s, p.id, 'sale');

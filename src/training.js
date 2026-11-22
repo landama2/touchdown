@@ -1,4 +1,4 @@
-import { ATTRS, ALL_ATTRS, WEIGHTS, ageing } from './player.js';
+import { ATTRS, ALL_ATTRS, WEIGHTS, ageing, growFactor, declineAge } from './player.js';
 import { injure } from './squad.js';
 import { has } from './tactics.js';
 import { coachScale, medicalScale } from './staff.js';
@@ -10,7 +10,7 @@ import { coachScale, medicalScale } from './staff.js';
 // ageGrow(age): about 4 a season at Normal for 23 and under, tapering to about 0.4 from 31. Never above
 // his hidden potential `pot`: half the time his individual focus, otherwise one from the team focus
 // (keepers: always their position's key attributes). Players aged 31 and over lose a physical point
-// now and then, whatever the schedule. Training can injure, Hard more often, Light less, a personal
+// now and then, whatever the schedule (legends from 33, and they grow faster: growFactor in player.js). Training can injure, Hard more often, Light less, a personal
 // Rest never. The club's coaching staff scale growth, its medical staff the length of injuries (src/staff.js).
 export const FOCUS = {
   Balanced: null, // the position's key attributes (WEIGHTS in player.js)
@@ -40,11 +40,16 @@ const intensityOf = (t, p) => loadOf(t, p) === 'Rest' ? REST : INTENSITY[loadOf(
 // Condition regained per day by player p (left out: the team's rate). Rest, the team's or his own, adds REST_RECOVER.
 export const recoverRate = (t, p) => intensityOf(t, p).recover + (t.focus === 'Rest' || loadOf(t, p) === 'Rest' ? REST_RECOVER : 0);
 
-// ponytail: a pick at the cap is lost, not re-rolled (fun surprise #10).
+// A pick at the hidden potential is re-rolled among the attributes still below it (fun surprise #10);
+// the gain is lost only when every candidate is capped.
 function raise(rng, p, t) {
   const own = t.ind[p.id], team = p.pos === 'GK' || !FOCUS[t.focus] ? Object.keys(WEIGHTS[p.pos]) : FOCUS[t.focus];
-  const k = own && rng.next() < 0.5 ? own : rng.pick(team);
-  if (p.attrs[k] < p.pot) { p.attrs[k]++; p.gain++; }
+  const open = ks => ks.filter(k => p.attrs[k] < p.pot);
+  const pool = own && rng.next() < 0.5 && open([own]).length ? [own] : open(team);
+  if (!pool.length) return;
+  const k = rng.pick(pool);
+  p.attrs[k]++; p.gain++;
+  (p.gains ||= {})[k] = (p.gains[k] || 0) + 1; // which attribute, for the Training tab (cleared each summer with p.gain)
 }
 
 // One week of training for `club` under schedule t. Injured players sit it out. Returns the players injured in training.
@@ -54,8 +59,11 @@ export function trainWeek(rng, club, t) {
     if (p.inj) continue;
     const I = intensityOf(t, p);
     if (rng.next() < INJURY * I.injury) { injure(rng, p, heal); hurt.push(p); continue; }
-    if (t.focus !== 'Rest' && rng.next() < grow * I.grow * ageGrow(p.age) * posGrow(p.pos)) raise(rng, p, t);
-    if (p.age >= 31 && rng.next() < DECLINE) { const k = rng.pick(ageing(p)); p.attrs[k] = Math.max(1, p.attrs[k] - 1); }
+    if (t.focus !== 'Rest' && rng.next() < grow * I.grow * ageGrow(p.age) * growFactor(p) * posGrow(p.pos)) raise(rng, p, t);
+    if (p.age >= declineAge(p) && rng.next() < DECLINE) {
+      const k = rng.pick(ageing(p));
+      if (p.attrs[k] > 1) { p.attrs[k]--; (p.losses ||= {})[k] = (p.losses[k] || 0) + 1; } // recorded like gains, for the Training tab
+    }
   }
   return hurt;
 }

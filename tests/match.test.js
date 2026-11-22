@@ -4,7 +4,7 @@ import { makeRng } from '../src/rng.js';
 import { createWorld } from '../src/world.js';
 import { FORMATIONS, BENCH, slots, bestXI, strength } from '../src/lineup.js';
 import { ROLES, defaultTactics } from '../src/tactics.js';
-import { startMatch, stepMinute, matchResult, simMatch, power, preview, substitute, swapPositions, emptySlots, moveTo, setFormation, setLiveTactic, shootout, MAX_SUBS } from '../src/match.js';
+import { startMatch, stepMinute, matchResult, simMatch, power, preview, substitute, swapPositions, emptySlots, moveTo, setFormation, setLiveTactic, shootout, MAX_SUBS, subLimit } from '../src/match.js';
 import { MINI } from './fixtures/mini.js';
 
 const s = createWorld(3, MINI);
@@ -180,6 +180,30 @@ function tally(change, n = 300) {
   return t;
 }
 
+test('aggression strengthens pressing: a pressing side of aggressive players wins more of the ball and concedes fewer shots', () => {
+  const run = (pressing, aggression) => {
+    let poss = 0, against = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const entry = mine(4, t => { t.pressing = pressing; });
+      for (const p of entry.club.players) p.attrs.aggression = aggression;
+      const m = play(seed, entry, side(5));
+      poss += m.sides[0].st.poss; against += m.sides[1].st.shots;
+    }
+    return { poss, against };
+  };
+  const calm = run(1, 2), fierce = run(1, 20);
+  assert.ok(fierce.poss > calm.poss && fierce.against < calm.against, `pressing: ${JSON.stringify([calm, fierce])}`);
+  const ctrl = (pressing, aggression) => {
+    const entry = mine(4, t => { t.pressing = pressing; });
+    for (const p of entry.club.players) p.attrs.aggression = aggression;
+    return power(startMatch(1, entry, side(5)), 0).ctrl;
+  };
+  assert.equal(ctrl(0, 2), ctrl(0, 20), 'Normal pressing: aggression adds no control');
+  assert.ok(ctrl(1, 20) > ctrl(1, 2), 'it strengthens a High press');
+  assert.equal(ctrl(-1, 20), ctrl(-1, 2), 'a Low press is not made worse by it');
+  assert.equal(ctrl(1, 2), ctrl(1, 10), 'nor is a High press by low aggression');
+});
+
 test('the matchday bench is seven players, a keeper among them; only they are in the match', () => {
   const m = startMatch(1, side(4), side(5));
   for (const S of m.sides) {
@@ -325,4 +349,33 @@ test('a player starts a match with his condition, and readiness scales his stren
   set({ cond: 100, morale: 100 });
   const happy = power(startMatch(1, home, away), 0);
   for (const k of ['att', 'def', 'ctrl']) assert.ok(Math.abs(happy[k] / fresh[k] - 1.02) < 1e-9, k);
+});
+
+test('extra time: a knockout match level after 90 plays on to 120, with one more substitution', () => {
+  let went = 0, decided = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const m = startMatch(seed, side(4), side(5), false, true);
+    while (m.min < 90) stepMinute(m);
+    const level = m.sides[0].st.goals === m.sides[1].st.goals;
+    assert.equal(m.done, !level);
+    if (!level) { decided++; assert.equal(matchResult(m).aet, undefined); continue; }
+    went++;
+    assert.equal(subLimit(m), MAX_SUBS + 1);
+    assert.equal(m.ev.at(-1).type, 'extra');
+    while (!m.done) stepMinute(m);
+    assert.equal(m.min, 120);
+    assert.equal(matchResult(m).aet, true);
+    assert.equal(subLimit(m), MAX_SUBS);
+  }
+  assert.ok(went > 5 && decided > 5, `${went} to extra time, ${decided} decided in 90`);
+  assert.equal(play(1, side(4), side(5)).min, 90); // no extra time unless asked
+});
+
+test('extra time in a second leg: level on aggregate, not on the day', () => {
+  for (let seed = 1; seed <= 40; seed++) {
+    const m = startMatch(seed, side(4), side(5), false, [1, 0]); // first-leg goals [this home side, this away side]: 1-0
+    while (m.min < 90) stepMinute(m);
+    const [h, a] = m.sides.map(S => S.st.goals);
+    assert.equal(m.done, h + 1 !== a);
+  }
 });

@@ -55,6 +55,15 @@ test('an individual focus takes about half the gains; nothing grows past the hid
   assert.equal(season(capped, plan({})), 0);
 });
 
+test('a pick at the hidden potential is re-rolled, not lost', () => {
+  const club = squad(7, 50, 19), t = plan({ ind: {} });
+  for (const p of club.players) { p.attrs.pace = p.pot; t.ind[p.id] = 'pace'; }
+  const before = club.players.map(p => ({ ...p.attrs })), base = season(squad(7, 50, 19), plan({}));
+  const gained = season(club, t);
+  assert.ok(Math.abs(gained - base) / base < 0.15, `gain ${gained} vs ${base}`);
+  club.players.forEach((p, i) => assert.equal(p.attrs.pace, before[i].pace));
+});
+
 test('veterans lose about two physical points a season whatever the schedule', () => {
   const club = squad(6, 300, 32), sum = () => club.players.reduce((n, p) => n + ATTRS.physical.reduce((t, k) => t + p.attrs[k], 0), 0);
   const before = sum();
@@ -133,4 +142,26 @@ test('a season in a whole world raises players aged 24-30 by a little, not a lot
   while (!s.done) playDay(s);
   const after = avg(s.clubs.flatMap(c => c.players).filter(p => ids.has(p.id)));
   assert.ok(after - before > 0 && after - before < 3, `${before} -> ${after}`);
+});
+
+test('each gain is recorded against the attribute that rose, and the record matches p.gain', () => {
+  const club = squad(5, 8, 19);
+  const before = club.players.map(p => ({ ...p.attrs }));
+  season(club, plan({}), 3);
+  club.players.forEach((p, i) => {
+    const rose = Object.entries(p.attrs).filter(([k, v]) => v > before[i][k]);
+    assert.deepEqual(Object.fromEntries(rose.map(([k, v]) => [k, v - before[i][k]])), p.gains || {});
+    assert.equal(Object.values(p.gains || {}).reduce((a, b) => a + b, 0), p.gain);
+  });
+  assert.ok(club.players.some(p => p.gain > 0));
+});
+
+test('an older player\'s physical losses are recorded, so gains and losses together explain every change', () => {
+  const club = squad(6, 8, 34);
+  const before = club.players.map(p => ({ ...p.attrs }));
+  season(club, plan({}), 4);
+  club.players.forEach((p, i) => {
+    for (const k of Object.keys(p.attrs)) assert.equal(p.attrs[k] - before[i][k], (p.gains?.[k] || 0) - (p.losses?.[k] || 0));
+  });
+  assert.ok(club.players.some(p => p.losses));
 });

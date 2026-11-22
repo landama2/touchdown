@@ -1,14 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRng } from '../src/rng.js';
-import { cupRounds, cupRoundName, tie, draw, newCup, nextCupRound, addLeg, aggregate, decide, playoffSemis, playoffFinal } from '../src/cup.js';
+import { cupPlan, cupRounds, cupRoundName, tie, draw, newCup, nextCupRound, addLeg, aggregate, decide, playoffSemis, playoffFinal } from '../src/cup.js';
 
-test('rounds and names: a preliminary round when the clubs are not a power of two', () => {
+test('rounds and names: the cup plan for 68, 64, 20 and 16 clubs', () => {
   assert.equal(cupRounds(64), 6);
   assert.equal(cupRounds(68), 7);
   assert.equal(cupRounds(20), 5);
+  assert.deepEqual(cupPlan(68), { enter: [40, 12, 16, 0, 0, 0, 0], size: [40, 32, 32, 16, 8, 4, 2] });
+  for (const n of [5, 16, 20, 64, 65, 68, 90, 100]) {
+    const { enter, size } = cupPlan(n);
+    assert.equal(enter.reduce((t, e) => t + e, 0), n);
+    assert.equal(size.at(-1), 2);
+    assert.ok(size.every(x => x % 2 === 0));
+  }
   assert.deepEqual([...Array(7).keys()].map(k => cupRoundName(k, 68)),
-    ['Preliminary round', 'Round 1', 'Round 2', 'Round 3', 'Quarter-finals', 'Semi-finals', 'Final']);
+    ['Round 1', 'Round 2', 'Round 3', 'Round 4', 'Quarter-finals', 'Semi-finals', 'Final']);
   assert.deepEqual([...Array(4).keys()].map(k => cupRoundName(k, 16)), ['Round 1', 'Quarter-finals', 'Semi-finals', 'Final']);
 });
 
@@ -19,20 +26,23 @@ test('the draw pairs every club once', () => {
   assert.ok(ties.every(t => t.legs.length === 0 && t.pens === null && t.w === null));
 });
 
-test('a new cup: the weakest clubs meet in the preliminary round, the rest join in round 1', () => {
+test('a new cup: the weakest clubs start, the strongest join in later rounds', () => {
   const ranked = [...Array(68).keys()], rng = makeRng(2), cup = newCup(rng, ranked);
-  assert.deepEqual(cup.byes, ranked.slice(0, 60));
-  assert.deepEqual(cup.rounds[0].ties.flatMap(t => [t.h, t.a]).sort((a, b) => a - b), ranked.slice(60));
-  for (const t of cup.rounds[0].ties) t.w = t.h;
-  nextCupRound(rng, cup);
-  assert.equal(cup.rounds[1].ties.length, 32);
-  assert.equal(new Set(cup.rounds[1].ties.flatMap(t => [t.h, t.a])).size, 64);
-  for (const t of cup.rounds[1].ties) t.w = t.a;
-  nextCupRound(rng, cup);
-  assert.equal(cup.rounds[2].ties.length, 16); // the byes join only once
+  assert.deepEqual(cup.entries, [ranked.slice(28), ranked.slice(16, 28), ranked.slice(0, 16), [], [], [], []]);
+  assert.deepEqual(cup.rounds[0].ties.flatMap(t => [t.h, t.a]).sort((a, b) => a - b), ranked.slice(28));
+  for (const [k, n] of [[1, 16], [2, 16], [3, 8]]) {
+    for (const t of cup.rounds[k - 1].ties) t.w = t.h;
+    nextCupRound(rng, cup);
+    assert.equal(cup.rounds[k].ties.length, n);
+    const playing = cup.rounds[k].ties.flatMap(t => [t.h, t.a]);
+    assert.ok(cup.entries[k].every(id => playing.includes(id)));
+  }
   const even = newCup(rng, [...Array(16).keys()]);
-  assert.deepEqual(even.byes, []);
   assert.equal(even.rounds[0].ties.length, 8);
+  // a cup saved before staged entry: the byes join in round 2
+  const old = { byes: [0, 1], rounds: [{ ties: [{ ...tie(2, 3), w: 2 }, { ...tie(4, 5), w: 5 }] }] };
+  nextCupRound(rng, old);
+  assert.deepEqual(old.rounds[1].ties.flatMap(t => [t.h, t.a]).sort(), [0, 1, 2, 5]);
 });
 
 test('ties: one leg or two, aggregate score, penalties when level', () => {

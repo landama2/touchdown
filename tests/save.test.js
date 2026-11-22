@@ -262,7 +262,7 @@ test('a version 10 save gets boards, a career at its club and an empty inbox, an
   const b = deserialize(JSON.stringify(asV10(a)));
   assert.equal(b.version, SAVE_VERSION);
   assert.ok(b.clubs.every(c => c.conf === BOARD_START && c.games === c.st.p));
-  assert.deepEqual(b.career, { rep: REP_START, asked: null, warned: null, spells: [{ club: 9, from: a.season, to: null, how: null }], money: 0, shares: {} });
+  assert.deepEqual(b.career, { rep: REP_START, asked: null, warned: null, spells: [{ club: 9, from: a.season, to: null, how: null }], money: 0, shares: {}, stars: 0, hall: [], waiting: [] });
   assert.deepEqual([b.jobs, b.inbox], [[], []]);
   assert.ok(playDay(b).length);
   const picker = deserialize(JSON.stringify(asV10(createWorld(28, MINI))));
@@ -302,9 +302,25 @@ test('a version 12 save loses its wage budget and its wages fall to a fifth', ()
   assert.ok(playDay(b).length);
 });
 
-test('version 13 saves get stadiums at level 0 and a building line in the books', () => {
+// A save as Phase 10b (version 13) wrote it: no assists records.
+test('a version 13 save gets empty assists records and plays a season with them', () => {
+  const a = createWorld(26, MINI);
+  takeClub(a, 3);
+  const o = JSON.parse(serialize(a));
+  o.version = 13;
+  for (const r of o.records) delete r.assists;
+  for (const c of o.clubs) delete c.rec.assists;
+  const b = deserialize(JSON.stringify(o));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.ok(b.records.every(r => r.assists === null) && b.clubs.every(c => c.rec.assists === null));
+  while (!b.done) playDay(b);
+  endSeason(b);
+  assert.ok(b.records.every(r => r.assists?.v > 0));
+});
+
+test('version 15 saves get stadiums at level 0 and a building line in the books', () => {
   const s = createWorld(3);
-  s.version = 13;
+  s.version = 15;
   for (const c of s.clubs) { delete c.stadium; delete c.fin.season.build; }
   const t = deserialize(serialize(s));
   assert.equal(t.version, SAVE_VERSION);

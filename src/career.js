@@ -1,6 +1,6 @@
 import { table, takeClub, PROMOTED, PLAYOFF, RELEGATED } from './season.js';
-import { SEASON_WEEKS, SHARE, clubValue, profit, stake } from './finance.js';
-import { cupRounds } from './cup.js';
+import { SEASON_WEEKS, SHARE, clubValue, profit, stake, rankPrize } from './finance.js';
+import { cupPlan } from './cup.js';
 import { seeding, BOARD_START as START, REP_START } from './world.js';
 
 // The manager's career. Every club's board judges its manager: c.conf (confidence 0-100) and c.games
@@ -23,7 +23,7 @@ export const REP = { pull: 0.3, trophy: 5, sacked: 10, gate: 15, patience: 10 };
 export const ASK = { conf: 60, cost: 3, transfer: 1.25 };
 export const VACANCY_DAYS = 14, INBOX_MAX = 150;
 export const SALARY = { base: 150e3, growth: 0.045 };          // a year: size 0 €150k, 50 €1.4M, 100 €13.5M
-export const BONUS = { target: 0.1, up: 0.25, trophy: 0.25 }, SEVERANCE = 0.25; // × a year's salary
+export const BONUS = { target: 0.1, up: 0.25, trophy: 0.25, ranking: [0.02, 0.01, 0.005] }, SEVERANCE = 0.25; // × a year's salary (ranking: by place in a top 3)
 
 const clamp = x => Math.max(0, Math.min(100, x));
 const round = (x, step) => Math.round(x / step) * step;
@@ -49,10 +49,14 @@ export function leagueTarget(s, id) {
   const b = bands(s, s.clubs[id].div), e = expectedPos(s, id), k = b.findIndex(([, lim]) => lim >= e);
   return k < 0 ? b.length - 1 : k;
 }
-// The cup round the board expects club id to reach: seeded r-th of the n clubs, it should outlast the clubs seeded below it.
+// The cup round the board expects club id to reach: seeded r-th, it should outlast the clubs seeded
+// below it, so reach the last round with r clubs or more in it (at least the round it enters in).
 export function cupTarget(s, id) {
-  const n = s.clubs.length, P = 2 ** Math.floor(Math.log2(n)), r = seeding(s.clubs).indexOf(id) + 1;
-  return Math.max(0, Math.min(cupRounds(n) - 1, Math.floor(Math.log2(P / r)) + (n > P ? 1 : 0)));
+  const { enter, size } = cupPlan(s.clubs.length), r = seeding(s.clubs).indexOf(id) + 1;
+  let k = 0, below = s.clubs.length - r; // clubs seeded below, who enter no later
+  while (below >= enter[k]) below -= enter[k++];
+  while (k + 1 < size.length && size[k + 1] >= r) k++;
+  return k;
 }
 // A club's size, 0-100: its place in the cup seeding (division, then squad quality).
 export function level(s, id) {
@@ -106,6 +110,12 @@ export function seasonReview(s, tables, h) {
       post(s, { type: 'review', club: id, target: b[target][0], met: missed <= 0, pos: k + 1, rep: s.career.rep, was });
       const bonus = round(salary(s) * ((missed <= 0 ? BONUS.target : 0) + (h.divs[d].up.includes(id) ? BONUS.up : 0) + BONUS.trophy * trophies), 1e3);
       if (bonus) { s.career.money += bonus; post(s, { type: 'bonus', club: id, amount: bonus }); }
+      for (const key of ['goals', 'assists']) (h.ranks?.[d][key] || []).forEach((x, place) => {
+        if (x.club !== id) return;
+        const own = round(salary(s) * BONUS.ranking[place], 1e3);
+        s.career.money += own;
+        post(s, { type: 'ranking', club: id, name: x.name, key, place, v: x.v, div: d, amount: rankPrize(key, d, place), bonus: own });
+      });
     });
     above += t.length;
   });
@@ -130,7 +140,7 @@ const targets = (s, id) => ({ type: 'target', club: id, league: bands(s, s.clubs
 
 // A new career at club id (the club picker).
 export function startCareer(s, id) {
-  s.career = { rep: REP_START, asked: null, warned: null, spells: [], money: 0, shares: {} };
+  s.career = { rep: REP_START, asked: null, warned: null, spells: [], money: 0, shares: {}, stars: 0, hall: [], waiting: [] };
   hire(s, id);
 }
 function hire(s, id) {
@@ -162,6 +172,7 @@ function leave(s, how) {
   c.conf = START; c.games = 0;
   Object.assign(s.career.spells.at(-1), { to: ended(s), how });
   s.jobs.push({ club: c.id, season: s.season, until: s.day + VACANCY_DAYS, offered: false });
+  s.career.waiting.push(...s.youth.filter(p => p.legend)); // legends wait for the next job (takeClub)
   s.me = null; s.live = null; s.youth = []; s.scouts = []; s.offers = []; s.talks = { win: null, by: {} }; s.budget = 0;
 }
 // Whether club id would offer the human manager its job: the manager's reputation reaches its size less REP.gate
