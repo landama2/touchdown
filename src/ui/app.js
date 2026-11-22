@@ -369,18 +369,21 @@ const views = {
     return h;
   },
   Table() {
+    // tab name: [ranking key, column head, note]. Keepers' stats: a clean sheet is a league match he played in with no goal against.
+    const BOARDS = { Scorers: ['goals', 'Goals', ''], Assists: ['assists', 'Assists', ''], 'Goals + assists': ['points', 'G + A', ''],
+      'Clean sheets': ['cs', 'Clean sheets', 'Goalkeepers only.'], 'Save %': ['save', 'Saved', 'Goalkeepers only: shots on target saved out of saved plus conceded, for keepers with at least half the games played so far.'] };
     const ZONE_TEXT = { up: 'promotion place', playoff: 'play-off place', down: 'relegation place' };
     const cols = ['P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts'];
     // Sorting reorders the rows; # and the zone colours stay the real league position.
     const st = id => s.clubs[id].st, LEAGUE_COLS = { pos: x => x.k, club: x => s.clubs[x.id].name, p: x => st(x.id).p, w: x => st(x.id).w, d: x => st(x.id).d, l: x => st(x.id).l, gf: x => st(x.id).gf, ga: x => st(x.id).ga, gd: x => st(x.id).gf - st(x.id).ga, pts: x => st(x.id).pts };
     const row = ({ id, k }) => { const t = s.clubs[id].st; return `<tr class="${id === s.me ? 'me' : ''} ${zone(s, tableDiv, k) || ''}"><td class="n">${k + 1}${ZONE_TEXT[zone(s, tableDiv, k)] ? `<span class="sr"> (${ZONE_TEXT[zone(s, tableDiv, k)]})</span>` : ''}</td><td>${clubLink(id, 18)}</td>${[t.p, t.w, t.d, t.l, t.gf, t.ga, t.gf - t.ga, t.pts].map(v => `<td class="n">${v}</td>`).join('')}</tr>`; };
     const bar = `<div class="bar">${s.divisions.map((d, i) => `<button data-act="div" data-id="${i}" class="${i === tableDiv ? 'on' : ''}">${esc(d.name)}</button>`).join('')}</div>
-      <div class="bar">${['Table', 'Scorers', 'Assists'].map(v => `<button data-act="tableView" data-v="${v}" class="${v === tableView ? 'on' : ''}">${v}</button>`).join('')}</div>`;
+      <div class="bar">${['Table', ...Object.keys(BOARDS)].map(v => `<button data-act="tableView" data-v="${v}" class="${v === tableView ? 'on' : ''}">${v}</button>`).join('')}</div>`;
     if (tableView !== 'Table') {
-      const key = tableView === 'Scorers' ? 'goals' : 'assists', list = ranking(s, tableDiv, key);
-      const rows = list.map((x, k) => `<tr class="${x.club === s.me ? 'me' : ''}"><td class="n">${k + 1}</td><td><button class="link" data-act="view" data-id="${x.id}">${esc(x.name)}</button></td><td>${badge(x.club, 18)}${clubName(x.club)}</td><td class="n">${x.apps}</td><td class="n"><b>${x.v}</b></td><td class="n">${(x.v / x.apps).toFixed(2)}</td><td class="n dim">${k < 3 ? money(rankPrize(key, tableDiv, k)) : ''}</td></tr>`).join('');
-      return `${bar}<h2>${tableView} · season ${s.season}</h2>${list.length ? `<div class="wrap"><table><tr><th class="n">#</th><th>Player</th><th>Club</th><th class="n">Games</th><th class="n">${key === 'goals' ? 'Goals' : 'Assists'}</th><th class="n">Per game</th><th class="n">Prize</th></tr>${rows}</table></div>
-        <p class="dim">League matches only. Ties go to the player with fewer games. The top 3 win prize money for their club when the season ends, and you get a bonus for each of yours.</p>` : '<p class="dim">No league goals yet this season.</p>'}`;
+      const [key, head, note] = BOARDS[tableView], list = ranking(s, tableDiv, key), paid = key === 'goals' || key === 'assists', save = key === 'save';
+      const rows = list.map((x, k) => `<tr class="${x.club === s.me ? 'me' : ''}"><td class="n">${k + 1}</td><td><button class="link" data-act="view" data-id="${x.id}">${esc(x.name)}</button></td><td>${badge(x.club, 18)}${clubName(x.club)}</td><td class="n">${x.apps}</td><td class="n"><b>${x.v}${save ? '%' : ''}</b></td><td class="n">${save ? `${x.sv} / ${x.ga ?? 0}` : (x.v / x.apps).toFixed(2)}</td>${paid ? `<td class="n dim">${k < 3 ? money(rankPrize(key, tableDiv, k)) : ''}</td>` : ''}</tr>`).join('');
+      return `${bar}<h2>${tableView} · season ${s.season}</h2>${list.length ? `<div class="wrap"><table><tr><th class="n">#</th><th>Player</th><th>Club</th><th class="n">Games</th><th class="n">${head}</th><th class="n">${save ? 'Saved / conceded' : 'Per game'}</th>${paid ? '<th class="n">Prize</th>' : ''}</tr>${rows}</table></div>
+        <p class="dim">League matches only. Ties go to the player with fewer games. ${note}${paid ? ' The top 3 win prize money for their club when the season ends, and you get a bonus for each of yours.' : ' The winner gets an award in History; no prize money.'}</p>` : '<p class="dim">Nobody yet this season.</p>'}`;
     }
     return `${bar}
       <h2>Season ${s.season}</h2><div class="wrap"><table><tr>${heads('league', [['#', 'pos', 'n'], ['Club', 'club'], ...cols.map(c => [c, c.toLowerCase(), 'n'])])}</tr>${order('league', LEAGUE_COLS, table(s, tableDiv).map((id, k) => ({ id, k })), l => l).map(row).join('')}</table></div>
@@ -402,7 +405,7 @@ const views = {
       ${h.youthLeft?.length ? `<div class="dim">Left the youth squad at ${LEAVE_AGE}: ${h.youthLeft.map(esc).join(', ')}</div>` : ''}
       ${h.cup ? `<div>${CUP_NAME}: <b>${name(h.cup.winner)}</b> <span class="dim">beat ${name(h.cup.runnerUp)} in the final</span></div>` : ''}
       ${h.divs.map((x, d) => `<div><b>${esc(s.divisions[d].name)}</b> champions: ${name(x.champion)}${x.up.length ? ` · promoted: ${names(x.up)}` : ''}${x.down.length ? ` · relegated: ${names(x.down)}` : ''}</div>
-        ${x.awards ? award('Player of the season', x.awards.player, ' avg') + award('Top scorer', x.awards.scorer, ' goals') + award('Top assists', x.awards.assists, ' assists') + award('Young player', x.awards.young, ' avg') : ''}
+        ${x.awards ? award('Player of the season', x.awards.player, ' avg') + award('Top scorer', x.awards.scorer, ' goals') + award('Top assists', x.awards.assists, ' assists') + award('Goals + assists', x.awards.points, ' G + A') + award('Golden Glove', x.awards.glove, ' clean sheets') + award('Best save %', x.awards.saves, '%') + award('Young player', x.awards.young, ' avg') : ''}
         ${h.ranks?.[d] ? podium('Scorers', h.ranks[d].goals) + podium('Assists', h.ranks[d].assists) : ''}`).join('')}`).join('');
     const rec = (title, r, f) => r ? `<div>${title}: ${f(r)} <span class="dim">(season ${r.season})</span></div>` : '';
     const win = r => `${name(r.h)} ${r.hg} – ${r.ag} ${name(r.a)}`;

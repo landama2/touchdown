@@ -117,6 +117,7 @@ function attempt(m, rng, i, o, xg, kind, assistFrom, pGoal = null) {
   const stop = keeper ? (keeper.attrs.handling + keeper.attrs.reflexes) / 2 : 0; // nobody in goal: stop 0
   pGoal ??= Math.min(0.95, xg * (1.3 - stop / 33));
   const e = { min: m.min, side: i, type: 'miss', id: o.id, name: p.name, xg: Math.round(xg * 100) / 100 };
+  if (keeper) e.gk = active(m, 1 - i).find(o => o.pos === 'GK').id; // the keeper who faced it: goals against and saves in the season stats
   if (kind !== 'open') e.kind = kind;
   S.st.shots++;
   const r = rng.next();

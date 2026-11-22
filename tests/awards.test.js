@@ -43,6 +43,25 @@ test('after a season the rankings\' leaders are the awards, and the records hold
   assert.equal(s.records[0].assists.v, before); // a lower number does not replace the record
 });
 
+test('keepers: goals against and saves are counted, and the new awards are the leaders of their rankings', () => {
+  const s = world(3);
+  while (!s.done) playDay(s);
+  s.divisions.forEach((dv, d) => {
+    const ps = dv.clubIds.flatMap(c => s.clubs[c].players.filter(p => p.stats));
+    const against = ps.reduce((t, p) => t + (p.stats.ga ?? 0), 0), scored = dv.clubIds.reduce((t, c) => t + s.clubs[c].st.gf, 0);
+    assert.equal(against, scored, 'every league goal is against one keeper');
+    assert.ok(ps.every(p => p.pos === 'GK' || (!p.stats.cs && !p.stats.sv && !p.stats.ga)), 'only keepers get keeper stats');
+    const aw = seasonAwards(s, d);
+    for (const [key, a] of [['points', aw.points], ['cs', aw.glove], ['save', aw.saves]]) {
+      const top = ranking(s, d, key, 1)[0];
+      assert.deepEqual(a, { id: top.id, name: top.name, club: top.club, v: top.v });
+    }
+    const p = ps.find(x => x.id === aw.points.id);
+    assert.equal(aw.points.v, p.stats.goals + p.stats.assists);
+    assert.ok(aw.saves.v > 0 && aw.saves.v <= 100 && ranking(s, d, 'cs').every(x => ps.find(p => p.id === x.id).pos === 'GK'));
+  });
+});
+
 test('ranking prizes: by division and place, the 2nd half and the 3rd a quarter of the winner\'s', () => {
   assert.deepEqual([0, 1, 2].map(k => rankPrize('goals', 0, k)), [SCORER_PRIZE[0], SCORER_PRIZE[0] / 2, SCORER_PRIZE[0] / 4]);
   assert.equal(rankPrize('assists', 2, 0), ASSIST_PRIZE[2]);
