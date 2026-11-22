@@ -120,6 +120,30 @@
   .attrs .ph .pname { font-size:19px; color:var(--text); }
   .attrs .ph [data-act=close] { margin-left:auto; }
   .attrs h3 { text-transform:uppercase; letter-spacing:.06em; font-size:11px; }
+  /* live match on a phone: the club bar shrinks to one line and scrolls away, the score stays pinned,
+     tactics fold behind a button, the feed is short enough to see the squad below it */
+  .tac-toggle { display:none; }
+  @media (max-width:700px) {
+    body.in-match header { position:static; padding-bottom:8px; }
+    body.in-match #info > span, body.in-match #nav { display:none; }
+    body.in-match .scoreboard { position:sticky; top:0; z-index:4; padding:6px 8px; margin:8px -16px; border-radius:0; border-width:0 0 1px; gap:8px; box-shadow:0 4px 12px var(--shadow); }
+    body.in-match .scoreboard > div:not(:nth-child(2)) { flex-direction:row; gap:6px; }
+    body.in-match .scoreboard > div:first-child { justify-content:flex-end; }
+    body.in-match .scoreboard > div:last-child { flex-direction:row-reverse; justify-content:flex-end; }
+    body.in-match .scoreboard svg { width:22px; height:22px; }
+    body.in-match .scoreboard b { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    body.in-match .scoreboard .big { font-size:24px; }
+    body.in-match .scoreboard .sub { font-size:12px; }
+    body.in-match .bar { gap:6px; margin:8px 0; }
+    .tac-toggle { display:inline-block; }
+    .tactics:not(.open) { display:none; }
+    body.in-match .feed { max-height:180px; }
+    body.in-match .live { gap:8px; }
+    body.in-match .msg:empty { display:none; }
+    body.in-match .live p.dim { font-size:13px; margin:4px 0; }
+    body.in-match .live th, body.in-match .live td { padding:4px 5px; font-size:14px; }
+    body.in-match .live td:nth-child(2) { white-space:normal; }
+  }
   #update { position:fixed; right:16px; bottom:max(16px, env(safe-area-inset-bottom)); z-index:10; box-shadow:0 4px 16px var(--shadow); }
 </style>
 </head>

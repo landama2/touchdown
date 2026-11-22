@@ -44,6 +44,7 @@ let s = (await readSave(KEY)) || newWorld();
 let tab = 'Squad', tableView = 'Table', legendPos = 'All', sel = null, viewing = null, clubOpen = null, savesOpen = false, tableDiv = s.me === null ? 0 : s.clubs[s.me].div, msg = '', filters = {}; // filters: the player search on Transfers
 let ownPay = false; // Transfers: pay fees from the manager's own money
 let timer = null, speed = 400, subOut = null, subIn = null; // live match: clock, ms per match minute, player picked to come off / to come on
+let tacticsOpen = false; // live match on a phone: formation and team instructions folded away until asked for
 const SPEEDS = [['Slow', 1000], ['Normal', 400], ['Fast', 100], ['Very fast', 25]];
 
 const $ = id => document.getElementById(id);
@@ -179,8 +180,9 @@ function liveView() {
   const controls = m.done ? '<button class="primary" data-act="play">Continue</button>'
     : `<button class="primary" id="clock" data-act="${timer ? 'pause' : 'go'}">${timer ? 'Pause' : m.min ? 'Resume' : 'Kick off'}</button>
       <label>Speed <select data-act="speed">${SPEEDS.map(([t, ms]) => `<option value="${ms}"${ms === speed ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
-      <label>Formation ${formationSelect('liveFormation', S.formation)}</label>
-      <button data-act="play">Skip to result</button></div><div class="bar">${teamSelects('liveTeam', S.tac)}`;
+      <button data-act="play">Skip to result</button>
+      <button class="tac-toggle" data-act="tactics" aria-expanded="${tacticsOpen}">Tactics ${tacticsOpen ? '▴' : '▾'}</button></div>
+      <div class="bar tactics${tacticsOpen ? ' open' : ''}"><label>Formation ${formationSelect('liveFormation', S.formation)}</label>${teamSelects('liveTeam', S.tac)}`;
   return `${scoreboard(H.club, A.club, `${H.st.goals} – ${A.st.goals}`, m.done ? (m.min > 90 ? 'Full time (aet)' : 'Full time') : m.min > 90 ? `ET ${m.min}'` : m.min ? `${m.min}'` : 'Kick-off')}<div class="bar">${controls}</div>
     <div class="live"><div>${pitchSvg(m, i)}<div class="feed" aria-live="polite">${feed || '<div class="dim">The teams are walking out.</div>'}</div></div>
     <div>${m.done ? '' : `<p class="dim">${hint}</p>`}<div class="wrap"><table><tr><th>Pos</th><th>On the pitch</th><th class="n">Ovr</th><th class="n">Fit</th><th class="n">Rating</th><th></th></tr>${S.on.map(onRow).join('')}${emptySlots(m, i).map(emptyRow).join('')}${(S.sent ?? []).map(sentRow).join('')}
@@ -698,6 +700,7 @@ const actions = {
   load(id, el) { msg = setLoad(s, id, el.value || null) || ''; },
   live() { kickOff(s); subOut = subIn = null; },
   go() { startClock(); },
+  tactics() { tacticsOpen = !tacticsOpen; },
   pause() { stopClock(); },
   speed(_, el) { speed = +el.value; if (timer) startClock(); },
   liveFormation(_, el) { msg = setFormation(s.live, mySide(), el.value) || ''; subOut = subIn = null; },
@@ -817,6 +820,7 @@ function draw() {
   $('info').innerHTML = `${badge(s.me, 22)}<b>${clubName(s.me)}</b><span>${esc(s.divisions[myClub(s).div].name)} · Season ${s.season} · ${s.done ? 'season over' : dateLabel(s.days[s.next].day)}</span>
     <span class="chip" title="transfer budget">Transfers ${money(s.budget)}</span><span class="chip" title="wage bill">Wages ${perWeek(wageBill(myClub(s)))}</span>`;
   if (s.live) tab = 'Match'; // the other screens wait for the final whistle
+  document.body?.classList.toggle('in-match', !!s.live); // a phone gives the match the whole screen
   // A profile replaces the screen until closed; never during a live match.
   const screen = overlay() ?? views[tab]();
   const main = `<div class="msg" role="status">${msg}</div>` + screen; // first: the inbox marks what it shows as read
