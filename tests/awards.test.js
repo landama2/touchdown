@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../src/world.js';
 import { takeClub, playDay, endSeason, table } from '../src/season.js';
-import { ranking, seasonAwards, noteSeason } from '../src/awards.js';
+import { VALUE, ranking, seasonAwards, noteSeason } from '../src/awards.js';
 import { rankPrize, SCORER_PRIZE, ASSIST_PRIZE } from '../src/finance.js';
 import { startCareer, seasonReview, salaryFor, BONUS } from '../src/career.js';
 import { MINI } from './fixtures/mini.js';
@@ -19,6 +19,21 @@ test('ranking orders by the number, then fewer games, then the lower id; leaves 
   assert.deepEqual(ranking(s, d, 'assists').map(x => x.id), [...tie, r.id]);
   assert.equal(ranking(s, d, 'goals', 2).length, 2);
   assert.deepEqual(ranking(s, d, 'goals', 1)[0], { id: r.id, name: r.name, club: b.id, apps: 12, v: 7 });
+});
+
+test('save %: a keeper with saves and no goal against is 100%, one with neither is left out', () => {
+  assert.equal(VALUE.save({ sv: 4 }), 100);
+  assert.equal(VALUE.save({ sv: 3, ga: 1 }), 75);
+  assert.equal(VALUE.save({}), 0);
+});
+
+test('save % ties: the keeper who faced more shots ranks first, whatever the games', () => {
+  const s = world(1), d = 0, [a, b] = s.divisions[d].clubIds.map(id => s.clubs[id]);
+  for (const c of s.clubs) c.st.p = 2;
+  const [p, q] = [a, b].map(c => c.players.find(x => x.pos === 'GK'));
+  p.stats = { apps: 1, goals: 0, assists: 0, rating: 7, sv: 3 };
+  q.stats = { apps: 2, goals: 0, assists: 0, rating: 14, sv: 20 };
+  assert.deepEqual(ranking(s, d, 'save').map(x => [x.id, x.v]), [[q.id, 100], [p.id, 100]]);
 });
 
 test('after a season the rankings\' leaders are the awards, and the records hold the most assists', () => {

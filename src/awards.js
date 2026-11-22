@@ -9,16 +9,17 @@ export const blankRecords = () => ({ points: null, goals: null, assists: null, w
 // What each ranking counts. save = the share of the shots on target a keeper stopped, in percent.
 export const VALUE = {
   goals: st => st.goals, assists: st => st.assists, points: st => st.goals + st.assists, cs: st => st.cs ?? 0,
-  save: st => (st.sv ?? 0) + (st.ga ?? 0) ? Math.round(1000 * st.sv / (st.sv + st.ga)) / 10 : 0,
+  save: ({ sv = 0, ga = 0 }) => sv + ga ? Math.round(1000 * sv / (sv + ga)) / 10 : 0, // ga is missing until his first goal against
 };
 // The top n of division d by key (a key of VALUE), live during the season: [{ id, name, club, apps, v }].
 // Players with none are left out; the save % only counts keepers with at least half the games the busiest
-// club has played. Ties: fewer games first, then the lower id. The season's winner of each ranking is its
+// club has played. Ties: fewer games first (save %: more shots faced first), then the lower id. The season's winner of each ranking is its
 // award; the top 3 of goals and assists are paid prize money (payPrizes in src/finance.js).
 export function ranking(s, d, key, n = 20) {
   const ids = s.divisions[d].clubIds, minApps = key === 'save' ? Math.max(1, Math.max(...ids.map(c => s.clubs[c].st.p)) / 2) : 0;
   const all = ids.flatMap(club => s.clubs[club].players.filter(p => p.stats && p.stats.apps >= minApps && VALUE[key](p.stats) > 0).map(p => ({ id: p.id, name: displayName(p), club, apps: p.stats.apps, v: VALUE[key](p.stats), ...(key === 'save' && { sv: p.stats.sv ?? 0, ga: p.stats.ga ?? 0 }) })));
-  return all.sort((a, b) => b.v - a.v || a.apps - b.apps || a.id - b.id).slice(0, n);
+  const tie = key === 'save' ? (a, b) => b.sv + b.ga - (a.sv + a.ga) : (a, b) => a.apps - b.apps;
+  return all.sort((a, b) => b.v - a.v || tie(a, b) || a.id - b.id).slice(0, n);
 }
 const top = r => r[0] ? { id: r[0].id, name: r[0].name, club: r[0].club, v: r[0].v } : null;
 
