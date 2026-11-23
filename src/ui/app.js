@@ -7,7 +7,7 @@ import { FORMATIONS, BENCH, slots, autoPick, fixLineup, swap } from '../lineup.j
 import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, endSeason, forceRetire } from '../season.js';
 import { dateLabel } from '../calendar.js';
 import { CUP_NAME, cupRoundName, aggregate } from '../cup.js';
-import { ranking } from '../awards.js';
+import { ranking, SAVE_PRIOR } from '../awards.js';
 import { stepMinute, substitute, swapPositions, emptySlots, moveTo, setFormation, setLiveTactic, preview, subLimit } from '../match.js';
 import { TEAM, TEAM_KEYS, TEAM_NAMES, ROLES, DUTIES, INSTR, TAKERS, setTeam, setSlot, setTaker } from '../tactics.js';
 import { line } from './commentary.js';
@@ -374,9 +374,9 @@ const views = {
     return h;
   },
   Table() {
-    // tab name: [ranking key, column head, note]. Keepers' stats: a clean sheet is a league match he played in with no goal against.
+    // tab name: [ranking key, column head, note]. Keepers' stats count only the league matches played in goal; a clean sheet is one with no goal against.
     const BOARDS = { Scorers: ['goals', 'Goals', ''], Assists: ['assists', 'Assists', ''], 'Goals + assists': ['points', 'G + A', ''],
-      'Clean sheets': ['cs', 'Clean sheets', 'Goalkeepers only.'], 'Save %': ['save', 'Saved', 'Goalkeepers only: shots on target saved out of saved plus conceded, for keepers with at least half the games played so far.'] };
+      'Clean sheets': ['cs', 'Clean sheets', 'Only matches played in goal count; Games is games in goal.'], 'Save %': ['save', 'Rating', `Only matches played in goal count; Games is games in goal. Save % is shots on target saved out of saved plus conceded; keepers are ranked by it weighed with ${SAVE_PRIOR} shots at the league's average, so one great game cannot beat a great season. Keepers with at least half the games played so far.`] };
     const ZONE_TEXT = { up: 'promotion place', playoff: 'play-off place', down: 'relegation place' };
     const cols = ['P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts'];
     // Sorting reorders the rows; # and the zone colours stay the real league position.
@@ -386,8 +386,8 @@ const views = {
       <div class="bar">${['Table', ...Object.keys(BOARDS)].map(v => `<button data-act="tableView" data-v="${v}" class="${v === tableView ? 'on' : ''}">${v}</button>`).join('')}</div>`;
     if (tableView !== 'Table') {
       const [key, head, note] = BOARDS[tableView], list = ranking(s, tableDiv, key), paid = key === 'goals' || key === 'assists', save = key === 'save';
-      const rows = list.map((x, k) => `<tr class="${x.club === s.me ? 'me' : ''}"><td class="n">${k + 1}</td><td><button class="link" data-act="view" data-id="${x.id}">${esc(x.name)}</button></td><td>${badge(x.club, 18)}${clubName(x.club)}</td><td class="n">${x.apps}</td><td class="n"><b>${x.v}${save ? '%' : ''}</b></td><td class="n">${save ? `${x.sv} / ${x.ga ?? 0}` : (x.v / x.apps).toFixed(2)}</td>${paid ? `<td class="n dim">${k < 3 ? money(rankPrize(key, tableDiv, k)) : ''}</td>` : ''}</tr>`).join('');
-      return `${bar}<h2>${tableView} · season ${s.season}</h2>${list.length ? `<div class="wrap"><table><tr><th class="n">#</th><th>Player</th><th>Club</th><th class="n">Games</th><th class="n">${head}</th><th class="n">${save ? 'Saved / conceded' : 'Per game'}</th>${paid ? '<th class="n">Prize</th>' : ''}</tr>${rows}</table></div>
+      const rows = list.map((x, k) => `<tr class="${x.club === s.me ? 'me' : ''}"><td class="n">${k + 1}</td><td><button class="link" data-act="view" data-id="${x.id}">${esc(x.name)}</button></td><td>${badge(x.club, 18)}${clubName(x.club)}</td><td class="n">${x.apps}</td><td class="n"><b>${x.v}${save ? '%' : ''}</b></td><td class="n">${save ? `${x.pct}% <span class="dim">(${x.sv} / ${x.ga})</span>` : (x.v / x.apps).toFixed(2)}</td>${paid ? `<td class="n dim">${k < 3 ? money(rankPrize(key, tableDiv, k)) : ''}</td>` : ''}</tr>`).join('');
+      return `${bar}<h2>${tableView} · season ${s.season}</h2>${list.length ? `<div class="wrap"><table><tr><th class="n">#</th><th>Player</th><th>Club</th><th class="n">Games</th><th class="n">${head}</th><th class="n">${save ? 'Save % (saved / conceded)' : 'Per game'}</th>${paid ? '<th class="n">Prize</th>' : ''}</tr>${rows}</table></div>
         <p class="dim">League matches only. ${save ? 'Ties go to the keeper who faced more shots.' : 'Ties go to the player with fewer games.'} ${note}${paid ? ' The top 3 win prize money for their club when the season ends, and you get a bonus for each of yours.' : ' The winner gets an award in History; no prize money.'}</p>` : '<p class="dim">Nobody yet this season.</p>'}`;
     }
     return `${bar}

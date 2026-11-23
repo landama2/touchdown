@@ -64,6 +64,7 @@ function makeSide({ club, ids, formation, bench = autoBench(club, ids), tactics 
     const p = club.players.find(x => x.id === id);
     pl[id] = { name: displayName(p), pos: p.pos, attrs: p.attrs, side, fit: p.cond, edge: readiness(p), rt: 6, yc: 0, inj: false, played: ids.includes(id) };
   }
+  ids.forEach((id, k) => { if (pos[k] === 'GK') pl[id].gk = true; }); // the starting keeper
   return {
     club: club.id, formation, auto: true, subs: 0,
     tac: Object.fromEntries(TEAM_KEYS.map(k => [k, tactics[k]])), takers: { ...tactics.takers }, fam: { ...fam },
@@ -206,6 +207,7 @@ function tire(m) {
     const t = 1 + K.PRESS_TIRE * S.tac.pressing + K.TEMPO_TIRE * S.tac.tempo;
     for (const o of S.on) {
       const p = m.pl[o.id];
+      if (o.pos === 'GK') p.gk = true; // he played in goal: his clean sheets and keeper rankings count this match
       p.fit = Math.max(0, p.fit - K.FATIGUE * t * (o.pos === 'GK' ? 0.4 : 1) * (1.6 - p.attrs.stamina / 20));
     }
   }
@@ -329,11 +331,12 @@ export function stepMinute(m) {
   m.seed = rng.seed;
 }
 
-// The shape season.js stores in state.last: ratings are 3.0-10.0, best first.
+// The shape season.js stores in state.last: ratings are 3.0-10.0, best first; gk: true for whoever played in goal.
 export function matchResult(m) {
   const [H, A] = m.sides;
+  for (const S of m.sides) for (const o of S.on) if (o.pos === 'GK') m.pl[o.id].gk = true; // came on after the last minute's tire()
   const ratings = Object.entries(m.pl).filter(([, p]) => p.played)
-    .map(([id, p]) => ({ id: +id, name: p.name, side: p.side, rt: Math.round(Math.max(3, Math.min(10, p.rt)) * 10) / 10 }))
+    .map(([id, p]) => ({ id: +id, name: p.name, side: p.side, rt: Math.round(Math.max(3, Math.min(10, p.rt)) * 10) / 10, ...(p.gk && { gk: true }) }))
     .sort((x, y) => y.rt - x.rt);
   const r = { h: H.club, a: A.club, hg: H.st.goals, ag: A.st.goals, ev: m.ev, stats: [H.st, A.st], ratings };
   if (m.min > MINUTES) r.aet = true;

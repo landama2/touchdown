@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../src/world.js';
 import { takeClub, playDay, endSeason, table } from '../src/season.js';
-import { VALUE, ranking, seasonAwards, noteSeason } from '../src/awards.js';
+import { VALUE, ranking, seasonAwards, noteSeason, addMatch } from '../src/awards.js';
 import { rankPrize, SCORER_PRIZE, ASSIST_PRIZE } from '../src/finance.js';
 import { startCareer, seasonReview, salaryFor, BONUS } from '../src/career.js';
 import { MINI } from './fixtures/mini.js';
@@ -31,9 +31,40 @@ test('save % ties: the keeper who faced more shots ranks first, whatever the gam
   const s = world(1), d = 0, [a, b] = s.divisions[d].clubIds.map(id => s.clubs[id]);
   for (const c of s.clubs) c.st.p = 2;
   const [p, q] = [a, b].map(c => c.players.find(x => x.pos === 'GK'));
-  p.stats = { apps: 1, goals: 0, assists: 0, rating: 7, sv: 3 };
-  q.stats = { apps: 2, goals: 0, assists: 0, rating: 14, sv: 20 };
-  assert.deepEqual(ranking(s, d, 'save').map(x => [x.id, x.v]), [[q.id, 100], [p.id, 100]]);
+  p.stats = { apps: 2, gk: 2, goals: 0, assists: 0, rating: 7, sv: 3, ga: 1 };
+  q.stats = { apps: 2, gk: 2, goals: 0, assists: 0, rating: 14, sv: 30, ga: 10 };
+  assert.deepEqual(ranking(s, d, 'save').map(x => [x.id, x.pct]), [[q.id, 75], [p.id, 75]]);
+});
+
+test('save %: weighed with the league average, one great game does not beat a great season', () => {
+  const s = world(1), d = 0, [a, b, c] = s.divisions[d].clubIds.map(id => s.clubs[id]);
+  for (const x of s.clubs) x.st.p = 1;
+  const [one, season, poor] = [a, b, c].map(x => x.players.find(p => p.pos === 'GK'));
+  one.stats = { apps: 1, gk: 1, goals: 0, assists: 0, rating: 8, sv: 6, ga: 0 }; // 100% from 6 shots
+  season.stats = { apps: 30, gk: 30, goals: 0, assists: 0, rating: 210, sv: 102, ga: 18 }; // 85% from 120 shots
+  poor.stats = { apps: 30, gk: 30, goals: 0, assists: 0, rating: 180, sv: 80, ga: 80 }; // 50%: pulls the average down
+  const r = ranking(s, d, 'save');
+  assert.deepEqual(r.map(x => x.id), [season.id, one.id, poor.id]);
+  assert.deepEqual(r.map(x => x.pct), [85, 100, 50]);
+  assert.ok(r.every(x => x.v > 0 && x.v < 100));
+});
+
+test('keeper rankings count only matches played in goal', () => {
+  const s = world(1), d = 0, [a, b] = s.divisions[d].clubIds.map(id => s.clubs[id]);
+  for (const x of s.clubs) x.st.p = 10;
+  const out = a.players.find(p => p.pos !== 'GK'), gk = b.players.find(p => p.pos === 'GK');
+  const r = (ratings, hg, ag, ev = []) => ({ h: a.id, a: b.id, hg, ag, ev, ratings });
+  // 9 matches outfield, 1 in goal without a goal against
+  for (let k = 0; k < 9; k++) addMatch(s, d, r([{ id: out.id, rt: 7 }, { id: gk.id, rt: 7, gk: true }], 1, 0, [{ type: 'goal', id: 0, gk: gk.id }]));
+  addMatch(s, d, r([{ id: out.id, rt: 7, gk: true }, { id: gk.id, rt: 7 }], 0, 0, [{ type: 'save', id: 0, gk: out.id }]));
+  assert.equal(out.stats.apps, 10);
+  assert.equal(out.stats.gk, 1);
+  assert.equal(out.stats.cs, 1);
+  assert.equal(gk.stats.gk, 9);
+  assert.equal(gk.stats.cs, undefined, 'his outfield match without a goal against is no clean sheet');
+  assert.equal(gk.stats.ga, 9);
+  assert.deepEqual(ranking(s, d, 'cs').map(x => [x.id, x.apps]), [[out.id, 1]]);
+  assert.ok(!ranking(s, d, 'save').some(x => x.id === out.id), 'one game in goal is short of half the games');
 });
 
 test('after a season the rankings\' leaders are the awards, and the records hold the most assists', () => {
@@ -65,15 +96,15 @@ test('keepers: goals against and saves are counted, and the new awards are the l
     const ps = dv.clubIds.flatMap(c => s.clubs[c].players.filter(p => p.stats));
     const against = ps.reduce((t, p) => t + (p.stats.ga ?? 0), 0), scored = dv.clubIds.reduce((t, c) => t + s.clubs[c].st.gf, 0);
     assert.equal(against, scored, 'every league goal is against one keeper');
-    assert.ok(ps.every(p => p.pos === 'GK' || (!p.stats.cs && !p.stats.sv && !p.stats.ga)), 'only keepers get keeper stats');
+    assert.ok(ps.every(p => p.stats.gk || (!p.stats.cs && !p.stats.sv && !p.stats.ga)), 'only who played in goal gets keeper stats');
     const aw = seasonAwards(s, d);
     for (const [key, a] of [['points', aw.points], ['cs', aw.glove], ['save', aw.saves]]) {
       const top = ranking(s, d, key, 1)[0];
-      assert.deepEqual(a, { id: top.id, name: top.name, club: top.club, v: top.v });
+      assert.deepEqual(a, { id: top.id, name: top.name, club: top.club, v: key === 'save' ? top.pct : top.v });
     }
     const p = ps.find(x => x.id === aw.points.id);
     assert.equal(aw.points.v, p.stats.goals + p.stats.assists);
-    assert.ok(aw.saves.v > 0 && aw.saves.v <= 100 && ranking(s, d, 'cs').every(x => ps.find(p => p.id === x.id).pos === 'GK'));
+    assert.ok(aw.saves.v > 0 && aw.saves.v <= 100 && ranking(s, d, 'cs').every(x => ps.find(p => p.id === x.id).stats.gk === x.apps));
   });
 });
 
