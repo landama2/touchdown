@@ -193,6 +193,7 @@ export function playDay(s) {
     s.last.push(r);
   }
   for (const it of today.items) advance(s, rng, it);
+  if (played) s.condAt = Object.fromEntries(myClub(s).players.map(p => [p.id, p.cond])); // your squad's condition at the whistle: the Squad screen shows the recovery since
   const weeks = Math.floor(today.day / 7) - Math.floor(s.day / 7);
   payWeeks(s, weeks); // weekly instalments, every club
   payManager(s, weeks); // and the manager's salary

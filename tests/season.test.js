@@ -338,6 +338,19 @@ test('switching formation mid-match teaches the new shape for the minutes played
   assert.equal(s.fam['4-4-2'], 1); // its half hour outweighs the fade
 });
 
+test('your squad\'s condition at the end of your match is kept, so recovery since can be shown', () => {
+  const s = world(4);
+  takeClub(s, 6);
+  fixLineup(s);
+  kickOff(s);
+  const played = s.lineup[3];
+  playDay(s);
+  const p = myClub(s).players.find(x => x.id === played);
+  assert.ok(s.condAt[played] < 100, 'a starter ends the match tired');
+  assert.ok(p.cond > s.condAt[played], 'and has recovered some by the next match day');
+  assert.deepEqual(Object.keys(s.condAt).map(Number).sort(), myClub(s).players.map(x => x.id).sort());
+});
+
 const season = (seed, me = null) => { const s = world(seed); if (me !== null) takeClub(s, me); while (!s.done) playDay(s); return s; };
 
 test('the cup: every club enters, the weakest first, extra time then penalties, one winner after a neutral final', () => {

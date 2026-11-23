@@ -86,8 +86,11 @@ const nameBtn = (p, act) => `<td><button class="link" data-act="${act}" data-id=
 const outFor = d => d === 1 ? '1 day' : d < 14 ? `${d} days` : `${Math.round(d / 7)} weeks`;
 const status = p => p.inj ? `${esc(p.inj.name)}, ${outFor(p.inj.days)}` : p.ban ? `banned for ${p.ban} match${p.ban > 1 ? 'es' : ''}`
   : p.yc % YELLOW_LIMIT === YELLOW_LIMIT - 1 ? '🟨 one more yellow is a ban' : '';
-const SQUAD_HEAD = '<th class="n">Cond</th><th>Morale</th><th class="n">Form</th><th>Status</th>';
-const squadCells = p => `<td class="n">${p.cond}%</td><td>${moraleLabel(p.morale)}</td><td class="n">${formAvg(p) ?? '–'}</td><td class="${available(p) ? 'dim' : 'oop'}">${status(p)}</td>`;
+const SQUAD_HEAD = '<th class="n" title="condition, and its change since your last match">Cond</th><th>Morale</th><th class="n">Form</th><th>Status</th>';
+// Condition gained (or lost) since the end of your last match: how fast each player recovers.
+const condDelta = p => { const was = s.condAt?.[p.id], d = was === undefined ? 0 : Math.round(p.cond - was);
+  return d ? ` <span class="delta ${d > 0 ? 'gain' : 'loss'}" title="since your last match">${d > 0 ? '+' : '−'}${Math.abs(d)}</span>` : ''; };
+const squadCells = p => `<td class="n">${p.cond}%${condDelta(p)}</td><td>${moraleLabel(p.morale)}</td><td class="n">${formAvg(p) ?? '–'}</td><td class="${available(p) ? 'dim' : 'oop'}">${status(p)}</td>`;
 // The human club's new injuries and bans from the day just played.
 const cupGoal = k => { const r = cupRoundName(k, s.clubs.length); return /^Round/.test(r) ? `${CUP_NAME} ${r.toLowerCase()}` : `the ${CUP_NAME} ${r.toLowerCase()}`; };
 const NEWS = {
