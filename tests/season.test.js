@@ -9,7 +9,7 @@ import { ranking } from '../src/awards.js';
 import { serialize, deserialize } from '../src/save.js';
 import { cupRounds, aggregate } from '../src/cup.js';
 import { stepMinute, matchResult, setFormation } from '../src/match.js';
-import { SEASON_WEEKS, BROADCAST, MERIT, CUP_PRIZE, rankPrize, sponsorship, gate, wageBill } from '../src/finance.js';
+import { SEASON_WEEKS, BROADCAST, MERIT, CUP_PRIZE, rankPrize, PAID_RANKS, sponsorship, gate, wageBill } from '../src/finance.js';
 import { MIN_SQUAD, MAX_SQUAD, buy } from '../src/transfers.js';
 import { lend } from '../src/market.js';
 import { MINI } from './fixtures/mini.js';
@@ -161,15 +161,15 @@ test('endSeason rolls over; three seasons keep squads intact', () => {
   assert.deepEqual(JSON.parse(JSON.stringify(s)), s);
 });
 
-test('prize money: every club by final position, the cup winner and runner-up, the top 3 scorers and assisters; the season goes into History', () => {
+test('prize money: every club by final position, the cup winner and runner-up, the top 3 of each paid ranking; the season goes into History', () => {
   const s = world(12);
   takeClub(s, 0);
   while (!s.done) playDay(s);
   const tables = s.divisions.map((_, d) => table(s, d)), bal = s.clubs.map(c => c.fin.balance), final = s.cup.rounds.at(-1).ties[0];
-  const ranks = s.divisions.map((_, d) => ({ goals: ranking(s, d, 'goals', 3), assists: ranking(s, d, 'assists', 3) }));
+  const ranks = s.divisions.map((_, d) => Object.fromEntries(PAID_RANKS.map(key => [key, ranking(s, d, key, 3)])));
   const want = id => {
     const d = tables.findIndex(t => t.includes(id)), t = tables[d];
-    const rank = ['goals', 'assists'].reduce((sum, key) => sum + ranks[d][key].reduce((x, r, k) => x + (r.club === id ? rankPrize(key, d, k) : 0), 0), 0);
+    const rank = PAID_RANKS.reduce((sum, key) => sum + ranks[d][key].reduce((x, r, k) => x + (r.club === id ? rankPrize(key, d, k) : 0), 0), 0);
     return MERIT[d] * (t.length - t.indexOf(id)) + (id === final.w ? CUP_PRIZE[0] : id === final.h || id === final.a ? CUP_PRIZE[1] : 0) + rank;
   };
   assert.ok(ranks.every(r => r.goals.length === 3 && r.assists.length === 3));

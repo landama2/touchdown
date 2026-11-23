@@ -35,7 +35,7 @@ export function saveAverage(s, d) {
 // Players with none are left out; the save % only counts keepers with at least half the games in goal the
 // busiest club has played, ranks them by the weighed save % (v) and also gives the plain one (pct).
 // Ties: fewer games first (save %: more shots faced first), then the lower id. The season's winner of each ranking is its
-// award; the top 3 of goals and assists are paid prize money (payPrizes in src/finance.js).
+// award; the top 3 of each are paid prize money (payPrizes in src/finance.js; less for the others than goals and assists).
 export function ranking(s, d, key, n = 20) {
   const ids = s.divisions[d].clubIds, save = key === 'save', keeper = KEEPER_KEYS.includes(key);
   const minApps = save ? Math.max(1, Math.max(...ids.map(c => s.clubs[c].st.p)) / 2) : 0, avg = save ? saveAverage(s, d) : undefined;

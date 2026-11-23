@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createWorld } from '../src/world.js';
 import { takeClub, playDay, endSeason, table } from '../src/season.js';
 import { VALUE, ranking, seasonAwards, noteSeason, addMatch } from '../src/awards.js';
-import { rankPrize, SCORER_PRIZE, ASSIST_PRIZE } from '../src/finance.js';
+import { rankPrize, SCORER_PRIZE, ASSIST_PRIZE, POINTS_PRIZE, KEEPER_PRIZE, PAID_RANKS } from '../src/finance.js';
 import { startCareer, seasonReview, salaryFor, BONUS } from '../src/career.js';
 import { MINI } from './fixtures/mini.js';
 
@@ -113,6 +113,9 @@ test('ranking prizes: by division and place, the 2nd half and the 3rd a quarter 
   assert.equal(rankPrize('assists', 2, 0), ASSIST_PRIZE[2]);
   assert.equal(rankPrize('assists', 5, 0), ASSIST_PRIZE[2]); // lower divisions use the last
   assert.equal(rankPrize('assists', 2, 2) % 5e3, 0);
+  assert.deepEqual(PAID_RANKS, ['goals', 'assists', 'points', 'cs', 'save']);
+  assert.deepEqual([rankPrize('points', 0, 0), rankPrize('cs', 1, 1), rankPrize('save', 2, 0)], [POINTS_PRIZE[0], KEEPER_PRIZE[1] / 2, KEEPER_PRIZE[2]]);
+  for (const d of [0, 1, 2]) for (const key of ['points', 'cs', 'save']) assert.ok(rankPrize(key, d, 0) < ASSIST_PRIZE[d], 'the new rankings pay less');
 });
 
 test('the manager gets a salary bonus for each of his players in a top 3, nothing for other clubs\' players', () => {
@@ -123,15 +126,16 @@ test('the manager gets a salary bonus for each of his players in a top 3, nothin
   const row = (club, k) => ({ id: 100 + k, name: `P${k}`, club, apps: 10, v: 10 - k });
   const ranks = s.divisions.map(() => ({ goals: [], assists: [] }));
   ranks[0] = { goals: [row(0, 0), row(1, 1), row(0, 2)], assists: [row(1, 3), row(0, 4)] };
+  ranks[0].cs = [row(0, 5)]; ranks[0].save = [row(1, 6), row(0, 7)]; // keepers' rankings: half the bonus
   const h = { cup: null, divs: s.divisions.map(() => ({ champion: null, playoff: null, up: [], down: [] })), ranks };
   seasonReview(s, tables, h);
   const r = x => Math.round(x / 1e3) * 1e3;
-  const want = r(pay * BONUS.ranking[0]) + r(pay * BONUS.ranking[2]) + r(pay * BONUS.ranking[1]);
+  const want = r(pay * BONUS.ranking[0]) + r(pay * BONUS.ranking[2]) + r(pay * BONUS.ranking[1]) + r(pay * BONUS.ranking[0] * BONUS.minorRanking) + r(pay * BONUS.ranking[1] * BONUS.minorRanking);
   const seasonBonus = // the season bonus is not part of it
     s.inbox.filter(n => n.type === 'bonus').reduce((x, n) => x + n.amount, 0);
   assert.equal(s.career.money - seasonBonus, want);
   const posts = s.inbox.filter(n => n.type === 'ranking');
-  assert.deepEqual(posts.map(n => [n.key, n.place, n.amount]), [['goals', 0, rankPrize('goals', 0, 0)], ['goals', 2, rankPrize('goals', 0, 2)], ['assists', 1, rankPrize('assists', 0, 1)]]);
+  assert.deepEqual(posts.map(n => [n.key, n.place, n.amount]), [['goals', 0, rankPrize('goals', 0, 0)], ['goals', 2, rankPrize('goals', 0, 2)], ['assists', 1, rankPrize('assists', 0, 1)], ['cs', 0, rankPrize('cs', 0, 0)], ['save', 1, rankPrize('save', 0, 1)]]);
 });
 
 test('a place in a top 3 lifts the player\'s morale, the winner most', () => {

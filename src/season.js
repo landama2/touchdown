@@ -9,7 +9,7 @@ import { addMatch, seasonAwards, noteSeason, ranking } from './awards.js';
 import { starLines, retirees, retireStars, aiLegends, aiLegend } from './legends.js';
 import { afterMatch, passDays, offseason } from './squad.js';
 import { defaultTraining, trainingOf, recoverRate, trainWeek, INTENSITY } from './training.js';
-import { payWeeks, payGate, payPrizes, seasonBudgets, blankLedger, ownerTake } from './finance.js';
+import { payWeeks, payGate, payPrizes, seasonBudgets, blankLedger, ownerTake, PAID_RANKS } from './finance.js';
 import { expireContracts, academy } from './contracts.js';
 import { MIN_SQUAD, inWindow, windowId, marketDay, returnLoans } from './market.js';
 import { scoutDays, staffScouts, prune } from './scouting.js';
@@ -255,7 +255,7 @@ export function endSeason(s) {
     divs: tables.map((t, d) => ({ champion: t[0], up: [], down: [], playoff: winnerOf(s.playoffs[d]), awards: awards[d] })),
   };
   if (s.me !== null) { h.div = myClub(s).div; h.pos = tables[h.div].indexOf(s.me) + 1; }
-  h.ranks = s.divisions.map((_, d) => ({ goals: ranking(s, d, 'goals', 3), assists: ranking(s, d, 'assists', 3) }));
+  h.ranks = s.divisions.map((_, d) => Object.fromEntries(PAID_RANKS.map(key => [key, ranking(s, d, key, 3)])));
   rankMorale(s, h.ranks);
   h.prize = payPrizes(s, tables, h.cup, s.me, h.ranks);
   h.fin = s.me === null ? null : { ...myClub(s).fin.season, balance: myClub(s).fin.balance };

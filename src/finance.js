@@ -12,6 +12,10 @@ export const BROADCAST = [93e6, 12e6, 4e6];   // per season, by division (top fi
 export const MERIT = [2.5e6, 0.1e6, 0.05e6];  // per place counted from the bottom: the last club gets 1×, the champion n×
 export const CUP_PRIZE = [2e6, 1e6];          // winner, runner-up
 export const SCORER_PRIZE = [1e6, 250e3, 100e3], ASSIST_PRIZE = [750e3, 200e3, 75e3]; // to the club of a ranking's winner, by division
+// The other rankings pay less: goals + assists mostly repeats the two above; the keepers' get a little more.
+export const POINTS_PRIZE = [300e3, 75e3, 30e3], KEEPER_PRIZE = [400e3, 100e3, 40e3];
+export const RANK_PRIZE = { goals: SCORER_PRIZE, assists: ASSIST_PRIZE, points: POINTS_PRIZE, cs: KEEPER_PRIZE, save: KEEPER_PRIZE };
+export const PAID_RANKS = Object.keys(RANK_PRIZE); // the rankings (keys of VALUE in src/awards.js) whose top 3 are paid
 export const PLACE_SHARE = [1, 0.5, 0.25];    // 1st, 2nd and 3rd of a ranking: × the winner's prize
 const SPONSOR = { at8: 0.8e6, growth: 0.46 }, GATE = { at8: 125e3, growth: 0.32 }; // quality 8 ≈ a League One club (tuned in Phase 6)
 export const WAGE_CUT = 5;                     // wages and staff costs were cut to a fifth of their Phase 6 size (save version 13)
@@ -90,15 +94,16 @@ export const payGate = c => book(c, 'gate', gate(c));
 
 // End of season: merit prize money for every club by final position (tables[d] = division d's final
 // table), cup prize money (cup = { winner, runnerUp } or null). Returns what club `me` earned.
-// The prize for place k (0 = 1st) of division d's scorers ('goals') or assists ranking.
-export const rankPrize = (key, d, k) => round(byDiv(key === 'goals' ? SCORER_PRIZE : ASSIST_PRIZE, d) * PLACE_SHARE[k], 5e3);
-// ranks (optional): per division { goals, assists }, each the season's top 3 from ranking() in src/awards.js.
+// The prize for place k (0 = 1st) of division d's ranking key (one of PAID_RANKS).
+export const rankPrize = (key, d, k) => round(byDiv(RANK_PRIZE[key], d) * PLACE_SHARE[k], 5e3);
+// ranks (optional): per division { goals, assists, ... }, each the season's top 3 from ranking() in src/awards.js;
+// a key missing (older History entries) pays nothing.
 export function payPrizes(s, tables, cup, me, ranks = []) {
   let mine = 0;
   const pay = (id, x) => { book(s.clubs[id], 'prize', x); if (id === me) mine += x; };
   tables.forEach((t, d) => t.forEach((id, k) => pay(id, byDiv(MERIT, d) * (t.length - k))));
   if (cup) { pay(cup.winner, CUP_PRIZE[0]); pay(cup.runnerUp, CUP_PRIZE[1]); }
-  ranks.forEach((r, d) => { for (const key of ['goals', 'assists']) r[key].forEach((x, k) => pay(x.club, rankPrize(key, d, k))); });
+  ranks.forEach((r, d) => { for (const key of PAID_RANKS) (r[key] || []).forEach((x, k) => pay(x.club, rankPrize(key, d, k))); });
   return mine;
 }
 

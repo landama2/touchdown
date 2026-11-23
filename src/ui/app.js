@@ -17,7 +17,7 @@ import { KEY, SLOTS, slotKey, serialize, deserialize } from '../save.js';
 import { TASKS, taskDays, estimate, ranges, assign, recall, toggleShortlist, searchPlayers } from '../scouting.js';
 import { AREAS, COACHING, MEDICAL, SCOUTS, SCOUT_SPEED, setStaff } from '../staff.js';
 import { YOUTH_MAX, LEAVE_AGE, ceilingRange, promote, release } from '../youth.js';
-import { rankPrize, wage, wageBill, projection, staffBill, STAFF_COST, STANDARD, SHARE, clubValue, stake, gate, STADIUM, stadiumCost, buildStadium } from '../finance.js';
+import { rankPrize, PAID_RANKS, wage, wageBill, projection, staffBill, STAFF_COST, STANDARD, SHARE, clubValue, stake, gate, STADIUM, stadiumCost, buildStadium } from '../finance.js';
 import { terms, canRenew, autoRenewOn, renew as renewContract } from '../contracts.js';
 import { MIN_GAMES, ASK, REP, BONUS, SEVERANCE, bands, leagueTarget, cupTarget, level, startCareer, acceptJob, declineJob, openOffer, askBoard, sackLine, salaryFor, trade } from '../career.js';
 import { crestSvg, kitSvg } from './art.js';
@@ -93,6 +93,9 @@ const condDelta = p => { const was = s.condAt?.[p.id], d = was === undefined ? 0
 const squadCells = p => `<td class="n">${p.cond}%${condDelta(p)}</td><td>${moraleLabel(p.morale)}</td><td class="n">${formAvg(p) ?? '–'}</td><td class="${available(p) ? 'dim' : 'oop'}">${status(p)}</td>`;
 // The human club's new injuries and bans from the day just played.
 const cupGoal = k => { const r = cupRoundName(k, s.clubs.length); return /^Round/.test(r) ? `${CUP_NAME} ${r.toLowerCase()}` : `the ${CUP_NAME} ${r.toLowerCase()}`; };
+// The paid rankings: as named in a sentence, and as a title in History.
+const RANK_NAME = { goals: 'scorers', assists: 'assists', points: 'goals + assists', cs: 'clean sheets', save: 'save %' };
+const RANK_TITLE = { goals: 'Scorers', assists: 'Assists', points: 'Goals + assists', cs: 'Clean sheets', save: 'Save %' };
 const NEWS = {
   injury: n => `🚑 ${esc(n.name)} is out for ${outFor(n.days)} (${esc(n.injury)}${n.training ? ', in training' : ''}).`,
   ban: n => `🟥 ${esc(n.name)} is banned for ${n.matches} match${n.matches > 1 ? 'es' : ''}.`,
@@ -108,7 +111,7 @@ const NEWS = {
   dividend: n => `📈 Your ${n.pct}% of ${clubName(n.club)} paid a dividend of ${money(n.amount)}.`,
   target: n => `🎯 The ${clubName(n.club)} board wants you to ${n.league} and reach ${cupGoal(n.cup)}.`,
   review: n => `📋 Season review: you finished ${ordinal(n.pos)}; the board wanted you to ${n.target}${n.met ? ' — target met' : ' — target missed'}. Reputation ${n.was} → ${n.rep}.`,
-  ranking: n => `${n.place ? '🥈' : '🏆'} ${esc(n.name)} finished ${ordinal(n.place + 1)} in the ${esc(s.divisions[n.div]?.name ?? '')} ${n.key === 'goals' ? 'scorers' : 'assists'} ranking (${n.v}). ${clubName(n.club)} receive ${money(n.amount)}; your bonus is ${money(n.bonus)}.`,
+  ranking: n => `${n.place ? '🥈' : '🏆'} ${esc(n.name)} finished ${ordinal(n.place + 1)} in the ${esc(s.divisions[n.div]?.name ?? '')} ${RANK_NAME[n.key] ?? n.key} ranking (${n.v}${n.key === 'save' ? '%' : ''}). ${clubName(n.club)} receive ${money(n.amount)}; your bonus is ${money(n.bonus)}.`,
   retired: n => `🎖️ ${esc(n.name)} retires from ${clubName(n.club)}: ${n.seasons} season${n.seasons === 1 ? '' : 's'} at the club, ${n.awards} award${n.awards === 1 ? '' : 's'}. +${n.points} Star points (see Legends).`,
   renewed: n => `📝 Contracts renewed automatically: ${n.names.map(esc).join(', ')}.`,
   aiLegend: n => `⭐ ${clubName(n.club)} have signed a young ${esc(n.name)} ★ from their academy.`,
@@ -385,7 +388,7 @@ const views = {
     const bar = `<div class="bar">${s.divisions.map((d, i) => `<button data-act="div" data-id="${i}" class="${i === tableDiv ? 'on' : ''}">${esc(d.name)}</button>`).join('')}</div>
       <div class="bar">${['Table', ...Object.keys(BOARDS)].map(v => `<button data-act="tableView" data-v="${v}" class="${v === tableView ? 'on' : ''}">${v}</button>`).join('')}</div>`;
     if (tableView !== 'Table') {
-      const [key, head, note] = BOARDS[tableView], list = ranking(s, tableDiv, key), paid = key === 'goals' || key === 'assists', save = key === 'save';
+      const [key, head, note] = BOARDS[tableView], list = ranking(s, tableDiv, key), paid = PAID_RANKS.includes(key), save = key === 'save';
       const rows = list.map((x, k) => `<tr class="${x.club === s.me ? 'me' : ''}"><td class="n">${k + 1}</td><td><button class="link" data-act="view" data-id="${x.id}">${esc(x.name)}</button></td><td>${badge(x.club, 18)}${clubName(x.club)}</td><td class="n">${x.apps}</td><td class="n"><b>${x.v}${save ? '%' : ''}</b></td><td class="n">${save ? `${x.pct}% <span class="dim">(${x.sv} / ${x.ga})</span>` : (x.v / x.apps).toFixed(2)}</td>${paid ? `<td class="n dim">${k < 3 ? money(rankPrize(key, tableDiv, k)) : ''}</td>` : ''}</tr>`).join('');
       return `${bar}<h2>${tableView} · season ${s.season}</h2>${list.length ? `<div class="wrap"><table><tr><th class="n">#</th><th>Player</th><th>Club</th><th class="n">Games</th><th class="n">${head}</th><th class="n">${save ? 'Save % (saved / conceded)' : 'Per game'}</th>${paid ? '<th class="n">Prize</th>' : ''}</tr>${rows}</table></div>
         <p class="dim">League matches only. ${save ? 'Ties go to the keeper who faced more shots.' : 'Ties go to the player with fewer games.'} ${note}${paid ? ' The top 3 win prize money for their club when the season ends, and you get a bonus for each of yours.' : ' The winner gets an award in History; no prize money.'}</p>` : '<p class="dim">Nobody yet this season.</p>'}`;
@@ -400,7 +403,7 @@ const views = {
   },
   History() {
     const name = id => id === null ? '—' : clubName(id), names = ids => ids.map(name).join(', ') || '—';
-    const podium = (title, list) => list.length ? `<div class="dim">${title}: ${list.map((x, k) => `${ordinal(k + 1)} ${esc(x.name)} (${name(x.club)}, ${x.v})`).join(' · ')}</div>` : '';
+    const podium = (title, list) => list.length ? `<div class="dim">${title}: ${list.map((x, k) => `${ordinal(k + 1)} ${esc(x.name)} (${name(x.club)}, ${x.pct ?? x.v}${x.pct === undefined ? '' : '%'})`).join(' · ')}</div>` : '';
     const award = (title, a, unit) => a ? `<div>${title}: <b>${esc(a.name)}</b> <span class="dim">(${name(a.club)}, ${a.v}${unit})</span></div>` : '';
     const seasons = [...s.history].reverse().map(h => `<h3>Season ${h.season}</h3>
       ${h.pos ? `<p>You finished ${h.pos} in the ${esc(s.divisions[h.div].name)} (prize ${money(h.prize)}).</p>` : ''}
@@ -411,7 +414,7 @@ const views = {
       ${h.cup ? `<div>${CUP_NAME}: <b>${name(h.cup.winner)}</b> <span class="dim">beat ${name(h.cup.runnerUp)} in the final</span></div>` : ''}
       ${h.divs.map((x, d) => `<div><b>${esc(s.divisions[d].name)}</b> champions: ${name(x.champion)}${x.up.length ? ` · promoted: ${names(x.up)}` : ''}${x.down.length ? ` · relegated: ${names(x.down)}` : ''}</div>
         ${x.awards ? award('Player of the season', x.awards.player, ' avg') + award('Top scorer', x.awards.scorer, ' goals') + award('Top assists', x.awards.assists, ' assists') + award('Goals + assists', x.awards.points, ' G + A') + award('Golden Glove', x.awards.glove, ' clean sheets') + award('Best save %', x.awards.saves, '%') + award('Young player', x.awards.young, ' avg') : ''}
-        ${h.ranks?.[d] ? podium('Scorers', h.ranks[d].goals) + podium('Assists', h.ranks[d].assists) : ''}`).join('')}`).join('');
+        ${h.ranks?.[d] ? PAID_RANKS.map(key => podium(RANK_TITLE[key], h.ranks[d][key] || [])).join('') : ''}`).join('')}`).join('');
     const rec = (title, r, f) => r ? `<div>${title}: ${f(r)} <span class="dim">(season ${r.season})</span></div>` : '';
     const win = r => `${name(r.h)} ${r.hg} – ${r.ag} ${name(r.a)}`;
     const records = s.divisions.map((dv, d) => `<h3>${esc(dv.name)}</h3>${rec('Most points', s.records[d].points, r => `${r.v}, ${name(r.club)}`)}${rec('Most goals', s.records[d].goals, r => `${r.v}, ${esc(r.name)} (${name(r.club)})`)}${rec('Most assists', s.records[d].assists, r => `${r.v}, ${esc(r.name)} (${name(r.club)})`)}${rec('Biggest win', s.records[d].win, win)}`).join('');
