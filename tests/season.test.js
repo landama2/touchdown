@@ -8,7 +8,7 @@ import { takeClub, myClub, myFixture, upcoming, kickOff, playDay, table, zone, e
 import { ranking } from '../src/awards.js';
 import { serialize, deserialize } from '../src/save.js';
 import { cupRounds, aggregate } from '../src/cup.js';
-import { stepMinute, matchResult } from '../src/match.js';
+import { stepMinute, matchResult, setFormation } from '../src/match.js';
 import { SEASON_WEEKS, BROADCAST, MERIT, CUP_PRIZE, rankPrize, sponsorship, gate, wageBill } from '../src/finance.js';
 import { MIN_SQUAD, MAX_SQUAD, buy } from '../src/transfers.js';
 import { lend } from '../src/market.js';
@@ -314,6 +314,28 @@ test('your tactics reach your match, and playing teaches the formation', () => {
   assert.equal(S.tac.mentality, 1);
   playDay(s);
   assert.equal(s.fam['4-3-3'], 0.6);
+});
+
+test('familiarity learns by minutes: a shape played for half a match gets half the gain', () => {
+  const fam = newFam();
+  learnFam(fam, { '4-4-2': 45, '4-3-3': 45 });
+  assert.deepEqual(fam, { '4-4-2': 1, '4-3-3': 0.54, '3-5-2': 0.5, '5-3-2': 0.5, '4-5-1': 0.5 });
+  learnFam(fam, { '4-3-3': 90 });
+  assert.equal(fam['4-3-3'], 0.64); // a whole match, as with a formation name
+});
+
+test('switching formation mid-match teaches the new shape for the minutes played in it', () => {
+  const s = world(4);
+  takeClub(s, 6);
+  fixLineup(s);
+  const m = kickOff(s), i = m.sides.findIndex(x => !x.auto);
+  while (m.min < 30) stepMinute(m);
+  assert.equal(setFormation(m, i, '4-3-3'), null);
+  playDay(s);
+  assert.equal(m.sides[i].mins['4-4-2'], 30);
+  assert.equal(m.sides[i].mins['4-3-3'], 60);
+  assert.equal(s.fam['4-3-3'], 0.56); // 0.5 + 0.1 × 60/90 − 0.02 × 30/90
+  assert.equal(s.fam['4-4-2'], 1); // its half hour outweighs the fade
 });
 
 const season = (seed, me = null) => { const s = world(seed); if (me !== null) takeClub(s, me); while (!s.done) playDay(s); return s; };

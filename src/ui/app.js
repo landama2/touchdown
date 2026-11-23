@@ -324,7 +324,7 @@ const views = {
     return `<h2>Team instructions</h2><div class="bar">${teamSelects('team', t)}</div>
       <h2>Players</h2><div class="wrap"><table><tr><th>Pos</th><th>Player</th><th>Role</th><th>Duty</th><th>Shooting</th><th>Tackling</th></tr>${s.lineup.map(row).join('')}</table></div>
       <h2>Set pieces</h2><p class="dim">A taker who is not on the pitch is replaced by the best available player.</p><div class="bar">${takers}</div>
-      <h2>Formation familiarity</h2><p class="dim">Each match in a formation teaches it; an unfamiliar one costs up to 3% of the team's strength.</p>
+      <h2>Formation familiarity</h2><p class="dim">Each match teaches the formations it was played in, by minutes (switching mid-match counts); an unfamiliar one costs up to 3% of the team's strength.</p>
       <div class="bar">${Object.keys(FORMATIONS).map(f => `<span>${f} ${Math.round(s.fam[f] * 100)}%</span>`).join(' · ')}</div>`;
   },
   Training() {

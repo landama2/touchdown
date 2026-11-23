@@ -102,9 +102,13 @@ export function autoBench(club, taken, have = [], all = false) {
 }
 
 // Formation familiarity, 0.5-1 per formation: AI clubs play 4-4-2, so a club you take over knows only that.
-// Each match played in a shape teaches it; the others fade a little.
+// A match teaches the shapes it was played in by their share of its minutes (a whole match: +0.1);
+// the rest of the match lets the others fade a little (a whole match without a shape: -0.02).
+// used: a formation, or { formation: minutes } from a match where the shape changed.
 const FAM_GAIN = 0.1, FAM_LOSS = 0.02, FAM_MIN = 0.5;
 export const newFam = () => Object.fromEntries(Object.keys(FORMATIONS).map(f => [f, f === '4-4-2' ? 1 : FAM_MIN]));
 export function learnFam(fam, used) {
-  for (const f in fam) fam[f] = Math.round(Math.min(1, Math.max(FAM_MIN, fam[f] + (f === used ? FAM_GAIN : -FAM_LOSS))) * 100) / 100;
+  const mins = typeof used === 'string' ? { [used]: 1 } : used, total = Object.values(mins).reduce((a, b) => a + b, 0) || 1;
+  for (const f in fam) { const share = (mins[f] ?? 0) / total;
+    fam[f] = Math.round(Math.min(1, Math.max(FAM_MIN, fam[f] + FAM_GAIN * share - FAM_LOSS * (1 - share))) * 100) / 100; }
 }

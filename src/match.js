@@ -312,6 +312,7 @@ export function stepMinute(m) {
   if (m.done) return;
   const rng = makeRng(m.seed);
   m.min++;
+  for (const S of m.sides) S.mins = { ...S.mins, [S.formation]: (S.mins?.[S.formation] ?? 0) + 1 }; // minutes in each shape: familiarity learns from them
   const edge = m.neutral ? 1 : HOME_EDGE, P = [power(m, 0), power(m, 1)], home = P[0].ctrl * edge;
   const atk = rng.next() < home / (home + P[1].ctrl) ? 0 : 1, def = 1 - atk, ta = m.sides[atk].tac, td = m.sides[def].tac;
   m.sides[atk].st.poss++;

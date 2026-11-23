@@ -180,9 +180,11 @@ export function playDay(s) {
   if (live) { for (const S of live.sides) S.auto = true; while (!live.done) stepMinute(live); }
   const rng = makeRng(s.seed);
   s.last = []; s.news = [];
+  let mine = null; // your match: its minutes in each formation teach familiarity
   for (const it of today.items) for (const f of fixtures(s, it)) {
     const m = live && live.sides[0].club === f.h && live.sides[1].club === f.a ? live : play(rng, s, f);
     if (f.tie) settle(f, m);
+    if (f.h === s.me || f.a === s.me) mine = m.sides.find(S => S.club === s.me);
     const r = { ...matchResult(m), item: { ...it } };
     if (it.comp === 'league') { record(s.clubs[f.h].st, r.hg, r.ag); record(s.clubs[f.a].st, r.ag, r.hg); addMatch(s, it.div, r); afterLeague(s, r); }
     if (it.comp === 'cup' && f.tie.w !== null) afterCup(s, f.tie, it.round);
@@ -195,7 +197,7 @@ export function playDay(s) {
   payWeeks(s, weeks); // weekly instalments, every club
   payManager(s, weeks); // and the manager's salary
   boardWeeks(s, weeks); // boards look at the table and the books
-  if (played) learnFam(s.fam, s.formation); // the formation you prepared, not mid-match switches
+  if (played) learnFam(s.fam, mine?.mins ?? s.formation); // every shape you played in, by its minutes
   s.live = null;
   scoutDays(s, today.day - s.day); // scouts work every day up to this one
   s.day = today.day;
