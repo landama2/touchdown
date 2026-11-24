@@ -1,5 +1,5 @@
 import { POS, ATTRS, ALL_ATTRS, overall, value, RETIRE_AGE, displayName, declineAge, SIG_MAX } from '../player.js';
-import { TIERS, OWN_DISCOUNT, available as legendsOnOffer, signLegend, projectStar } from '../legends.js';
+import { TIERS, STAR, OWN_DISCOUNT, available as legendsOnOffer, signLegend, projectStar } from '../legends.js';
 import { available, formAvg, moraleLabel, YELLOW_LIMIT } from '../squad.js';
 import { FOCUS, INTENSITY, LOADS, setTraining, setFocus, setLoad } from '../training.js';
 import { createWorld } from '../world.js';
@@ -80,6 +80,9 @@ const HEAD = '<th>Name</th><th>Pos</th><th class="n">Age</th><th class="n">Ovr</
 const retires = p => p.age >= RETIRE_AGE ? 'retires at the end of this season' : p.age === RETIRE_AGE - 1 ? 'retires at the end of next season' : '';
 // Star points he would earn when he retires from your club (see Legends): '' if none.
 const starNote = p => { const n = retires(p) ? projectStar(s, p, p.age >= RETIRE_AGE ? 0 : 1) : 0; return n ? `gives ${n} Star point${n === 1 ? '' : 's'}` : ''; };
+// Star points for retiring your player p right now (Retire him): a star's projectStar, any other player STAR.retiree; 0 with no career.
+const retireNow = p => !s.career || !myClub(s)?.players.includes(p) || p.loan ? 0 : projectStar(s, p, 0) || STAR.retiree;
+const starPts = n => `${n} Star point${n === 1 ? '' : 's'}`;
 const ageCell = p => retires(p) ? `<span class="${p.age >= RETIRE_AGE ? 'oop' : 'dim'}" title="${retires(p)}${starNote(p) ? ' · ' + starNote(p) : ''}">${p.age} ⏳${starNote(p) ? ` ★${starNote(p).match(/\d+/)[0]}` : ''}</span>` : p.age;
 const cells = p => `<td>${p.pos}</td><td class="n">${ageCell(p)}</td><td class="n">${overall(p)}</td><td class="n">${money(value(p))}</td>`;
 const nameBtn = (p, act) => `<td><button class="link" data-act="${act}" data-id="${p.id}">${esc(displayName(p))}</button>${p.mine ? ' <span role="img" title="yours: bought with your own money" aria-label="yours">💼</span>' : ''}</td>`;
@@ -271,14 +274,19 @@ export function playerView(id) {
   if (!p) { viewing = null; return '<p class="dim">That player has gone.</p>'; }
   const c = clubOfPlayer(p), e = estimate(s, p, c), r = e.k < 100 ? ranges(s, p, c) : null, mine = c?.id === s.me;
   const shown = k => r ? span(r[k]) : p.attrs[k], high = k => (r ? r[k][0] : p.attrs[k]) >= 15;
-  const group = ([title, keys]) => `<h3>${title}</h3>` + keys.map(k => `<div><span>${label(k)}</span><b class="${high(k) ? 'hi' : ''}">${shown(k)}</b>${netChange(p, k) && c?.id === s.me ? ` <span class="dim" title="net change from training and ageing this season">${netChange(p, k) > 0 ? '+' : '−'}${Math.abs(netChange(p, k))}</span>` : ''}</div>`).join('');
+  const group = ([title, keys]) => `<h3>${title}</h3>` + keys.map(k => `<div><span>${label(k)}${p.sig?.includes(k) ? ' <span title="signature attribute: grows to ' + SIG_MAX + '">★</span>' : ''}</span><b class="${high(k) ? 'hi' : ''}">${shown(k)}</b>${netChange(p, k) && c?.id === s.me ? ` <span class="dim" title="net change from training and ageing this season">${netChange(p, k) > 0 ? '+' : '−'}${Math.abs(netChange(p, k))}</span>` : ''}</div>`).join('');
   const known = e.k < 100 ? ` · <span class="dim">known ${e.k}%</span> ${e.ovr[0] < e.ovr[1] && s.scouts.some(x => !x.task) ? `<button data-act="scoutPlayer" data-id="${p.id}">Scout him</button>` : ''}` : '';
   const go = (t, text) => `<button data-act="tab" data-tab="${t}">${text}</button>`;
+  const now = retireNow(p), isStar = now && projectStar(s, p, 0);
+  const later = isStar && projectStar(s, p, 1); // a season more at the club, if he is still a star then
+  const starLine = now ? `<p>${isStar ? `★ <b>A star</b>: retiring from your club now he gives <b>${starPts(now)}</b>${later > now ? `, after another season here ${later}` : ''}.`
+    : `<span class="dim">Not a star (the top 10% of his division by overall, or an award winner): retiring he gives ${starPts(now)}.</span>`}</p>` : '';
+  const sigLine = p.sig ? `<p>★ Signature attributes: <b>${p.sig.map(label).join(', ')}</b>, growing to ${SIG_MAX} where anyone else stops at 20.</p>` : '';
   const links = s.youth.includes(p) ? go('Youth', 'Youth squad') : mine ? go('Contracts', 'Contract') + go('Transfers', 'Sell or list') + go('Training', 'Training')
     : `<button data-act="findPlayer" data-id="${p.id}">${c ? 'Bid on Transfers' : 'Sign on Transfers'}</button>`;
   return `<div class="attrs"><div class="ph">${mine ? '' : star(p.id, p.name)}<b class="pname">${esc(displayName(p))}</b><span class="dim">${p.pos} · age ${p.age}${retires(p) ? ` <span class="oop">⏳ ${retires(p)}${starNote(p) ? ` · ★ ${starNote(p)}` : ''}</span>` : ''} · ${c ? clubLink(c.id) : 'free agent'} · overall <b>${span(e.ovr)}</b> · potential ${potential(p, e)} · ${moneySpan(e.value)}${known}</span>
-    ${mine && !p.loan ? `<button data-act="retire" data-id="${p.id}" title="end his career now">Retire him</button> ` : ''}<button data-act="close">Close</button></div>
-    ${seasonLine(p, c)}<p>Condition ${p.cond}% · sharpness ${Math.round(p.sharp)}% · morale ${moraleLabel(p.morale)} · form ${formAvg(p) ?? '–'} · ${p.yc} league yellow${p.yc === 1 ? '' : 's'}${status(p) ? ` · <span class="oop">${status(p)}</span>` : ''}${p.contract ? ` · contract ${perWeek(p.contract.wage)} until season ${p.contract.until}${p.contract.clause ? `, release clause ${money(p.contract.clause)}` : ''}` : ''}</p>
+    ${mine && !p.loan && !s.youth.includes(p) ? `<button data-act="retire" data-id="${p.id}" title="end his career now">Retire him</button> ` : ''}<button data-act="close">Close</button></div>
+    ${sigLine}${starLine}${seasonLine(p, c)}<p>Condition ${p.cond}% · sharpness ${Math.round(p.sharp)}% · morale ${moraleLabel(p.morale)} · form ${formAvg(p) ?? '–'} · ${p.yc} league yellow${p.yc === 1 ? '' : 's'}${status(p) ? ` · <span class="oop">${status(p)}</span>` : ''}${p.contract ? ` · contract ${perWeek(p.contract.wage)} until season ${p.contract.until}${p.contract.clause ? `, release clause ${money(p.contract.clause)}` : ''}` : ''}</p>
     <div class="bar" style="grid-column:1/-1">${links}</div>${Object.entries(ATTRS).map(group).join('')}</div>`;
 }
 
@@ -761,7 +769,7 @@ const actions = {
   counterOffer(id) { msg = counterOffer(s, id, feeOf(id)) || 'They agreed: sold.'; },
   autoRenew(_, el) { s.autoRenew = el.checked; msg = s.autoRenew ? 'Expiring contracts will be renewed automatically.' : 'Expiring contracts will no longer be renewed automatically.'; },
   renew(id) { msg = renewContract(s, id) || 'Contract agreed.'; },
-  retire(id) { const p = myClub(s).players.find(x => x.id === id); if (!p || !confirm(`Force ${displayName(p)} to retire now? He leaves your club for good and this can't be undone.`)) return; msg = forceRetire(s, id) || `${esc(displayName(p))} has retired.`; if (viewing === id) viewing = null; },
+  retire(id) { const p = myClub(s).players.find(x => x.id === id); if (!p || !confirm(`Force ${displayName(p)} to retire now? He leaves your club for good and this can't be undone.${retireNow(p) ? ` You get ${starPts(retireNow(p))}.` : ''}`)) return; msg = forceRetire(s, id) || `${esc(displayName(p))} has retired.`; if (viewing === id) viewing = null; },
   sell(id) { msg = sell(s, id) || 'Sold.'; if (viewing === id) viewing = null; },
   sortBy(_, el) { sorts[el.dataset.table] = nextSort(sorts[el.dataset.table], el.dataset.key); },
 };
