@@ -1,4 +1,4 @@
-import { ATTRS, ALL_ATTRS, WEIGHTS, ageing, growFactor, declineAge } from './player.js';
+import { ATTRS, ALL_ATTRS, WEIGHTS, ageing, growFactor, declineAge, capOf, growKeys } from './player.js';
 import { injure } from './squad.js';
 import { has } from './tactics.js';
 import { coachScale, medicalScale } from './staff.js';
@@ -43,8 +43,8 @@ export const recoverRate = (t, p) => intensityOf(t, p).recover + (t.focus === 'R
 // A pick at the hidden potential is re-rolled among the attributes still below it (fun surprise #10);
 // the gain is lost only when every candidate is capped.
 function raise(rng, p, t) {
-  const own = t.ind[p.id], team = p.pos === 'GK' || !FOCUS[t.focus] ? Object.keys(WEIGHTS[p.pos]) : FOCUS[t.focus];
-  const open = ks => ks.filter(k => p.attrs[k] < p.pot);
+  const own = t.ind[p.id], team = p.pos === 'GK' || !FOCUS[t.focus] ? growKeys(p) : FOCUS[t.focus];
+  const open = ks => ks.filter(k => p.attrs[k] < capOf(p, k)); // a legend's signature attributes: up to SIG_MAX
   const pool = own && rng.next() < 0.5 && open([own]).length ? [own] : open(team);
   if (!pool.length) return;
   const k = rng.pick(pool);

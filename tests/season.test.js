@@ -425,11 +425,9 @@ test('promotion and relegation: three up and three down at each boundary, none d
 test('awards and records: the season\'s best players and the biggest numbers are kept', () => {
   const s = season(18), tables = s.divisions.map((_, d) => table(s, d));
   const players = s.clubs.flatMap(c => c.players.filter(p => p.stats).map(p => ({ p, c })));
-  for (const [d, dv] of s.divisions.entries()) {
-    const mine = players.filter(x => dv.clubIds.includes(x.c.id));
-    const goals = mine.reduce((t, x) => t + x.p.stats.goals, 0), scored = dv.clubIds.reduce((t, id) => t + s.clubs[id].st.gf, 0);
-    assert.equal(goals, scored, 'every league goal has a scorer');
-  }
+  // Counted over the whole world: a scorer sold to another division mid-season takes his goals with him.
+  const goals = players.reduce((t, x) => t + x.p.stats.goals, 0), scored = s.clubs.reduce((t, c) => t + c.st.gf, 0);
+  assert.equal(goals, scored, 'every league goal has a scorer');
   const top = players.filter(x => x.c.div === 1).reduce((b, x) => !b || x.p.stats.goals > b.p.stats.goals ? x : b, null);
   const champPts = s.clubs[tables[0][0]].st.pts, topGoals = top.p.stats.goals;
   endSeason(s);

@@ -31,12 +31,12 @@ export function knowledge(s, p, club) {
 
 // A stable pseudo-random offset 0..w for player id and attribute index i (no RNG: ranges don't flicker).
 const offset = (id, i, w) => (((id * 2654435761) ^ (i * 40503)) >>> 0) % (w + 1);
-// { attr: [lo, hi] }, both ends 1-20; lo <= true <= hi.
+// { attr: [lo, hi] }, both ends 1-20 (a legend's signature attributes: up to SIG_MAX); lo <= true <= hi.
 export function ranges(s, p, club) {
   const w = Math.round(MAX_WIDTH * (1 - knowledge(s, p, club) / 100));
   return Object.fromEntries(ALL_ATTRS.map((k, i) => {
     const lo = Math.max(1, p.attrs[k] - offset(p.id, i, w));
-    return [k, [lo, Math.min(20, lo + w)]];
+    return [k, [lo, Math.min(Math.max(20, p.attrs[k]), lo + w)]];
   }));
 }
 // What you can tell about p: knowledge, overall as [lo, hi] (its own range: errors in single

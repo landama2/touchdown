@@ -1,4 +1,4 @@
-import { POS, ATTRS, ALL_ATTRS, overall, value, RETIRE_AGE, displayName, declineAge } from '../player.js';
+import { POS, ATTRS, ALL_ATTRS, overall, value, RETIRE_AGE, displayName, declineAge, SIG_MAX } from '../player.js';
 import { TIERS, OWN_DISCOUNT, available as legendsOnOffer, signLegend, projectStar } from '../legends.js';
 import { available, formAvg, moraleLabel, YELLOW_LIMIT } from '../squad.js';
 import { FOCUS, INTENSITY, LOADS, setTraining, setFocus, setLoad } from '../training.js';
@@ -546,7 +546,7 @@ views.Legends = () => {
     ${[...c.hall].reverse().map(h => `<tr><td>${h.season}</td><td><b>${esc(h.name)}</b></td><td>${h.pos}</td><td>${badge(h.club, 18)}${clubName(h.club)}</td><td class="n">${h.seasons}</td><td class="n">${h.apps}</td><td class="n">${h.goals}</td><td class="n">${h.awards}</td><td class="n">${h.ovr}</td><td class="n">+${h.points}</td></tr>`).join('')}</table></div>`
     : '<p class="dim">Nobody yet. When a star retires from a club you manage, he goes in here.</p>';
   return `<h2>Legends · ${pts} Star point${pts === 1 ? '' : 's'}</h2>
-    ${help(`A star who retires from your club earns Star points: 2, plus 1 for each season at the club after his first, 1 for each season award he ever won and 1 for retiring in the Premier League. A star: the top 10% of his division by overall, or any award winner. Points stay with you from job to job. Spend them on a 17-year-old young version of a legend: he joins your youth squad with a ceiling of 100, grows twice as fast as anyone else and declines two years later. Promote him before ${LEAVE_AGE} or he leaves. Each legend exists once: AI clubs now and then sign one too.`)}
+    ${help(`A star who retires from your club earns Star points: 2, plus 1 for each season at the club after his first, 1 for each season award he ever won and 1 for retiring in the Premier League. A star: the top 10% of his division by overall, or any award winner. Points stay with you from job to job. Spend them on a 17-year-old young version of a legend: he joins your youth squad with a ceiling above 100, as his three signature attributes go on to ${SIG_MAX} where anyone else stops at 20. He grows twice as fast as anyone else and declines two years later. Promote him before ${LEAVE_AGE} or he leaves. Each legend exists once: AI clubs now and then sign one too.`)}
     <div class="bar">${['All', ...POS].map(x => `<button data-act="legendPos" data-v="${x}" class="${x === legendPos ? 'on' : ''}">${x}</button>`).join('')}</div>
     ${s.me === null ? '<p class="dim">You can sign legends again once you have a club.</p>' : s.youth.length >= YOUTH_MAX ? `<p class="oop">The youth squad is full (${YOUTH_MAX}).</p>` : ''}
     <div class="wrap"><table><tr><th>Legend</th><th>Pos</th><th>Tier</th><th>Signature</th><th class="n">Ovr at 17</th><th class="n">Cost</th><th></th></tr>${rows || '<tr><td colspan="7" class="dim">None on offer.</td></tr>'}</table></div>

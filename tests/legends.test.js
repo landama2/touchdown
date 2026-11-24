@@ -8,7 +8,8 @@ import { promote, ageYouth, ceilingRange, ceiling, YOUTH_MAX, LEAVE_AGE } from '
 import { trainWeek, defaultTraining } from '../src/training.js';
 import { SEASON_WEEKS } from '../src/finance.js';
 import { makeRng } from '../src/rng.js';
-import { overall, ageOneYear, displayName, ATTRS, ALL_ATTRS, WEIGHTS, createPlayer } from '../src/player.js';
+import { overall, ageOneYear, displayName, ATTRS, ALL_ATTRS, WEIGHTS, SIG_MAX, createPlayer } from '../src/player.js';
+import { ranges } from '../src/scouting.js';
 import { serialize, deserialize, SAVE_VERSION } from '../src/save.js';
 import {
   TIERS, STAR, OWN_DISCOUNT, projectStar, starLines, starPoints, retireStars, awardsOf, available, makeLegend, signLegend, aiLegends,
@@ -135,13 +136,48 @@ test('an Icon trained at Normal from 17 is 95 or better by 20', () => {
   assert.ok(overall(p) >= 95, String(overall(p)));
 });
 
-test('at the strongest Premier League club, a Star-tier legend at 17 is better than every free youngster', () => {
-  for (const seed of [2, 3, 5]) { // ponytail: a likely outcome, not a certain one (youth is random): some seeds give an 80+ youngster
+test('a legend\'s signature attributes grow on to SIG_MAX, his other key attributes stop at 20: grown, he rates above 100', () => {
+  const s = world(4);
+  takeClub(s, 0);
+  const club = s.clubs[0], p = makeLegend(makeRng(5), s.nid++, entry('Thierry Henry')), rng = makeRng(6);
+  assert.deepEqual(p.sig, entry('Thierry Henry').sig);
+  assert.ok(ceiling(p) > 100, String(ceiling(p)));
+  club.players.push(p);
+  for (let season = 0; season < 6; season++) {
+    for (let w = 0; w < SEASON_WEEKS; w++) { trainWeek(rng, club, defaultTraining()); p.inj = null; }
+    ageOneYear(rng, p);
+  }
+  for (const k of p.sig) assert.equal(p.attrs[k], SIG_MAX, k);
+  for (const k of Object.keys(WEIGHTS.FW)) if (!p.sig.includes(k)) assert.ok(p.attrs[k] <= 20, k);
+  assert.ok(overall(p) > 100, String(overall(p)));
+  const r = ranges(s, p, null); // a scout's range still holds the truth past 20
+  for (const k of p.sig) assert.ok(r[k][0] <= SIG_MAX && r[k][1] >= SIG_MAX, `${k} ${r[k]}`);
+});
+
+test('a version 16 save: every legend learns his signature attributes', () => {
+  const a = world(9);
+  startCareer(a, 1);
+  a.career.stars = 20;
+  assert.equal(signLegend(a, 'Thierry Henry'), null);
+  const o = JSON.parse(serialize(a));
+  o.version = 16;
+  for (const p of o.youth) delete p.sig;
+  const b = deserialize(JSON.stringify(o));
+  assert.equal(b.version, SAVE_VERSION);
+  assert.deepEqual(b.youth.find(p => p.name === 'Thierry Henry').sig, entry('Thierry Henry').sig);
+  assert.ok(b.youth.filter(p => !p.legend).every(p => !p.sig));
+});
+
+test('at the strongest Premier League club, a Star-tier legend at 17 is better than the best free youngster in most worlds, and a ceiling of 100 is rare', () => {
+  let beaten = 0, kids = 0, top100 = 0;
+  for (let seed = 1; seed <= 20; seed++) { // youth is random: some worlds give an 80+ youngster
     const s = createWorld(seed), top = s.divisions[0].clubIds.reduce((a, b) => s.clubs[a].quality >= s.clubs[b].quality ? a : b);
     takeClub(s, top);
-    const best = Math.max(...s.youth.map(p => overall(p)));
-    assert.ok(TIERS.star.ovr - 1 > best, `seed ${seed}: youth ${best}`);
+    if (TIERS.star.ovr - 1 > Math.max(...s.youth.map(p => overall(p)))) beaten++;
+    kids += s.youth.length; top100 += s.youth.filter(p => ceiling(p) >= 100).length;
   }
+  assert.ok(beaten > 10, `the legend is better in ${beaten} of 20`);
+  assert.ok(top100 / kids < 0.1, `ceiling 100: ${top100} of ${kids}`); // was about 7 in 10 before GEM
 });
 
 test('signLegend: needs a club, a legend on offer, the points and a youth place; takes the points; two in a season work', () => {

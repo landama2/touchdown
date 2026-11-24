@@ -10,8 +10,9 @@ import LIST from './data/legends.js';
 // +1 an award, +1 retiring in the top division; with caps.
 // Any other player retiring from your club gives STAR.retiree point, with no Hall of fame row or note.
 // Points buy legends: 17-year-old young versions of great players (src/data/legends.js, plus every star who
-// retires from the top division or from your club), with potential 20 and a head start by tier. Each exists once
-// a world (s.legends.used). A signed legend joins the youth squad; AI clubs draw one now and then when a star
+// retires from the top division or from your club), with potential 20 and a head start by tier; their three signature
+// attributes (p.sig) grow on to SIG_MAX (22), past anyone else's 20, so a grown legend outrates any academy player.
+// Each exists once a world (s.legends.used). A signed legend joins the youth squad; AI clubs draw one now and then when a star
 // of theirs retires. Legends grow faster and decline later (growFactor and declineAge in player.js).
 // s.legends = { used: [names], extra: [{ name, pos, tier, sig, own }] }.
 // ovr: his overall at 17 (±1); sig: the signature attributes at least this.
@@ -100,18 +101,24 @@ export function available(s) {
 
 // A legend aged 17 from entry e: the signature attributes at the tier's level, his position's other key attributes
 // nudged until his overall is the tier's (±1), every other outfield attribute (a keeper: mental and physical) at
-// most 2 under the key attributes' average, potential 20.
+// most 2 under the key attributes' average, potential 20, signature attributes p.sig (growing to SIG_MAX).
 export function makeLegend(rng, id, e) {
   const T = TIERS[e.tier], p = createPlayer(rng, id, e.pos, T.ovr / 5 - 2, 17);
   for (const k of e.sig) p.attrs[k] = Math.min(20, Math.max(p.attrs[k], T.sig));
   const free = Object.keys(WEIGHTS[e.pos]).filter(k => !e.sig.includes(k)), by = f => free.reduce((b, k) => f(p.attrs[k], p.attrs[b]) ? k : b);
   for (let i = 0; i < 100 && overall(p) < T.ovr - 1; i++) { const k = by((x, y) => x < y); if (p.attrs[k] >= 20) break; p.attrs[k]++; }
-  for (let i = 0; i < 100 && overall(p) > T.ovr + 1; i++) { const k = by((x, y) => x > y); if (p.attrs[k] <= 1) break; p.attrs[k]--; }
+  // Too good: the highest other key attribute down, or a signature attribute still above the tier's level (a keeper's
+  // handling and reflexes are most of his overall, so trimming the rest alone cannot bring him down).
+  const above = () => [...free, ...e.sig.filter(k => WEIGHTS[e.pos][k] && p.attrs[k] > T.sig)];
+  for (let i = 0; i < 100 && overall(p) > T.ovr + 1; i++) { const k = above().reduce((b, x) => p.attrs[x] > p.attrs[b] ? x : b); if (p.attrs[k] <= 1) break; p.attrs[k]--; }
   const keys = Object.keys(WEIGHTS[e.pos]), floor = Math.round(keys.reduce((t, k) => t + p.attrs[k], 0) / keys.length) - 2;
   const rounded = e.pos === 'GK' ? [...ATTRS.mental, ...ATTRS.physical] : ALL_ATTRS.filter(k => !ATTRS.goalkeeping.includes(k));
   for (const k of rounded) if (!WEIGHTS[e.pos][k]) p.attrs[k] = Math.min(20, Math.max(p.attrs[k], floor));
-  return Object.assign(p, { name: e.name, pot: 20, legend: e.tier });
+  return Object.assign(p, { name: e.name, pot: 20, legend: e.tier, sig: [...e.sig] });
 }
+// The signature attributes of the legend called `name`: from the hand-made list or s.legends.extra, else his best
+// three key attributes now (for a save from before p.sig).
+export const sigOf = (s, p) => LIST.find(e => e[0] === p.name)?.[3] ?? s.legends.extra.find(e => e.name === p.name)?.sig ?? bestKeys(p);
 const hash = str => [...str].reduce((h, ch) => Math.imul(h ^ ch.codePointAt(0), 16777619) >>> 0, 2166136261);
 
 // The human manager spends Star points on the legend called `name`: he joins the youth squad. Error message or null.

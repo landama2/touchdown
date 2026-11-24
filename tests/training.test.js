@@ -101,7 +101,7 @@ test('training setters check what they are given', () => {
 });
 
 test('older players still improve, less with every year; Hard is faster for them too', () => {
-  const at = (age, intensity = 'Normal') => season(squad(1, 300, age), plan({ intensity }));
+  const at = (age, intensity = 'Normal') => season(squad(1, 300, age, 'FW'), plan({ intensity })); // FW: six key attributes, the reference rate (posGrow)
   const [young, mid, late, old] = [19, 26, 29, 32].map(a => at(a));
   assert.ok(young > mid && mid > late && late > old && old > 0, `${young} ${mid} ${late} ${old}`);
   assert.ok(mid > 1.2 && mid < 2.6, `26: ${mid}`);

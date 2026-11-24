@@ -236,7 +236,8 @@ test('roles, duties and instructions change who shoots and who sets up goals', (
   const count = (change, k) => {
     let shots = 0, assists = 0;
     for (let seed = 1; seed <= 300; seed++) {
-      const m = play(seed, mine(4, change), side(5)), id = m.sides[0].on[k]?.id ?? -1;
+      const m = startMatch(seed, mine(4, change), side(5)), id = m.sides[0].on[k].id; // the starter: at full time the slot may hold a substitute
+      while (!m.done) stepMinute(m);
       for (const e of m.ev) if (e.side === 0) { if (SHOTS.includes(e.type) && !e.kind && e.id === id) shots++; if (e.assist === id) assists++; }
     }
     return { shots, assists };

@@ -1,17 +1,21 @@
-import { createPlayer, overall, WEIGHTS, growFactor, joinSeason } from './player.js';
+import { createPlayer, overall, WEIGHTS, growFactor, joinSeason, capOf, growKeys } from './player.js';
 import { wage } from './finance.js';
 import { coachScale } from './staff.js';
 
 // The human club's youth squad, s.youth: players aged 15-18 outside the first team, on no contract
 // and no wages, who play no matches. Each summer an intake of 2 + coaching level joins (at most
 // YOUTH_MAX in all), at the club's quality - 3 plus the coaching level's step, with room to grow:
-// their hidden potential sits 2-6 above their best key attribute. They train every week (growth
+// their hidden potential sits 2-6 above their best key attribute, but the top potential (20, a ceiling of 100)
+// only with chance GEM: otherwise 19. They train every week (growth
 // only, scaled by coaching). Promote one to the first team on a starter contract, or release him;
 // at 19 those still here leave. The first team's gap-filling academy players come from here first.
 export const YOUTH_MAX = 20, YOUTH_YEARS = 3, LEAVE_AGE = 19;
 const GROWTH = 0.15;                                   // chance per player per week, × coaching
 const CEILING_WIDTH = [12, 9, 6, 4, 2];                // how sure your coaches are of a ceiling, by coaching level
 const SHAPE = ['GK', 'DF', 'DF', 'MF', 'MF', 'FW'];
+// A potential of 20 is a gem: a top club's intake reached it nine times in ten, which left the legends (src/legends.js) with
+// nothing to offer there. With GEM about one top-club kid in twenty gets it; the rest stop at 19 (a ceiling of 95).
+export const GEM = 0.05;
 
 // The summer intake (also when you take a club).
 export function intake(s, rng) {
@@ -19,6 +23,7 @@ export function intake(s, rng) {
   for (let k = 0; k < n; k++) {
     const p = createPlayer(rng, s.nid++, rng.pick(SHAPE), c.quality - 3 + (level - 3), rng.int(15, 16));
     p.pot = Math.min(20, Math.max(...Object.keys(WEIGHTS[p.pos]).map(a => p.attrs[a])) + rng.int(2, 6));
+    if (p.pot === 20 && rng.next() >= GEM) p.pot = 19;
     s.youth.push(p);
   }
   return n;
@@ -30,13 +35,13 @@ export function trainYouth(s, rng, weeks) {
   const chance = GROWTH * coachScale(s.clubs[s.me]);
   for (let w = 0; w < weeks; w++) for (const p of s.youth) {
     if (rng.next() >= chance * growFactor(p)) continue;
-    const k = rng.pick(Object.keys(WEIGHTS[p.pos]));
-    if (p.attrs[k] < p.pot) p.attrs[k]++;
+    const k = rng.pick(growKeys(p));
+    if (p.attrs[k] < capOf(p, k)) p.attrs[k]++;
   }
 }
 
 // The overall he would reach with every key attribute at his potential.
-export const ceiling = p => overall({ ...p, attrs: Object.fromEntries(Object.entries(p.attrs).map(([k, v]) => [k, WEIGHTS[p.pos][k] ? Math.max(v, p.pot) : v])) });
+export const ceiling = p => overall({ ...p, attrs: Object.fromEntries(Object.entries(p.attrs).map(([k, v]) => [k, WEIGHTS[p.pos][k] ? Math.max(v, capOf(p, k)) : v])) });
 // What your coaches can tell of it: a range as wide as your coaching level allows, holding the truth.
 export function ceilingRange(s, p) {
   if (p.legend) return [ceiling(p), ceiling(p)]; // a legend's ceiling is known: you paid for it

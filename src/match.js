@@ -16,7 +16,7 @@ const MINUTES = 90, EXTRA = 30;
 export const subLimit = m => MAX_SUBS + (m.min >= MINUTES && !m.done ? 1 : 0);
 const HOME_EDGE = 1.12;      // home side's extra share of the ball and of chances
 const K = { // tuning; see the calibration note above
-  SHOT_RATE: 0.25,      // chance per minute that the side on the ball shoots, between equal sides
+  SHOT_RATE: 0.245,     // chance per minute that the side on the ball shoots, between equal sides (0.25 until the 2026-11-24 overall rebalance: picking and training by the new overall made sides finish better)
   SPREAD: 40,           // how strongly an attack-vs-defence gap changes that chance
   FOUL_RATE: 0.12, YELLOW_BASE: 0.17, STRAIGHT_RED: 0.002, INJURY_RATE: 0.003,
   FATIGUE: 0.3,         // fitness lost per minute by an outfielder with stamina 12
