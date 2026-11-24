@@ -46,7 +46,7 @@ export const ceiling = p => overall({ ...p, attrs: Object.fromEntries(Object.ent
 export function ceilingRange(s, p) {
   if (p.legend) return [ceiling(p), ceiling(p)]; // a legend's ceiling is known: you paid for it
   const w = CEILING_WIDTH[s.clubs[s.me].staff.coaching - 1], o = ceiling(p), off = ((p.id * 2654435761) >>> 0) % (w + 1);
-  return [o - off, o - off + w];
+  return [o - off, Math.min(100, o - off + w)]; // past 100 only legends go (SIG_MAX): the guess never says more
 }
 
 const take = (s, p) => s.youth.splice(s.youth.indexOf(p), 1)[0];

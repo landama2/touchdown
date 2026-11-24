@@ -25,16 +25,17 @@ test('sorting does not change the input array', () => {
   assert.deepEqual(rows, copy);
 });
 
-test('first click ascends, second click on the same column descends, a new column ascends', () => {
+test('first click ascends, second click on the same column descends, third resets, a new column ascends', () => {
   const a = nextSort(null, 'ovr');
   assert.deepEqual(a, { key: 'ovr', dir: 1 });
   assert.deepEqual(nextSort(a, 'ovr'), { key: 'ovr', dir: -1 });
+  assert.equal(nextSort({ key: 'ovr', dir: -1 }, 'ovr'), null);
   assert.deepEqual(nextSort({ key: 'ovr', dir: -1 }, 'age'), { key: 'age', dir: 1 });
 });
 
 test('a sortable header is a native button and marks the sorted column', () => {
   const html = sortHead('Ovr', 'train', 'ovr', { key: 'ovr', dir: -1 }, 'n');
-  assert.match(html, /<button class="link" data-act="sortBy" data-table="train" data-key="ovr">Ovr ▼<\/button>/);
+  assert.match(html, /<button class="link" data-act="sortBy" data-table="train" data-key="ovr" title="Back to the default order">Ovr ▼<\/button>/);
   assert.match(html, /aria-sort="descending"/);
   assert.match(sortHead('Age', 'train', 'age', { key: 'ovr', dir: 1 }), /aria-sort="none"/);
 });

@@ -1,5 +1,5 @@
 import { POS, ATTRS, ALL_ATTRS, overall, value, RETIRE_AGE, displayName, declineAge, SIG_MAX } from '../player.js';
-import { TIERS, STAR, OWN_DISCOUNT, available as legendsOnOffer, signLegend, projectStar } from '../legends.js';
+import { TIERS, STAR, OWN_DISCOUNT, available as legendsOnOffer, signLegend, projectStar, starInfo } from '../legends.js';
 import { available, formAvg, moraleLabel, YELLOW_LIMIT } from '../squad.js';
 import { FOCUS, INTENSITY, LOADS, setTraining, setFocus, setLoad } from '../training.js';
 import { createWorld } from '../world.js';
@@ -267,6 +267,20 @@ function seasonLine(p, c) {
 // A club name that opens its profile.
 const clubLink = (id, size = 16) => `<button class="link" data-act="club" data-id="${id}">${badge(id, size)} ${clubName(id)}</button>`;
 
+// A star's profile box, folded: why he is a star and, for your player, what retiring him gives, part by part.
+const AWARD_LABEL = { player: 'Player of the season', scorer: 'Top scorer', assists: 'Top assists', young: 'Young player' };
+function starBox(p, info, now) {
+  const dn = d => esc(s.divisions[d].name), why = [];
+  if (info.ovr >= info.line) why.push(`Overall ${info.ovr}: ${ordinal(info.rank)} of ${info.of} in the ${dn(info.div)}, in its top 10% (the line is ${info.line} this season)`);
+  for (const a of info.awards) why.push(`${AWARD_LABEL[a.key]}, ${dn(a.div)}, season ${a.season}`);
+  const P = info.points, later = P && projectStar(s, p, 1), parts = P && [`${P.base} for being a star`,
+    `${P.seasons} for ${P.tenure} season${P.tenure === 1 ? '' : 's'} at the club (the first counts nothing; at most ${STAR.seasons})`,
+    `${P.awards} for awards (at most ${STAR.awards})`, `${P.topFlight} for playing in the ${dn(0)}`];
+  return `<details class="star"><summary>★ <b>A star</b>${P ? `: retiring now he gives <b>${starPts(now)}</b>` : ''} · ${why.length} reason${why.length === 1 ? '' : 's'}</summary>
+    <ul>${why.map(x => `<li>${x}</li>`).join('')}</ul>
+    ${P ? `<p>Retiring now: ${starPts(P.total)} = ${parts.join(' + ')}.${later > now ? ` After another season here: ${later}.` : ''} An estimate: the top 10% line moves every season.</p>` : ''}</details>`;
+}
+
 // Player profile: a screen of its own, opened from any name. Read-only: actions live on their screens, linked from here.
 // ponytail: season stats only; career totals need a field kept across seasons (a save migration), add if wanted.
 export function playerView(id) {
@@ -277,10 +291,8 @@ export function playerView(id) {
   const group = ([title, keys]) => `<h3>${title}</h3>` + keys.map(k => `<div><span>${label(k)}${p.sig?.includes(k) ? ' <span title="signature attribute: grows to ' + SIG_MAX + '">★</span>' : ''}</span><b class="${high(k) ? 'hi' : ''}">${shown(k)}</b>${netChange(p, k) && c?.id === s.me ? ` <span class="dim" title="net change from training and ageing this season">${netChange(p, k) > 0 ? '+' : '−'}${Math.abs(netChange(p, k))}</span>` : ''}</div>`).join('');
   const known = e.k < 100 ? ` · <span class="dim">known ${e.k}%</span> ${e.ovr[0] < e.ovr[1] && s.scouts.some(x => !x.task) ? `<button data-act="scoutPlayer" data-id="${p.id}">Scout him</button>` : ''}` : '';
   const go = (t, text) => `<button data-act="tab" data-tab="${t}">${text}</button>`;
-  const now = retireNow(p), isStar = now && projectStar(s, p, 0);
-  const later = isStar && projectStar(s, p, 1); // a season more at the club, if he is still a star then
-  const starLine = now ? `<p>${isStar ? `★ <b>A star</b>: retiring from your club now he gives <b>${starPts(now)}</b>${later > now ? `, after another season here ${later}` : ''}.`
-    : `<span class="dim">Not a star (the top 10% of his division by overall, or an award winner): retiring he gives ${starPts(now)}.</span>`}</p>` : '';
+  const now = retireNow(p), info = starInfo(s, p);
+  const starLine = info?.star ? starBox(p, info, now) : now ? `<p class="dim">Not a star (the top 10% of his division by overall, or a season award winner): retiring he gives ${starPts(now)}.</p>` : '';
   const sigLine = p.sig ? `<p>★ Signature attributes: <b>${p.sig.map(label).join(', ')}</b>, growing to ${SIG_MAX} where anyone else stops at 20.</p>` : '';
   const links = s.youth.includes(p) ? go('Youth', 'Youth squad') : mine ? go('Contracts', 'Contract') + go('Transfers', 'Sell or list') + go('Training', 'Training')
     : `<button data-act="findPlayer" data-id="${p.id}">${c ? 'Bid on Transfers' : 'Sign on Transfers'}</button>`;

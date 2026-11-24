@@ -12,7 +12,7 @@ import { overall, ageOneYear, displayName, ATTRS, ALL_ATTRS, WEIGHTS, SIG_MAX, c
 import { ranges } from '../src/scouting.js';
 import { serialize, deserialize, SAVE_VERSION } from '../src/save.js';
 import {
-  TIERS, STAR, OWN_DISCOUNT, projectStar, starLines, starPoints, retireStars, awardsOf, available, makeLegend, signLegend, aiLegends,
+  TIERS, STAR, OWN_DISCOUNT, projectStar, starInfo, starLines, starPoints, retireStars, awardsOf, available, makeLegend, signLegend, aiLegends,
 } from '../src/legends.js';
 import LIST from '../src/data/legends.js';
 import { MINI } from './fixtures/mini.js';
@@ -277,6 +277,27 @@ test('a version 14 save gets seasons at the club from now, no Star points or leg
   playSeason(b);
   endSeason(b);
   assert.equal(b.season, 2);
+});
+
+test('starInfo: why a player is a star, and for yours the Star points by part, adding up to projectStar', () => {
+  const s = world(1);
+  startCareer(s, 0);
+  const c = s.clubs[0], [star, winner] = c.players, ai = s.clubs[1].players[0];
+  makeStar(star); makeStar(ai);
+  for (const k of ALL_ATTRS) winner.attrs[k] = 1;
+  star.since = s.season - 6;
+  s.history.push({ season: 0, divs: [{ awards: { player: { id: winner.id }, scorer: { id: winner.id }, assists: null, young: null, glove: { id: winner.id } } }] });
+  const a = starInfo(s, star);
+  assert.ok(a.star && a.ovr >= a.line && a.rank <= 2 && a.awards.length === 0);
+  assert.deepEqual([a.points.seasons, a.points.awards, a.points.total], [STAR.seasons, 0, projectStar(s, star)]);
+  const w = starInfo(s, winner); // a star by his awards alone; the Golden Glove does not count
+  assert.ok(w.star && w.ovr < w.line);
+  assert.deepEqual(w.awards.map(x => [x.season, x.div, x.key]), [[0, 0, 'player'], [0, 0, 'scorer']]);
+  assert.equal(w.points.total, projectStar(s, winner));
+  assert.equal(starInfo(s, ai).points, null); // another club's star: reasons, no points
+  assert.ok(starInfo(s, ai).star);
+  const plain = c.players.find(p => p !== star && p !== winner && overall(p) < starLines(s)[c.div]);
+  assert.deepEqual([starInfo(s, plain).star, starInfo(s, plain).points], [false, null]);
 });
 
 test('projectStar previews the points a retiring star of yours will give; 0 for a non-star or another club\'s player', () => {

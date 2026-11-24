@@ -53,6 +53,22 @@ export function projectStar(s, p, ahead = 0) {
   if (overall(p) < starLines(s)[club.div] && !awards) return 0;
   return starPoints(tenure(s, p) + ahead, awards, club.div);
 }
+// Why player p is a star, for his profile: { star, ovr, line, rank, of, div, awards: [{ season, div, key }], points }.
+// top: his overall is at least his division's star line (rank of `of` players by overall). awards: the season awards
+// that count (AWARDS). points (your player only, else null): the Star points retiring now, by part. null: no club.
+export function starInfo(s, p) {
+  const club = s.clubs.find(c => c.players.includes(p));
+  if (!club) return null;
+  const div = club.div, ovr = overall(p), line = starLines(s)[div];
+  const all = s.divisions[div].clubIds.flatMap(id => s.clubs[id].players.map(x => overall(x)));
+  const awards = s.history.flatMap(h => h.divs.flatMap((x, d) => AWARDS.filter(k => x.awards?.[k]?.id === p.id).map(key => ({ season: h.season, div: d, key }))));
+  const star = ovr >= line || awards.length > 0, seasons = tenure(s, p);
+  const mine = s.career && s.me !== null && (p.loan ? p.loan.from : club.id) === s.me;
+  const points = star && mine ? { base: STAR.base, seasons: Math.min(STAR.seasons, Math.max(0, seasons - 1)), tenure: seasons,
+    awards: Math.min(STAR.awards, awards.length), topFlight: div === 0 ? STAR.topFlight : 0 } : null;
+  if (points) points.total = points.base + points.seasons + points.awards + points.topFlight;
+  return { star, ovr, line, rank: all.filter(o => o > ovr).length + 1, of: all.length, div, awards, points };
+}
 const tierFor = ovr => ovr >= 88 ? 'icon' : ovr >= 84 ? 'great' : 'star';
 const bestKeys = p => Object.keys(WEIGHTS[p.pos]).sort((a, b) => p.attrs[b] - p.attrs[a] || WEIGHTS[p.pos][b] - WEIGHTS[p.pos][a]).slice(0, 3);
 
